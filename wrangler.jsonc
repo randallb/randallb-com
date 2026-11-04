@@ -1,0 +1,12 @@
+{
+  "name": "randallb-com-preview",
+  "main": "worker.ts",
+  "account_id": "b27198dafc75cca5de8a7c01be3cbd0f",
+  "compatibility_date": "2026-11-04",
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [],
+  "vars": {
+    "SOURCE_REVISION": "local"
+  }
+}

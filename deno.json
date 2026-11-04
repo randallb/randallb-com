@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net=127.0.0.1:8000 dev.ts",
+    "check": "deno fmt --check && deno check worker.ts dev.ts worker_test.ts scripts/deploy_preview.ts && deno test",
+    "bundle": "npx --yes wrangler@4.157.0 deploy --dry-run",
+    "deploy:preview": "deno run --allow-run=git,npx,deno scripts/deploy_preview.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": [
+      "deno.ns",
+      "dom",
+      "esnext"
+    ]
+  }
+}
