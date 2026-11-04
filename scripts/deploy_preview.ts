@@ -12,7 +12,7 @@ if (await git("status", "--porcelain")) {
   throw new Error("Commit or stash changes before deploying.");
 }
 const revision = await git("rev-parse", "HEAD");
-const checks = await new Deno.Command(Deno.execPath(), {
+const checks = await new Deno.Command("deno", {
   args: ["task", "check"],
   stdout: "inherit",
   stderr: "inherit",
