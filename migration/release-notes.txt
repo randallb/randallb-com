@@ -12,3 +12,5 @@ Validation: both Deno tests pass, covering every cataloged path, root query stri
 
 Production application: Randall approved the narrower placeholder release. Worker version 481339ba-209b-453c-bbe7-edac8e0197bd attached to randallb.com as Custom Domain. Removed apex Substack CNAME, then disabled Substack custom-domain binding because it continued receiving requests. Substack settings verified to show Add a custom domain afterward. Publication remains at randallb.substack.com.
 Rollback also requires re-enabling randallb.com in Substack Domain settings, in addition to removing Worker Custom Domain and restoring DNS-only apex CNAME. The Substack setting is no longer intact.
+
+Review correction: initial Python HTML snapshots were empty following HTTP403. Recovery uses curl against retained randallb.substack.com; snapshot-recovery.json records source URLs, sizes and SHA-256 hashes. The original catalog statuses remain historical collection results.
