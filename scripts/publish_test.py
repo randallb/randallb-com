@@ -1,10 +1,9 @@
 """Validate source isolation and content-change behavior of the Drive publisher."""
-import base64
 import json
 from pathlib import Path
 import tempfile
 import unittest
-from publish import build
+from publish import build, MAX_SOURCE_BYTES
 
 
 class PublishTests(unittest.TestCase):
@@ -30,7 +29,7 @@ class PublishTests(unittest.TestCase):
         second = build(self.source, self.output)
         self.assertNotEqual(first['revision'], second['revision'])
         content = json.loads((self.output / 'site-content.json').read_text())
-        self.assertEqual(base64.b64decode(content['routes']['/']['body']), b'second')
+        self.assertEqual((self.output / 'assets' / content['routes']['/']['asset'].lstrip('/')).read_bytes(), b'second')
         (self.source / 'private.txt').write_text('unpublished')
         self.assertEqual(build(self.source, self.output)['revision'], second['revision'])
 
@@ -57,7 +56,32 @@ class PublishTests(unittest.TestCase):
         self.write_manifest()
         build(self.source, self.output)
         content = json.loads((self.output / 'site-content.json').read_text())
-        self.assertEqual(base64.b64decode(content['routes']['/asset']['body']), bytes([0, 255, 128]))
+        self.assertEqual((self.output / 'assets' / content['routes']['/asset']['asset'].lstrip('/')).read_bytes(), bytes([0, 255, 128]))
+
+    def test_large_site_and_exact_limit(self):
+        # Repeated routes count a file once; a >4 MB asset is stored outside code.
+        data = b'x' * 5_000_000
+        (self.source / 'page.html').write_bytes(data)
+        receipt = build(self.source, self.output)
+        self.assertGreater(receipt['source_bytes'], 4_000_000)
+        self.assertLess((self.output / 'site-content.json').stat().st_size, 2000)
+        from unittest.mock import patch
+        with patch('publish.MAX_SOURCE_BYTES', receipt['source_bytes']):
+            build(self.source, self.output)
+        with patch('publish.MAX_SOURCE_BYTES', receipt['source_bytes'] - 1):
+            with self.assertRaisesRegex(ValueError, '100 MB'):
+                build(self.source, self.output)
+
+    def test_rebuild_removes_old_assets_and_keeps_indexing_scoped(self):
+        build(self.source, self.output)
+        (self.source / 'page.html').write_text('replacement')
+        self.manifest['routes']['/']['noindex'] = False
+        self.write_manifest()
+        build(self.source, self.output)
+        self.assertEqual(len(list((self.output / 'assets').iterdir())), 1)
+        site = json.loads((self.output / 'site-content.json').read_text())
+        self.assertFalse(site['routes']['/']['noindex'])
+        self.assertTrue(site['not_found']['noindex'])
 
 
 if __name__ == '__main__':

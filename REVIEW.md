@@ -1,17 +1,19 @@
-# Drive publishing review state
+# Atlas publisher review
 
-Randall corrected the content location: Google Drive holds pages and assets;
-Git holds publishing code. The current change implements that correction.
+The publisher now accepts 100 MB of mapped Drive source and uploads file bytes
+as Cloudflare static assets. Only the explicit route table is bundled in Worker
+code. Requests to unmapped paths cannot reach uploaded assets. Content remains
+in Drive; no Atlas essays, private research, or generated assets are committed.
 
-Checks exercise generic routing and binary assets, content edits changing the
-build without code edits, exclusion of unlisted files, and rejection of missing
-or escaped source paths. CI and the actual CWR shell adapter run those checks
-without access to private Drive. Generated deployment files are ignored.
+Checks cover exact aggregate limit behavior, files larger than the former 4 MB
+limit, stale asset removal, scoped indexing, binary bytes, source isolation,
+GET/HEAD/404/405 responses, and content changes without code changes. The Atlas
+bundle separately validates all 345 entries and passes its 30 existing tests.
 
-The recovered archive and catalog now live in the Drive Website/reference folder;
-only files explicitly named by site.json are included in the public bundle.
-Existing Git history is retained; the branch's current tracked content is removed.
+The public export is mounted below /organizational-intelligence. It includes
+full-text search and the eight existing visualizations. Existing site routes and
+their indexing policy are preserved. Preview always discourages indexing; Atlas
+production routes have canonical URLs and an Atlas sitemap.
 
-Previous CWR pass/fail/restoration CI passed at dc61529. New CI and live release
-verification must be recorded for the Drive publisher revision separately.
-No independent agent review is claimed for this correction.
+No independent agent review is claimed. Release evidence and the exported content
+receipt are maintained with the Drive Atlas publication project.

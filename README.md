@@ -32,8 +32,11 @@ as `--source`. Record Drive IDs in `drive-provenance.json` alongside it. Downloa
 raw HTML, not a text extraction. Never substitute repository content for Drive.
 
 No content commit is needed. Drive edits do not publish automatically; run the
-publisher after editing. This initial inline publisher supports up to 4 MB of
-mapped source files, including assets; larger sites need a separate asset store.
+publisher after editing. The publisher supports up to 100 MB (100,000,000 bytes) of mapped source,
+including the manifest. Each file is limited to 25 MB. Content is uploaded through
+Cloudflare Workers static assets; Worker code contains only the route table.
+Repeated routes to the same file count once. `noindex` may be set per route;
+preview deployments always send noindex.
 Missing files, paths escaping the source folder, and invalid routes stop release.
 `.drive-build/` contains generated files and a receipt with content hashes and the
 revision returned in `X-Content-Revision`. Keep it out of Git. Private reference
@@ -82,5 +85,5 @@ Draft PR #1 initially placed the catalog and reference pages in Git. They have
 been copied and verified in Drive and removed from the branch's current tracked
 files. Existing Git history is preserved. `migration/` may remain locally as an
 ignored historical copy; it is neither the editing source nor a publish input.
-The original Drive code checkout is also preserved. Active publishing code is
-in the originating Workloop workspace's `integration-repo` checkout.
+The original Drive code checkout is also preserved. The current publisher update is maintained in the Atlas publication workspace's
+`publisher` checkout; the former editing checkout is preserved.

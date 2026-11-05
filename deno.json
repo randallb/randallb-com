@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --allow-net=127.0.0.1:8000 dev.ts",
+    "dev": "deno run --allow-read=.drive-build --allow-net=127.0.0.1:8000 dev.ts",
     "check": "deno fmt --check worker.ts worker_test.ts dev.ts scripts deno.json wrangler.jsonc wrangler.preview.jsonc && deno check worker.ts worker_test.ts && deno test worker_test.ts && python3 -m unittest discover -s scripts -p publish_test.py",
     "bundle": "npx --yes wrangler@4.157.0 deploy --config wrangler.preview.jsonc --dry-run",
     "check:cwr": "sh scripts/cwr-check.sh",
