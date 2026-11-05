@@ -1,7 +1,7 @@
 {
   "name": "randallb-com-placeholder-preview",
   "account_id": "b27198dafc75cca5de8a7c01be3cbd0f",
-  "main": "worker.ts",
+  "main": ".drive-build/entry.ts",
   "compatibility_date": "2026-11-04",
   "workers_dev": true,
   "routes": [

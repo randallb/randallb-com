@@ -1,94 +1,86 @@
-# randallb.com
+# randallb.com publisher
 
-Cloudflare Worker serving the visible text `randallb.com coming soon` on the
-17 paths in `migration/url-catalog.json`. Unknown paths return 404 with the same
-placeholder; GET and HEAD are supported, and other methods return 405. Queries
-do not affect path matching. Responses are no-store and noindex.
+Google Drive is the editing home for pages, assets, the route list and migration
+references. This repository contains the generic Worker, publisher and checks.
 
-Randall approved dropping Substack passthrough and deploying this narrower
-placeholder milestone. It is live on `https://randallb.com`; this integration
-preserves that behavior. The complete superbuild still requires CWR evidence and
-ordered independent/hosted review. No merge approval is implied.
+Content folder: [Launch / Website](https://drive.google.com/drive/folders/1s4jHLVpQcLjKrF03fxejifkucdD8Oah8).
+Edit `pages/coming-soon.html` there; `site.json` maps public URLs to files.
+Only explicitly mapped files are published. The reference archive stays private.
+The initial Drive content preserves the approved placeholder on 17 known paths.
+GET/HEAD work, unknown paths return 404 and other methods return 405.
 
-## Setup and checks
+## Publish from Drive
 
-Use Deno, Node/npm, Rust/Cargo 1.95.0 (pinned in rust-toolchain.toml), and a native C/C++ compiler for SQLite. The original source handoff verified Rust 1.95.0; newer compilers may reject newly deprecated APIs because the pinned source denies warnings.
+Use Python 3.9+, Deno 2 and Node/npm. With the Website folder synced locally:
 
 ```sh
-deno task dev
+python3 scripts/publish.py --source '/path/to/Drive/Projects/Launch/Website'
+python3 scripts/publish.py --source '/path/to/Drive/Projects/Launch/Website' --target dry-run
+python3 scripts/publish.py --source '/path/to/Drive/Projects/Launch/Website' --target preview
+python3 scripts/publish.py --source '/path/to/Drive/Projects/Launch/Website' --target production
+```
+
+The default builds only. Each publish rereads Drive source, validates all mapped
+files, runs code checks, then deploys an ignored generated snapshot. Local preview
+after building: `deno task dev` (127.0.0.1:8000). `deno task bundle` checks the
+last generated snapshot; use the publisher's dry-run target to read fresh content.
+
+If Drive desktop sync is unavailable, use the connected Google Drive tools to
+read the folder's `site.json`, download every referenced raw file into a temporary
+folder outside this checkout, preserving relative paths, and use that directory
+as `--source`. Record Drive IDs in `drive-provenance.json` alongside it. Download
+raw HTML, not a text extraction. Never substitute repository content for Drive.
+
+No content commit is needed. Drive edits do not publish automatically; run the
+publisher after editing. This initial inline publisher supports up to 4 MB of
+mapped source files, including assets; larger sites need a separate asset store.
+Missing files, paths escaping the source folder, and invalid routes stop release.
+`.drive-build/` contains generated files and a receipt with content hashes and the
+revision returned in `X-Content-Revision`. Keep it out of Git. Private reference
+files, notes and receipts are not automatically exposed by the Worker.
+
+Cloudflare production: Worker `randallb-com-placeholder-preview`, account
+`b27198dafc75cca5de8a7c01be3cbd0f`, custom domain `randallb.com`.
+The historical name includes preview but this Worker serves production.
+`wrangler.preview.jsonc` deploys a separate Worker with no production routes.
+Initial migration to Drive publishing is authorized by Randall's correction and
+"ok please do that" on November 4. Later production releases follow the user's
+release instructions; a Drive edit alone is not a release request.
+
+## Checks and CWR
+
+```sh
 deno task check
-deno task bundle
 deno task setup:cwr
 deno task check:cwr
 python3 scripts/cwr-verify.py
 ```
 
-The local app listens on `127.0.0.1:8000`. The CWR task builds and invokes the
-pinned real runtime and shell adapter; it runs `deno task check`, propagates a
-failed runtime outcome as a nonzero caller exit, and stops its resident runtime.
-No model account or Workloop source checkout is required. Toolchain verification
-may reuse public dependency caches. See `vendor/CWR-PROVENANCE.md`.
+Checks use synthetic fixtures so CI needs no access to private Drive content.
+Tests cover content changes without code changes, unmapped files, source escapes,
+missing files, route validation, binary assets, HTTP status and HEAD behavior.
+CWR setup needs Rust/Cargo 1.95.0 (pinned), Node/npm, Deno and a native C/C++ compiler
+for SQLite. The pinned real runtime/shell adapter invokes `deno task check`;
+`cwr-verify.py` verifies pass, intentional failure and restoration. See
+`vendor/CWR-PROVENANCE.md`. No model account or Workloop source checkout required.
 
-## Deployment
+## Rollback
 
-`wrangler.preview.jsonc` has no production routes. To publish a review preview:
+Previous placeholder Worker version: `481339ba-209b-453c-bbe7-edac8e0197bd`.
+Use Cloudflare Worker rollback to restore that known version if this publication
+fails smoke checks. No DNS changes are needed for rollback between Worker releases.
 
-```sh
-npx --yes wrangler@4.157.0 deploy --config wrangler.preview.jsonc
-```
+For the older Substack configuration, remove the Worker's custom domain, restore
+DNS-only apex CNAME `@ -> target.substack-custom-domains.com` with TTL Auto, and
+re-enable `randallb.com` in Substack publication Domain settings. Restoring DNS
+alone is insufficient. The publication remains at `https://randallb.substack.com`.
+Do not delete publication, subscribers, Worker, or mail records.
 
-`wrangler.jsonc` describes the already-live Worker named
-`randallb-com-placeholder-preview` in Content Foundry
-(`b27198dafc75cca5de8a7c01be3cbd0f`), attached to `randallb.com` as a Worker
-Custom Domain. The historical Worker name includes “preview” but it now serves
-production. Production deployment is explicit:
+## Repository history
 
-```sh
-npx --yes wrangler@4.157.0 deploy --config wrangler.jsonc
-```
-
-Randall's approval is required for a new production revision. This repository
-integration alone does not redeploy. Observed live version:
-`481339ba-209b-453c-bbe7-edac8e0197bd`. The deployed handler and this handler
-are identical except for relocating the catalog import into `migration/`.
-
-## URL replacement inventory
-
-`migration/url-catalog.csv` and `.json` record 17 discovered/known paths,
-including all five posts listed in the saved sitemap and RSS feed. The original ten Python page fetches failed with HTTP 403 and produced empty
-files. Those files were subsequently recovered with curl from the retained
-randallb.substack.com publication; see `migration/snapshot-recovery.json`. Ten public
-pages are now preserved. `migration/public-pages/`, `feed.xml`, and `sitemap.xml`
-preserve reference content. Service entry points were cataloged without submitting
-forms. This is a public inventory, not proof of exhaustive private/unlinked or
-historical coverage. Replace these paths as the real site is built. The deployed
-placeholder does not expose the saved source pages or catalog as an API.
-
-`migration/production-validation.json` records successful live GET checks for
-all 17 paths after routing changed. It contains the production version identifier.
-The older status fields in the catalog describe collection time, before cutover.
-
-## Routing and rollback
-
-The old apex CNAME was `@ -> target.substack-custom-domains.com`, DNS only,
-TTL Auto. Its deletion and the placeholder cutover were explicitly approved.
-Substack's custom-domain binding also had to be disabled before traffic reached
-the Worker. The publication is retained at `https://randallb.substack.com`.
-Mail DNS was not changed.
-
-To restore Substack, remove the Worker's `randallb.com` Custom Domain; restore
-the apex CNAME above; re-enable `randallb.com` in Substack publication Settings →
-Domain. Check the exact configuration shown by Substack, allow routing/TLS to
-settle, and verify the homepage plus a post. Restoring DNS alone is insufficient
-because Substack's custom-domain binding is currently disabled. Do not delete
-the Worker, publication, subscribers, or mail records.
-
-## Source and review
-
-GitHub repository: `randallb/randallb-com`. The former Drive checkout at
-`Memos/code/randallb-com` is preserved but has incomplete Git metadata and stalled
-file reads. The active integration checkout is the `integration-repo` folder in
-the originating Workloop workspace. Avoid editing both copies. This branch is
-based on remote main `85d04ca2c368e0cad8b8e64b079a9045a872ef7b` and carries the
-pinned CWR source plus newly reconstructed task declarations; it does not pretend
-the inaccessible earlier candidate history was recovered.
+Draft PR #1 initially placed the catalog and reference pages in Git. They have
+been copied and verified in Drive and removed from the branch's current tracked
+files. Existing Git history is preserved. `migration/` may remain locally as an
+ignored historical copy; it is neither the editing source nor a publish input.
+The original Drive code checkout is also preserved. Active publishing code is
+in the originating Workloop workspace's `integration-repo` checkout.
