@@ -3,6 +3,9 @@ on:
   push:
     branches: [integrate-live-placeholder]
   pull_request:
+concurrency:
+  group: site-check-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -14,6 +17,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.95.0 --profile minimal
       - name: Site checks
         run: deno task check
       - name: Build pinned CWR

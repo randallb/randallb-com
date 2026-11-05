@@ -12,7 +12,7 @@ ordered independent/hosted review. No merge approval is implied.
 
 ## Setup and checks
 
-Use Deno, Node/npm, Rust/Cargo, and a native C/C++ compiler for SQLite.
+Use Deno, Node/npm, Rust/Cargo 1.95.0 (pinned in rust-toolchain.toml), and a native C/C++ compiler for SQLite. The original source handoff verified Rust 1.95.0; newer compilers may reject newly deprecated APIs because the pinned source denies warnings.
 
 ```sh
 deno task dev
