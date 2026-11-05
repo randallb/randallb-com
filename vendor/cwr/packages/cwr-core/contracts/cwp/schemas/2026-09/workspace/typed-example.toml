@@ -1,0 +1,46 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/workspace"
+
+[[inputs]]
+type = "cwp://org.coworkerprotocol/2026-09/schemas/secret"
+as = "service_token"
+purpose = "Authenticate the configured service"
+
+[bindings.service_token]
+env = "CWR_EXAMPLE_SERVICE_TOKEN"
+
+[[volumes]]
+name = "files"
+path = "."
+access = "read"
+
+[[runtimes]]
+name = "ready"
+# Compatibility demonstration: a runtime selection can reuse a legacy /loop definition.
+path = "../loop/example.toml"
+source_roots = ["../loop"]
+working_directory = "."
+volume = "files"
+
+[[runtimes.volume_access]]
+volume = "files"
+access = "read"
+
+[[runtimes]]
+name = "service"
+path = "./typed.loop.toml"
+source_roots = [".", "../loop"]
+working_directory = "."
+volume = "files"
+
+[[runtimes.volume_access]]
+volume = "files"
+access = "read"
+
+[[runtimes.inputs]]
+ref = "~@/service_token"
+as = "token"
+
+[[runtimes.volumes]]
+ref = "~@/files"
+as = "project"
+access = "read"

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/gateway_request",
+  "title": "Gateway Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "ref",
+    "requester_actor_ref",
+    "resource_ref",
+    "request"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/gateway_request"
+    },
+    "ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "requester_actor_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "conversation_ref": {
+      "description": "The conversation whose visible context applies to this invocation.",
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "parent_invocation_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "resource_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$",
+      "description": "The host-supported gateway contract; not an account identity or permission grant."
+    },
+    "request": {
+      "type": "object",
+      "description": "Payload validated by the selected gateway contract."
+    }
+  }
+}

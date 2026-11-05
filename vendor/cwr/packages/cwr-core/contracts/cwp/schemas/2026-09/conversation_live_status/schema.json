@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_live_status",
+  "title": "Conversation Live Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "subject_actor_ref",
+    "publisher_session_id",
+    "sequence",
+    "status",
+    "expires_at_unix_ms"
+  ],
+  "properties": {
+    "subject_actor_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "publisher_session_id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_actor_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "cwr-ref",
+        "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["composing"]
+    },
+    "expires_at_unix_ms": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

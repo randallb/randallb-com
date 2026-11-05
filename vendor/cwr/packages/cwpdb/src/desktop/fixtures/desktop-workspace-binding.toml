@@ -1,0 +1,20 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/desktop-workspace-binding"
+storage = "cwpdb"
+record_kind = "desktop_workspace_binding_v1"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_workspace_binding_v1/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["id"]
+[value_schema.properties.record.properties.id]
+type = ["string", "null"]
+format = "cwr-ref"
+[value_schema.properties.record.properties.root]
+type = "string"
+minLength = 1
+maxLength = 16384

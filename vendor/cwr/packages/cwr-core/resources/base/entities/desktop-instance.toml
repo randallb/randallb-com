@@ -1,0 +1,38 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/desktop-instance"
+storage = "cwpdb"
+record_kind = "desktop_workspace_instance_v1"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_workspace_instance_v1/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+[value_schema.properties.record.properties.root]
+type = "string"
+[value_schema.properties.record.properties.id]
+type = "string"
+minLength = 1
+maxLength = 4096
+[value_schema.properties.record.properties.name]
+type = "string"
+minLength = 1
+maxLength = 128
+[value_schema.properties.record.properties.folders]
+type = ["array", "null"]
+[value_schema.properties.record.properties.folders.items]
+type = "string"
+[value_schema.properties.record.properties.removed]
+type = "boolean"
+[[value_schema.properties.record.oneOf]]
+required = ["root", "id", "name", "folders"]
+[value_schema.properties.record.oneOf.properties.removed]
+const = false
+[[value_schema.properties.record.oneOf]]
+required = ["removed"]
+[value_schema.properties.record.oneOf.properties.removed]
+const = true
+[value_schema.properties.record.oneOf.not]
+anyOf = [{ required = ["root"] }, { required = ["id"] }, { required = ["name"] }, { required = ["folders"] }]

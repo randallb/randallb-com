@@ -5,3 +5,6 @@ node_modules/
 .env.*
 .dev.vars
 .dev.vars.*
+vendor/cwr/target/
+.cwr-state/
+cwr/.cwr/

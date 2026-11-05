@@ -1,0 +1,14 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/runtime"
+
+[[inputs]]
+type = "cwp://org.coworkerprotocol/2026-09/schemas/secret"
+as = "token"
+purpose = "Credential required before this example runtime can run"
+
+[[volumes]]
+as = "project"
+access = "read"
+
+[[imports]]
+path = "../loop/COWORKER.toml"
+as = "person"

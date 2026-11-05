@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/workspace",
+  "title": "CWR workspace composition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "volumes"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/workspace"
+    },
+    "volumes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "default": true
+          },
+          "access": {
+            "enum": [
+              "read",
+              "read_write"
+            ],
+            "default": "read_write"
+          }
+        }
+      }
+    },
+    "loops": {
+      "$ref": "#/properties/runtimes",
+      "description": "Legacy spelling of runtimes; cannot be combined with runtimes."
+    },
+    "inputs": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/inputDeclarations"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "env"
+            ],
+            "properties": {
+              "env": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "path",
+          "source_roots",
+          "working_directory",
+          "volume"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_roots": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "working_directory": {
+            "type": "string",
+            "minLength": 1
+          },
+          "volume": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "volume_access": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "volume",
+                "access"
+              ],
+              "properties": {
+                "volume": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "access": {
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ]
+                }
+              }
+            }
+          },
+          "inputs": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ref",
+                    "as"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string",
+                      "pattern": "^~@/[A-Za-z0-9_-]+$"
+                    },
+                    "as": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]+$"
+                    }
+                  }
+                }
+              }
+            ],
+            "default": {}
+          },
+          "acting_coworker": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allow_reconfiguration": {
+            "type": "boolean"
+          },
+          "volumes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ref",
+                "as",
+                "access"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "pattern": "^~@/[A-Za-z0-9_-]+$"
+                },
+                "as": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+$"
+                },
+                "access": {
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "minItems": 1
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "runtimes"
+      ],
+      "not": {
+        "required": [
+          "loops"
+        ]
+      }
+    },
+    {
+      "required": [
+        "loops"
+      ],
+      "not": {
+        "required": [
+          "runtimes"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+type = "cwp://org.coworkerprotocol/2026-10-23/schemas/relationship-catalog"
+ref = "cwp://org.coworkerprotocol/cwr/relationships/conversations"
+
+# Native CWR edge contracts. All retain the existing cwpdb edge schema and
+# tuple identity. Explicit external actors and edge endpoints preserve binding-only identities.
+# Derived relationships are read indexes, never ownership or authorization.
+
+[[relationships]]
+kind = "conversation"
+source = ["runtime"]
+target = ["conversation"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "participant"
+source = ["conversation"]
+target = ["external:actor"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "parent"
+source = ["conversation"]
+target = ["conversation"]
+singleton = true
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "archived"
+source = ["conversation"]
+target = ["runtime"]
+singleton = true
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "root_conversation"
+source = ["runtime"]
+target = ["conversation"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "message"
+source = ["conversation"]
+target = ["message"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "activity"
+source = ["conversation"]
+target = ["activity"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "transfer_metadata"
+source = ["conversation"]
+target = ["conversation_transfer_metadata"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "conversation_timeline_root"
+source = ["conversation"]
+target = ["conversation_timeline_connection"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "conversation_timeline_item"
+source = ["conversation_timeline_connection"]
+target = ["conversation_timeline_item"]
+singleton = false
+ordered = true
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "conversation_timeline_child"
+source = ["conversation_timeline_item"]
+target = ["conversation_timeline_connection"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "conversation_timeline_message"
+source = ["conversation_timeline_item"]
+target = ["message"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "conversation_timeline_invocation"
+source = ["conversation_timeline_item"]
+target = ["invocation"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_message"
+source = ["conversation"]
+target = ["message"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_activity"
+source = ["conversation"]
+target = ["binding:activity"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_item"
+source = ["conversation"]
+target = ["message", "activity", "invocation", "edge:timeline_activity", "binding:projection_item"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_invocation"
+# Fork/import history retains invocation identity without execution authority.
+source = ["binding:invocation"]
+target = ["edge:timeline_activity"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_source"
+source = ["message"]
+target = ["edge:timeline_activity"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "timeline_parent"
+source = ["binding:invocation"]
+target = ["edge:timeline_activity"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "completed_invocation"
+source = ["conversation"]
+target = ["binding:invocation"]
+singleton = false
+ordered = true
+derived = true
+value_schema = { type = "object" }
+
+# Retained version evidence for external participants, distinct from current
+# participation. This is not a membership or authorization index.
+[[relationships]]
+kind = "participant_version"
+source = ["conversation"]
+target = ["external:actor"]
+singleton = false
+ordered = false
+derived = false
+value_schema = { type = "object", required = ["coworker_ref"], properties = { coworker_ref = { type = "string" } } }
+
+# field:* edges are mechanical ref dependencies extracted from record values.
+# commentary is a derived call-to-activity lookup. wait/execution/tool_* and
+# child_invocation retain their existing invocation/tool owning operations.

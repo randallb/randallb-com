@@ -1,0 +1,12 @@
+{
+  "name": "workloop-cwpdb-storage",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [
+      { "name": "WORKSPACE_STORAGE", "class_name": "WorkspaceStorage" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceStorage"] }]
+}

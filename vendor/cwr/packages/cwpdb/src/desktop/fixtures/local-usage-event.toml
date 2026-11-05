@@ -1,0 +1,50 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://getworkloop.com/desktop/local-usage/event-definition"
+storage = "cwpdb"
+lifetime = "disposable"
+record_kind = "desktop_usage_event"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_usage_event/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["uuid","event","sdkTime","json","bytes","control","receiptMs","hostSession","renderer","appVersion","sequence","sdkVersion"]
+[value_schema.properties.record.properties.uuid]
+type = "string"
+pattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+[value_schema.properties.record.properties.event]
+type = "string"
+minLength = 1
+maxLength = 256
+[value_schema.properties.record.properties.sdkTime]
+type = "string"
+maxLength = 80
+[value_schema.properties.record.properties.json]
+type = "string"
+[value_schema.properties.record.properties.bytes]
+type = "integer"
+minimum = 0
+maximum = 65536
+[value_schema.properties.record.properties.control]
+type = ["string","null"]
+maxLength = 256
+[value_schema.properties.record.properties.receiptMs]
+type = "integer"
+[value_schema.properties.record.properties.hostSession]
+type = "string"
+maxLength = 256
+[value_schema.properties.record.properties.renderer]
+type = "string"
+maxLength = 256
+[value_schema.properties.record.properties.appVersion]
+type = "string"
+maxLength = 256
+[value_schema.properties.record.properties.sequence]
+type = "integer"
+minimum = 1
+maximum = 9007199254740991
+[value_schema.properties.record.properties.sdkVersion]
+const = "1.288.0"

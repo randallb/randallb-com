@@ -1,0 +1,25 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://getworkloop.com/desktop/local-usage/cursor-definition"
+storage = "cwpdb"
+record_kind = "desktop_usage_cursor"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_usage_cursor/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["sequence"]
+[value_schema.properties.record.properties.sequence]
+type = "integer"
+minimum = 0
+maximum = 9007199254740991
+[value_schema.properties.record.properties.clearing]
+type = "boolean"
+[value_schema.properties.record.properties.rows]
+type = "integer"
+minimum = 0
+[value_schema.properties.record.properties.bytes]
+type = "integer"
+minimum = 0

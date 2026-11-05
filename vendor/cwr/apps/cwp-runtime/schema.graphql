@@ -1,0 +1,1061 @@
+type Action {
+	actorRef: ID!
+	actionName: String!
+	activation: String!
+	title: String!
+	description: String!
+	inputSchema: JSON!
+	outputSchema: JSON!
+}
+
+type ActionError {
+	code: String!
+	message: String!
+	retryable: Boolean!
+}
+
+interface ActionInvocation {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	requester: Actor
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	forkedConversationRef: ID
+	stopControl: StopControl
+	outcome: InvocationOutcome
+	resultMessage: PublishedMessage
+	actionPresentation: InvocationAction
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+}
+
+union ActionResult = AdmittedInvocation | AwaitingPersonInvocation | RunningInvocation | CompletedInvocation | BlockedInvocation | FailedInvocation | StoppingInvocation | StoppedInvocation | ActionError
+
+type ActionResultLink {
+	label: String!
+	kind: ActionResultLinkKind!
+	reference: ID!
+}
+
+enum ActionResultLinkKind {
+	CONVERSATION
+}
+
+interface ActivityTiming {
+	startedAt: DateTime!
+	finishedAt: DateTime
+	elapsedSeconds: Float!
+	measuredAt: DateTime!
+}
+
+interface Actor {
+	id: ID!
+	name: String
+}
+
+type ActorConnection {
+	edges: [ActorEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+}
+
+type ActorEdge {
+	cursor: Cursor!
+	node: Actor!
+}
+
+input ActorFilter {
+	search: String
+	refs: [ID!]
+}
+
+type Adapter {
+	id: ID!
+	name: String!
+}
+
+enum AddressingMode {
+	EXPLICIT
+	IMPLICIT
+}
+
+type AdmittedInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+interface Attachment {
+	id: ID!
+	title: String
+	mediaType: String!
+}
+
+type AttachmentConnection {
+	edges: [AttachmentEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+}
+
+type AttachmentEdge {
+	cursor: Cursor!
+	node: Attachment!
+}
+
+input AttachmentFilter {
+	search: String
+	mediaTypes: [String!]
+}
+
+type AwaitingPersonInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type BlockedInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type CompletedActivityTiming implements ActivityTiming {
+	startedAt: DateTime!
+	finishedAt: DateTime!
+	elapsedSeconds: Float!
+	measuredAt: DateTime!
+}
+
+type CompletedInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type ContentPresentation {
+	text: String!
+	attachments(filter: AttachmentFilter, first: Int, after: Cursor, last: Int, before: Cursor): AttachmentConnection!
+}
+
+type Conversation implements Node {
+	"""
+	Runtime row metadata from the authorized page or an authorized point read.
+	"""
+	summary: ConversationRowSummary
+	messageTargets: [Coworker!]!
+	defaultMessageTarget: Coworker
+	ownerContextRef: ID
+	"""
+	Recipients of the authenticated actor's latest addressed message.
+	"""
+	lastAddressedActorRefs: [ID!]!
+	forkSource: ForkSource
+	"""
+	Nullable canonical layout; an empty retained root remains authoritative.
+	"""
+	canonicalTimeline(last: Int! = 50, before: Cursor): TimelineItemConnection
+	"""
+	Selected legacy anchors and their content, without total counts or dependencies.
+	"""
+	legacyHistory(last: Int! = 50, before: Cursor): LegacyHistoryPage
+	timeline(filter: TimelineFilter, first: Int, after: Cursor, last: Int, before: Cursor): TimelineItemConnection!
+	id: ID!
+	title: String
+	archived: Boolean!
+	legacyTimeline(first: Int! = 50, after: String): TimelineConnection!
+}
+
+type ConversationCompletion {
+	invocationRef: ID!
+	sequence: Int!
+}
+
+type ConversationConnection {
+	edges: [ConversationEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+	revision: String!
+}
+
+type ConversationEdge {
+	cursor: String!
+	node: Conversation!
+}
+
+type ConversationRowSummary {
+	lastMessageRef: ID
+	lastMessagePreview: String
+	completedWorkRefs: [ID!]!
+	completedWork: [ConversationCompletion!]!
+	revision: String!
+}
+
+type Coworker implements Actor & Node {
+	id: ID!
+	name: String
+	handle: String
+	"""
+	Category of the current default adapter; unknown or historical-only identities return null.
+	"""
+	category: CoworkerCategory
+	"""
+	Current configured bindings visible to this session. Does not expose adapter parameters.
+	"""
+	bindings: [CoworkerBinding!]!
+	"""
+	Declared default, including when unavailable. Never substitutes another binding.
+	"""
+	defaultBinding: CoworkerBinding
+}
+
+type CoworkerBinding {
+	id: ID!
+	adapter: Adapter!
+	model: ModelConfiguration
+}
+
+enum CoworkerCategory {
+	HUMAN
+	AI
+	SOFTWARE
+}
+
+scalar Cursor
+
+scalar DateTime
+
+type ExecutionAttempt {
+	generation: String!
+	phase: String!
+	startedAt: DateTime
+	latestActivityAt: DateTime
+	progress: String
+}
+
+type FailedInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type FileChange {
+	path: String!
+	pathTruncated: Boolean!
+	changeKind: String!
+	diff: TextPreview
+}
+
+type FileChangeConnection {
+	edges: [FileChangeEdge!]!
+	pageInfo: PageInfo!
+	coverage: InspectorCoverage!
+}
+
+type FileChangeEdge {
+	cursor: Cursor!
+	node: FileChange!
+}
+
+type FileContent {
+	file: FileMetadata!
+	contentBase64: String!
+}
+
+type FileMetadata {
+	id: ID!
+	filename: String!
+	mediaType: String!
+	sizeBytes: Int!
+	sha256: String!
+}
+
+type ForkSource {
+	conversationRef: ID!
+	messageRef: ID!
+}
+
+type HtmlVisualization implements Attachment & Node {
+	"""
+	Artifact failure stays local even when content is composed into a screen.
+	"""
+	content: VisualizationContent!
+	id: ID!
+	title: String
+	mediaType: String!
+	html: String!
+}
+
+interface InformationalOutcome {
+	status: Int!
+	summary: String!
+}
+
+enum InspectorCoverage {
+	COMPLETE
+	PARTIAL
+}
+
+type InstalledScheduleV1 {
+	id: ID!
+	scheduleRef: ID!
+	ownerContextRef: ID!
+	authorActorRef: ID!
+	definition: ScheduleDefinitionV1!
+	availability: String!
+	paused: Boolean!
+	nextDueUnixMs: Float!
+	activeOccurrenceRef: ID
+	lastAdmissionError: String
+}
+
+type InvocationAction {
+	selector: String!
+	title: String!
+	"""
+	Already-public source text; private invocation inputs stay private.
+	"""
+	request: String!
+	links: [ActionResultLink!]!
+	resultMessage: PublishedMessage
+}
+
+type InvocationCall {
+	callId: String!
+	caller: ActionInvocation
+	callee: ActionInvocation
+}
+
+type InvocationCallConnection {
+	edges: [InvocationCallEdge!]!
+	pageInfo: PageInfo!
+	coverage: InspectorCoverage!
+}
+
+type InvocationCallEdge {
+	cursor: Cursor!
+	node: InvocationCall!
+}
+
+type InvocationOutcome {
+	status: Int!
+	summary: String!
+	error: OutcomeDetail
+	cause: OutcomeDetail
+}
+
+type InvocationWait {
+	callId: String!
+	state: InvocationWaitState!
+	waiter: ActionInvocation
+	awaited: ActionInvocation
+}
+
+type InvocationWaitConnection {
+	edges: [InvocationWaitEdge!]!
+	pageInfo: PageInfo!
+	coverage: InspectorCoverage!
+}
+
+type InvocationWaitEdge {
+	cursor: Cursor!
+	node: InvocationWait!
+}
+
+enum InvocationWaitState {
+	PENDING
+	READY
+	RESUMING
+	CONSUMED
+	ABANDONED
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+type LegacyHistoryEdge {
+	cursor: Cursor!
+	node: Node
+}
+
+type LegacyHistoryPage {
+	revision: String!
+	pageInfo: PageInfo!
+	edges: [LegacyHistoryEdge!]!
+}
+
+interface Message {
+	id: ID!
+	text: String!
+	files: [FileMetadata!]!
+	authorActorRef: ID!
+	addressedActorRefs: [ID!]!
+	replyToMessageRef: ID
+	addressingMode: AddressingMode
+	occurredAt: DateTime
+	replyTo: Message
+	progress: MessageProgress
+	action: MessageAction
+	author: Actor!
+	recipients(filter: ActorFilter, first: Int, after: Cursor, last: Int, before: Cursor): ActorConnection!
+	attachments(filter: AttachmentFilter, first: Int, after: Cursor, last: Int, before: Cursor): AttachmentConnection!
+}
+
+interface MessageAction {
+	invocation: ActionInvocation
+	title: String
+}
+
+type MessageActionCall implements MessageAction {
+	invocation: ActionInvocation
+	title: String
+	selector: String!
+	input: JSON!
+}
+
+type MessageActionResult implements MessageAction {
+	invocation: ActionInvocation
+	title: String
+	status: Int!
+	summary: String
+	result: JSON!
+}
+
+type MessageAdmission {
+	conversationRef: ID!
+	conversation: Conversation!
+	messageRef: ID!
+	invocation: ActionInvocation
+}
+
+type MessageProgress {
+	timing: ActivityTiming
+	response: InformationalOutcome
+	invocation: ActionInvocation!
+	sourceActivityRef: ID!
+	status: Int
+	occurredAt: DateTime
+}
+
+type MessageVisualization {
+	markerIndex: Int!
+	title: String
+	mode: String
+	error: String
+	artifactRef: ID
+}
+
+type ModelConfiguration {
+	provider: String
+	model: String
+	reasoningEffort: String
+}
+
+type Mutation {
+	invokeAction(url: ID!, activation: String!, input: JSON!, requestId: ID!): ActionResult!
+	ingestFile(filename: String!, mediaType: String!, contentBase64: String!): FileMetadata!
+	registerTerminalProvider(coworkers: [TerminalCoworkerInput!]!): ID!
+	enableTerminalCoworker(providerSessionRef: ID!, actorRef: ID!, enabled: Boolean!): Boolean!
+	completeTerminalWork(invocationRef: ID!, terminal: JSON!): Boolean!
+	acknowledgeTerminalStop(invocationRef: ID!): Boolean!
+	protectTerminalResult(invocationRef: ID!): Boolean!
+	validateTerminalResult(validationRef: ID!, allowed: Boolean!): Boolean!
+	revokeTerminalResult(invocationRef: ID!): Boolean!
+	"""
+	Append to an existing conversation. Its owner cannot be changed by a send.
+	"""
+	sendMessage(text: String!, requestId: ID!, conversationRef: ID!, fileRefs: [ID!]): MessageAdmission!
+	"""
+	Create a conversation in the selected pack or Workspace context.
+	Omitting the owner selects the runtime's default Workspace context.
+	"""
+	createConversation(text: String!, requestId: ID!, ownerContextRef: ID, fileRefs: [ID!]): MessageAdmission!
+}
+
+interface Node {
+	id: ID!
+}
+
+type OtherInformationalOutcome implements InformationalOutcome {
+	status: Int!
+	summary: String!
+}
+
+type OutcomeDetail {
+	code: String!
+	message: String
+}
+
+type PageInfo {
+	hasNextPage: Boolean!
+	hasPreviousPage: Boolean!
+	startCursor: Cursor
+	endCursor: Cursor
+}
+
+type ProgressOutcome implements InformationalOutcome {
+	status: Int!
+	summary: String!
+}
+
+union PublicationSource = ResolvedSource | UnavailableSource
+
+type PublishedMessage implements Message & Node {
+	id: ID!
+	authorActorRef: ID!
+	addressedActorRefs: [ID!]!
+	replyToMessageRef: ID
+	text: String!
+	"""
+	How the retained message addressed its recipients; unknown records remain null.
+	"""
+	addressingMode: AddressingMode
+	recipients(filter: ActorFilter, first: Int, after: Cursor, last: Int, before: Cursor): ActorConnection!
+	files: [FileMetadata!]!
+	attachments(filter: AttachmentFilter, first: Int, after: Cursor, last: Int, before: Cursor): AttachmentConnection!
+	occurredAt: DateTime
+	replyTo: Message
+	author: Actor!
+	progress: MessageProgress
+	visualizations: [MessageVisualization!]!
+	action: MessageAction
+}
+
+type Query {
+	runtime: Runtime!
+}
+
+type ResolvedSource {
+	node: Node!
+}
+
+type RunningActivityTiming implements ActivityTiming {
+	startedAt: DateTime!
+	finishedAt: DateTime
+	elapsedSeconds: Float!
+	measuredAt: DateTime!
+}
+
+type RunningInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type Runtime implements Node {
+	file(ref: ID!): FileContent!
+	message(ref: ID!): Message
+	timelineItem(ref: ID!): TimelineItem
+	node(ref: ID!): Node
+	id: ID!
+	"""
+	Session-visible targets intersected with the host product context.
+	"""
+	messageTargets(ownerContextRef: ID): [Coworker!]!
+	defaultMessageTarget(ownerContextRef: ID): Coworker
+	actions(ownerContextRef: ID): [Action!]!
+	"""
+	The installed-schedules-v1 collection for one host-owned pack context.
+	"""
+	schedules(ownerContextRef: ID!): [InstalledScheduleV1!]!
+	scheduleRuns(ownerContextRef: ID!, scheduleRef: ID!, first: Int! = 20): [ScheduleOccurrenceV1!]!
+	invocation(id: ID, ref: ID): ActionInvocation
+	actor: Actor!
+	actorRef: ID!
+	conversations(first: Int! = 50, after: String, includeArchived: Boolean! = false, ownerContextRef: ID, includeLegacyOwner: Boolean! = false): ConversationConnection!
+	conversation(id: ID, ref: ID): Conversation
+}
+
+type ScheduleDefinitionV1 {
+	declarationRef: ID!
+	revision: String!
+	anchorUnixMs: Float!
+	intervalMs: Float!
+}
+
+type ScheduleOccurrenceV1 {
+	id: ID!
+	occurrenceRef: ID!
+	scheduleRef: ID!
+	dueUnixMs: Float!
+	outcome: String!
+	invocationRef: ID
+	conversationRef: ID
+	archived: Boolean!
+}
+
+type SessionReady {
+	sessionRef: ID!
+}
+
+type StopControl {
+	target: ActionInvocation
+	disposition: StopRequestDisposition!
+}
+
+enum StopRequestDisposition {
+	PENDING
+	ACCEPTED
+	TOO_LATE
+	REJECTED
+}
+
+"""
+Whether executor release is confirmed, pending, or absent from legacy history.
+"""
+enum StopSettlement {
+	PENDING
+	CONFIRMED
+	UNAVAILABLE
+}
+
+type StoppedInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type StoppingInvocation implements ActionInvocation & Node {
+	id: ID!
+	state: String!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	targetActorRef: ID!
+	"""
+	The retained requester identity under this invocation's session visibility.
+	"""
+	requester: Actor
+	"""
+	The retained target identity, including unresolved historical actors.
+	"""
+	target: Actor
+	sourceMessageRef: ID
+	parentInvocationRef: ID
+	childInvocationRefs: [ID!]!
+	admittedAt: DateTime!
+	startedAt: DateTime
+	finishedAt: DateTime
+	stopRequestedAt: DateTime
+	stopSettlement: StopSettlement
+	currentExecution: ExecutionAttempt
+	activities(first: Int, after: Cursor, last: Int, before: Cursor): WorkActivityConnection
+	calls(first: Int, after: Cursor, last: Int, before: Cursor): InvocationCallConnection
+	waits(first: Int, after: Cursor, last: Int, before: Cursor): InvocationWaitConnection
+	stopControl: StopControl
+	forkedConversationRef: ID
+	actionPresentation: InvocationAction
+	"""
+	The authorized final published reply for named actions and ordinary chat.
+	"""
+	resultMessage: PublishedMessage
+	outcome: InvocationOutcome
+}
+
+type StreamingMessage implements Message & Node {
+	visualizations: [MessageVisualization!]!
+	phase: String!
+	id: ID!
+	text: String!
+	authorActorRef: ID!
+	addressedActorRefs: [ID!]!
+	replyToMessageRef: ID
+	recipients(filter: ActorFilter, first: Int, after: Cursor, last: Int, before: Cursor): ActorConnection!
+	files: [FileMetadata!]!
+	attachments(filter: AttachmentFilter, first: Int, after: Cursor, last: Int, before: Cursor): AttachmentConnection!
+	addressingMode: AddressingMode
+	occurredAt: DateTime
+	replyTo: Message
+	progress: MessageProgress
+	action: MessageAction
+	author: Actor!
+	invocation: ActionInvocation!
+}
+
+type Subscription {
+	"""
+	Emitted only for a committed development replacement, never an unexpected EOF.
+	"""
+	runtimeRestarting: String!
+	"""
+	Initial authoritative selection, then fresh selections after runtime publications.
+	Intermediate publications may be coalesced. Reconnect to obtain current state.
+	"""
+	runtime: Runtime!
+	terminalEvents: TerminalEvent!
+}
+
+input TerminalActionInput {
+	actionName: String!
+	title: String!
+	description: String!
+	inputSchema: JSON!
+	outputSchema: JSON!
+}
+
+input TerminalCoworkerInput {
+	actorRef: ID!
+	coworkerRef: ID!
+	handle: String!
+	name: String!
+	actions: [TerminalActionInput!]!
+}
+
+union TerminalEvent = SessionReady | TerminalWork | TerminalStop | TerminalResultValidation
+
+type TerminalResultValidation {
+	invocationRef: ID!
+	validationRef: ID!
+}
+
+type TerminalStop {
+	invocationRef: ID!
+}
+
+type TerminalWork {
+	invocationRef: ID!
+	rootInvocationRef: ID!
+	conversationRef: ID!
+	requesterActorRef: ID!
+	providerSessionRef: ID!
+	targetActorRef: ID!
+	coworkerRef: ID!
+	actionName: String!
+	input: JSON!
+	addressedMessage: JSON
+}
+
+type TextPreview {
+	text: String!
+	truncated: Boolean!
+}
+
+enum TimelineChildRole {
+	COMMENTARY
+	FINAL_REPLY
+}
+
+type TimelineConnection {
+	edges: [TimelineEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+	revision: String!
+}
+
+type TimelineEdge {
+	cursor: String!
+	node: TimelineNode!
+}
+
+input TimelineFilter {
+	search: String
+	sourceTypes: [TimelineSourceType!]
+	childRole: TimelineChildRole
+}
+
+type TimelineItem implements Node {
+	id: ID!
+	publicationRef: ID!
+	presentation: ContentPresentation!
+	source: PublicationSource!
+	children(filter: TimelineFilter, first: Int, after: Cursor, last: Int, before: Cursor): TimelineItemConnection
+}
+
+type TimelineItemConnection {
+	connectionRef: ID!
+	revision: String!
+	edges: [TimelineItemEdge!]!
+	pageInfo: PageInfo!
+	totalCount: Int!
+}
+
+type TimelineItemEdge {
+	cursor: Cursor!
+	node: TimelineItem!
+}
+
+union TimelineNode = PublishedMessage | AdmittedInvocation | AwaitingPersonInvocation | RunningInvocation | CompletedInvocation | BlockedInvocation | FailedInvocation | StoppingInvocation | StoppedInvocation
+
+enum TimelineSourceType {
+	MESSAGE
+	ACTION_INVOCATION
+}
+
+type UnavailableSource {
+	presentation: ContentPresentation!
+}
+
+type UnresolvedActor implements Actor & Node {
+	id: ID!
+	name: String
+}
+
+type VisualizationContent {
+	html: String
+	error: String
+}
+
+type WorkActivity {
+	id: ID!
+	kind: String!
+	label: String!
+	labelTruncated: Boolean!
+	state: String!
+	active: Boolean!
+	startedAt: DateTime
+	finishedAt: DateTime
+	detailsAvailable: Boolean!
+	childInvocation: ActionInvocation
+	command: TextPreview
+	output: TextPreview
+	error: TextPreview
+	exitCode: Int
+	files(first: Int, after: Cursor, last: Int, before: Cursor): FileChangeConnection
+}
+
+type WorkActivityConnection {
+	edges: [WorkActivityEdge!]!
+	pageInfo: PageInfo!
+	coverage: InspectorCoverage!
+}
+
+type WorkActivityEdge {
+	cursor: Cursor!
+	node: WorkActivity!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: Subscription
+}

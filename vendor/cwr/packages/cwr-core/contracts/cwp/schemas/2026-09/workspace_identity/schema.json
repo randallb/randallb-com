@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/workspace_identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "workspace_id"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/workspace_identity"
+    },
+    "workspace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "runtime_root_ref": {
+      "type": "string",
+      "description": "Persisted local runtime root. Omission retains the legacy org.coworkerprotocol.local root."
+    }
+  }
+}

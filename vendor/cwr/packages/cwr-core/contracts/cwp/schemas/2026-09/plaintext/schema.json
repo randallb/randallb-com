@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/plaintext",
+  "title": "Plaintext",
+  "description": "Ordinary JSON configuration; never grants access to a volume."
+}

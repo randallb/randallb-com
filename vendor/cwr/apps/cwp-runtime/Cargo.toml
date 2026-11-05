@@ -1,0 +1,33 @@
+[package]
+name = "cwp-runtime"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+base64 = "0.22"
+hex = "0.4"
+async-trait = "0.1"
+async-graphql = { version = "=7.2.1", default-features = false }
+async-graphql-axum = "=7.2.1"
+futures-util = "0.3"
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+cwr-core = { path = "../../packages/cwr-core" }
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+signal-hook = "0.3"
+time = "0.3"
+toml = "0.8"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+cwr-core = { path = "../../packages/cwr-core", features = ["test-read-metrics"] }
+tungstenite = "0.29"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
+tempfile = "3"

@@ -1,0 +1,3 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Reader"
+slug = "reader"

@@ -1,0 +1,5 @@
+type = "cwp://org.coworkerprotocol/2026-10-23/schemas/native-service"
+ref = "cwp://org.coworkerprotocol/cwr/services/conversations"
+provider = "cwr.conversations.v1"
+operations = ["publish", "timeline", "message", "archive", "restore", "stop", "replay", "ingress", "list", "browse", "rename", "export", "import", "fork"]
+entities = ["conversation", "conversation-message", "conversation-activity", "conversation-transfer-metadata", "conversation-timeline-connection", "conversation-timeline-item", "conversation-participation"]

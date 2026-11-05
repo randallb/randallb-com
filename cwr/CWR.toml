@@ -1,0 +1,6 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas"
+[[imports]]
+path = "./operator.toml"
+[[imports]]
+path = "./site_checks/COWORKER.toml"
+as = "site_checks"

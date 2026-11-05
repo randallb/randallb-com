@@ -1,0 +1,17 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/codex"
+name = "Codex"
+authority_capabilities = [
+  "workspace.read",
+  "workspace.write",
+  "process.execute",
+]
+
+[coworker_params_schema]
+path = "./codex.coworker-params.schema.json"
+
+[integration_params_schema]
+path = "./codex.integration-params.schema.json"
+
+[actor_integration_params_schema]
+path = "./codex.actor-integration-params.schema.json"

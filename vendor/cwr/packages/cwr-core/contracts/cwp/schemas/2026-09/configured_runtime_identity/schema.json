@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/configured_runtime_identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "runtime_id",
+    "runtime_root_ref"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/configured_runtime_identity"
+    },
+    "runtime_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "runtime_root_ref": {
+      "type": "string",
+      "description": "Persisted local runtime root. Fresh identities use cwp://local.<hostname>/runtimes/<runtime_id>; legacy database roots remain exact."
+    }
+  }
+}

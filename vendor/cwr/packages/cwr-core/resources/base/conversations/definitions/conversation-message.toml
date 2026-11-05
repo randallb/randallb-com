@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/conversation-message"
+storage = "cwpdb"
+record_kind = "message"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/message/2026-09"
+
+# Existing CWR storage shape; domain relationships and authorization stay in CWR.
+value_schema = { "type" = "object", "anyOf" = [{ "required" = ["record"] }, { "required" = ["streaming"] }], "properties" = { "record" = { "type" = "object", "required" = ["message_ref", "author_actor_ref", "addressed_actor_refs", "text"], "properties" = { "message_ref" = { "type" = "string" }, "author_actor_ref" = { "type" = "string" }, "addressed_actor_refs" = { "type" = "array", "items" = { "type" = "string" } }, "text" = { "type" = "string" } } } } }

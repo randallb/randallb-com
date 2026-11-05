@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Message duration checker input v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "context"
+  ],
+  "properties": {
+    "contract": {
+      "const": "message-duration-v2"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation",
+        "source_message",
+        "reply_messages",
+        "limitations"
+      ],
+      "properties": {
+        "invocation": {},
+        "source_message": {},
+        "reply_messages": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "occurredAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "occurredAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

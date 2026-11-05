@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/adapter",
+  "title": "Adapter",
+  "description": "A reusable communication or execution contract whose implementation is resolved by the host.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "ref",
+    "name"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+    },
+    "ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_capabilities": {
+      "description": "Actor-authority effects a conforming implementation of this adapter can provide and enforce.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "workspace.read",
+          "workspace.write",
+          "process.execute"
+        ]
+      },
+      "default": []
+    },
+    "coworker_params_schema": {
+      "description": "Locates the JSON Schema for coworker adapter-binding parameters.",
+      "$ref": "#/$defs/schemaLocator"
+    },
+    "integration_params_schema": {
+      "description": "Locates the JSON Schema for integration parameters.",
+      "$ref": "#/$defs/schemaLocator"
+    },
+    "actor_integration_params_schema": {
+      "description": "Locates the JSON Schema for actor-integration parameters.",
+      "$ref": "#/$defs/schemaLocator"
+    }
+  },
+  "$defs": {
+    "schemaLocator": {
+      "description": "Locates a JSON Schema by bundled file path or CWR ref.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "A JSON Schema file path relative to the adapter declaration.",
+          "type": "string",
+          "pattern": "^\\./"
+        },
+        "ref": {
+          "description": "A CWR ref that resolves to a JSON Schema document.",
+          "type": "string",
+          "format": "cwr-ref",
+          "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "ref"
+          ]
+        }
+      ]
+    }
+  }
+}

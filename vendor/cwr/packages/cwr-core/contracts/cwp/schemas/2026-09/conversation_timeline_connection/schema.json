@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_connection",
+  "title": "Conversation timeline connection page",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "connection_ref",
+    "owner",
+    "revision",
+    "edges",
+    "page_info"
+  ],
+  "properties": {
+    "connection_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    },
+    "owner": {
+      "$ref": "#/$defs/owner"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cursor",
+          "item"
+        ],
+        "properties": {
+          "cursor": {
+            "$ref": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_cursor"
+          },
+          "item": {
+            "$ref": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_item"
+          }
+        }
+      }
+    },
+    "page_info": {
+      "$ref": "#/$defs/page_info"
+    }
+  },
+  "$defs": {
+    "absolute_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^cwp://(?!~)[^\\s#]+$"
+    },
+    "owner": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "conversation_ref"
+          ],
+          "properties": {
+            "kind": {
+              "const": "conversation"
+            },
+            "conversation_ref": {
+              "$ref": "#/$defs/absolute_ref"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "item_ref"
+          ],
+          "properties": {
+            "kind": {
+              "const": "timeline_item"
+            },
+            "item_ref": {
+              "$ref": "#/$defs/absolute_ref"
+            }
+          }
+        }
+      ]
+    },
+    "page_info": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "has_previous_page",
+        "has_next_page"
+      ],
+      "properties": {
+        "has_previous_page": {
+          "type": "boolean"
+        },
+        "has_next_page": {
+          "type": "boolean"
+        },
+        "start_cursor": {
+          "$ref": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_cursor"
+        },
+        "end_cursor": {
+          "$ref": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_cursor"
+        }
+      }
+    }
+  }
+}

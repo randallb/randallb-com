@@ -1,0 +1,17 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/role"
+name = "Looper"
+
+[[adapters]]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/loopback"
+
+[[actions]]
+verb = "draft"
+object = "brief"
+title = "Draft brief"
+description = "Draft a concise brief."
+
+[actions.input_schema]
+ref = "cwp://com.example/schemas/2026-09/draft_brief_input"
+
+[actions.output_schema]
+ref = "cwp://com.example/schemas/2026-09/draft_brief_output"

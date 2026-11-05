@@ -1,0 +1,14 @@
+URL catalog and placeholder release — 2026-11-05T00:39:49.498353+00:00
+
+Scope: Substack passthrough removed at Randall’s request. Root and 16 other cataloged paths serve the exact visible text: randallb.com coming soon. Unknown paths return 404; form submissions return 405; all responses are no-store/noindex.
+
+Coverage: 5 posts found in sitemap and RSS; 10 public pages fetched; 17 unique paths total. Service entry points are recorded without submitting forms. This is an inventory of discovered public URLs, not a guarantee that private, unlinked, or historical URLs are exhaustive. The feed and fetched HTML are preserved.
+
+Production proposal: attach this Worker to randallb.com as a Worker Custom Domain, replacing the DNS-only apex Substack CNAME. Keep Substack’s publication configuration and mail DNS intact. Initial production application remains pending review/approval.
+
+Rollback: remove the Worker Custom Domain and restore apex CNAME @ -> target.substack-custom-domains.com, proxy off, TTL Auto. Verify Substack homepage and a post in Chrome.
+
+Validation: both Deno tests pass, covering every cataloged path, root query strings, HEAD, unknown routes and POST rejection. This standalone candidate is not the integrated superbuild; CWR and ordered review acceptance are not claimed. Existing Drive checkout stalled, so it was not modified.
+
+Production application: Randall approved the narrower placeholder release. Worker version 481339ba-209b-453c-bbe7-edac8e0197bd attached to randallb.com as Custom Domain. Removed apex Substack CNAME, then disabled Substack custom-domain binding because it continued receiving requests. Substack settings verified to show Add a custom domain afterward. Publication remains at randallb.substack.com.
+Rollback also requires re-enabling randallb.com in Substack Domain settings, in addition to removing Worker Custom Domain and restoring DNS-only apex CNAME. The Substack setting is no longer intact.

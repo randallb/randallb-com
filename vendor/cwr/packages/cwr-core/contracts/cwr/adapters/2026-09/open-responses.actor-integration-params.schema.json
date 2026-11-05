@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Responses Actor Integration Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cwr_action_actor_refs": {
+      "description": "Limit CWR actions to exact concrete coworkers. Declaration-local aliases resolve to canonical coworker refs during activation.",
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "cwr-ref"
+      }
+    },
+    "execution_environment": {
+      "description": "Execute using Workloop Cloud infrastructure. The host selects an executor; this value grants no authority or credentials. Omit for the normal local route.",
+      "enum": [
+        "workloop_cloud"
+      ]
+    }
+  }
+}

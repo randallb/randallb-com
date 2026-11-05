@@ -1,0 +1,7 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/conversation"
+ref = "cwp://com.example.runtime/conversations/product_review_01"
+participant_actor_refs = [
+  "~@/actors/randallb",
+  "~@/actors/looper",
+]
+timeline_connection_ref = "cwp://com.example.runtime/conversations/product_review_01/timeline"

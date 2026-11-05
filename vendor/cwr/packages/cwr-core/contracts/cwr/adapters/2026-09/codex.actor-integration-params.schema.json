@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex Actor Integration Parameters",
+  "description": "Configures Codex for one actor and local integration.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sandbox": {
+      "description": "Requests the Codex filesystem sandbox. Defaults to danger-full-access. The trusted host must name the canonical workspace path in CWR_CODEX_DANGER_FULL_ACCESS_WORKSPACE; local runtimes grant their bound workspace automatically. Use workspace-write to opt down.",
+      "type": "string",
+      "enum": [
+        "workspace-write",
+        "danger-full-access"
+      ],
+      "default": "danger-full-access"
+    },
+    "cwr_only": {
+      "description": "Disable provider filesystem, process, and network tools while retaining the actor's CWR host tools. Requires cwr_action_actor_refs. Defaults to false.",
+      "type": "boolean",
+      "default": false
+    },
+    "cwr_action_actor_refs": {
+      "description": "Limit CWR actions to exact concrete coworkers. Declaration-local aliases resolve to canonical coworker refs during activation.",
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "cwr-ref"
+      }
+    }
+  }
+}

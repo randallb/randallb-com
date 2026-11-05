@@ -1,0 +1,12 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Helper"
+slug = "helper"
+
+[[roles]]
+path = "./ROLE.toml"
+as = "behavior"
+
+[[integrations]]
+path = "./integration.toml"
+as = "local_execution"
+default = true

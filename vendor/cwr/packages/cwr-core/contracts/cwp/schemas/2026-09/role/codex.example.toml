@@ -1,0 +1,21 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/role"
+name = "Brief Writer"
+required_authority = ["workspace.read", "workspace.write"]
+
+[[adapters]]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/codex"
+
+[adapters.params]
+entrypoint = "./PROMPT.md"
+
+[[actions]]
+verb = "draft"
+object = "brief"
+title = "Draft brief"
+description = "Draft a concise brief."
+
+[actions.input_schema]
+path = "./codex.draft-brief.input.schema.json"
+
+[actions.output_schema]
+path = "./codex.draft-brief.output.schema.json"

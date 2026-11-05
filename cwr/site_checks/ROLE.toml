@@ -1,0 +1,13 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/role"
+name = "Site check runner"
+[[adapters]]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/sh"
+[[actions]]
+verb = "run"
+object = "checks"
+title = "Run site checks"
+description = "Run deterministic site checks and fail when they fail"
+[actions.input_schema]
+path = "./input.schema.json"
+[actions.output_schema]
+path = "./output.schema.json"

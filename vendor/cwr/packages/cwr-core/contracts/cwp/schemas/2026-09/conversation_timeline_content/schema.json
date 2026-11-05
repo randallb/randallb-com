@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_content",
+  "title": "Conversation timeline content link",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "message_ref"
+      ],
+      "properties": {
+        "kind": {
+          "const": "message"
+        },
+        "message_ref": {
+          "$ref": "#/$defs/absolute_ref"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "invocation_ref"
+      ],
+      "properties": {
+        "kind": {
+          "const": "invocation"
+        },
+        "invocation_ref": {
+          "$ref": "#/$defs/absolute_ref"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "absolute_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^cwp://(?!~)[^\\s#]+$"
+    }
+  }
+}

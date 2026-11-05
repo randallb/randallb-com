@@ -1,0 +1,10 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/person"
+name = "Person"
+authority_capabilities = []
+[coworker_params_schema]
+path = "./person.empty.schema.json"
+[integration_params_schema]
+path = "./person.integration-params.schema.json"
+[actor_integration_params_schema]
+path = "./person.empty.schema.json"

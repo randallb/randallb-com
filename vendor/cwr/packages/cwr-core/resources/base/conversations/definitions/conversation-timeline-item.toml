@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/conversation-timeline-item"
+storage = "cwpdb"
+record_kind = "conversation_timeline_item"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/conversation_timeline_item/2026-09"
+
+# Existing CWR storage shape; domain relationships and authorization stay in CWR.
+value_schema = { "type" = "object", "required" = ["publication_ref"], "properties" = { "publication_ref" = { "type" = "string" } } }

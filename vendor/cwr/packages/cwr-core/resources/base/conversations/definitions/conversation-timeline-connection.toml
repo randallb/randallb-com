@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/conversation-timeline-connection"
+storage = "cwpdb"
+record_kind = "conversation_timeline_connection"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/conversation_timeline_connection/2026-09"
+
+# Existing CWR storage shape; domain relationships and authorization stay in CWR.
+value_schema = { "type" = "object", "required" = ["revision", "next_sequence", "store_sequence"], "properties" = { "revision" = { "type" = "integer", "minimum" = 0 }, "next_sequence" = { "type" = "integer", "minimum" = 0 }, "store_sequence" = { "type" = "integer", "minimum" = 0 } } }

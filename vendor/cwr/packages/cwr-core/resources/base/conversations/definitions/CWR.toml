@@ -1,0 +1,29 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/runtime"
+
+[[exports]]
+path = "./conversation.toml"
+as = "conversation"
+
+[[exports]]
+path = "./conversation-message.toml"
+as = "conversation-message"
+
+[[exports]]
+path = "./conversation-activity.toml"
+as = "conversation-activity"
+
+[[exports]]
+path = "./conversation-transfer-metadata.toml"
+as = "conversation-transfer-metadata"
+
+[[exports]]
+path = "./conversation-timeline-connection.toml"
+as = "conversation-timeline-connection"
+
+[[exports]]
+path = "./conversation-timeline-item.toml"
+as = "conversation-timeline-item"
+
+[[exports]]
+path = "./conversation-participation.toml"
+as = "conversation-participation"

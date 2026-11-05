@@ -1,0 +1,17 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/variable"
+storage = "cwpdb"
+
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["name", "value"]
+
+[value_schema.properties.name]
+type = "string"
+pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+maxLength = 128
+
+[value_schema.properties.value]
+type = "string"
+maxLength = 65536

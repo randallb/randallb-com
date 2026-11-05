@@ -1,0 +1,7 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Looper"
+slug = "looper"
+
+[[roles]]
+path = "../role/example.toml"
+as = "behavior"

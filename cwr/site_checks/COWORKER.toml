@@ -1,0 +1,12 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Site checks"
+slug = "site_checks"
+[[roles]]
+path = "./ROLE.toml"
+[[integrations]]
+path = "./integration.toml"
+as = "local"
+[integrations.params]
+fail_on_nonzero = true
+[integrations.params.commands]
+run--checks = "cd .. && deno task check"

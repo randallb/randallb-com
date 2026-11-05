@@ -1,0 +1,6 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/schedule-owner"
+storage = "cwpdb"
+record_kind = "schedule_owner"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/schedule_owner/2026-09"
+value_schema = { type = "object", required = ["record"], additionalProperties = false, properties = { record = { type = "object" } } }

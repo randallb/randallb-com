@@ -1,0 +1,7 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Randall"
+slug = "randallb"
+
+[[roles]]
+path = "../role/slack.example.toml"
+as = "behavior"

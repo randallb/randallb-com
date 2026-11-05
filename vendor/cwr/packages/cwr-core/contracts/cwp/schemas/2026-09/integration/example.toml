@@ -1,0 +1,7 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/integration"
+
+[adapter]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/slack"
+
+[params]
+team_id = "T123"

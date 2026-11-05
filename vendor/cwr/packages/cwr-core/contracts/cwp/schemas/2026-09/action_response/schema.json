@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/action_response",
+  "title": "Action Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "invocation_ref",
+    "sequence",
+    "status",
+    "summary"
+  ],
+  "properties": {
+    "invocation_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599,
+      "not": {
+        "minimum": 300,
+        "maximum": 399
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "result": {
+      "description": "The successful output, validated by the selected action's output schema."
+    },
+    "error": {
+      "$ref": "#/$defs/detail"
+    },
+    "cause": {
+      "$ref": "#/$defs/detail"
+    },
+    "progress": {
+      "$ref": "#/$defs/progress"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "status": {
+          "minimum": 100,
+          "maximum": 199
+        },
+        "result": false,
+        "error": false,
+        "cause": false
+      }
+    },
+    {
+      "properties": {
+        "status": {
+          "minimum": 200,
+          "maximum": 299
+        },
+        "result": {},
+        "error": false,
+        "cause": false,
+        "progress": false
+      },
+      "required": [
+        "result"
+      ]
+    },
+    {
+      "properties": {
+        "status": {
+          "minimum": 400,
+          "maximum": 498
+        },
+        "result": false,
+        "error": {
+          "$ref": "#/$defs/detail"
+        },
+        "cause": false,
+        "progress": false
+      },
+      "required": [
+        "error"
+      ]
+    },
+    {
+      "properties": {
+        "status": {
+          "const": 499
+        },
+        "result": false,
+        "error": false,
+        "cause": {
+          "$ref": "#/$defs/detail"
+        },
+        "progress": false
+      }
+    },
+    {
+      "properties": {
+        "status": {
+          "minimum": 500,
+          "maximum": 599
+        },
+        "result": false,
+        "error": {
+          "$ref": "#/$defs/detail"
+        },
+        "cause": false,
+        "progress": false
+      },
+      "required": [
+        "error"
+      ]
+    }
+  ],
+  "$defs": {
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "details": {
+          "description": "Optional structured details defined by the action or host."
+        }
+      }
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+        },
+        "phase": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$"
+        },
+        "completed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "dependentRequired": {
+        "completed": [
+          "total"
+        ],
+        "total": [
+          "completed"
+        ]
+      }
+    }
+  }
+}

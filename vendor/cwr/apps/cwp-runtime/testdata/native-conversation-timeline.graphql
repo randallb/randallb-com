@@ -1,0 +1,1349 @@
+query ConversationTimeline($url: ID!, $last: Int!, $before: Cursor) {
+  runtime {
+    id
+    actorRef
+    conversation____ref___v_url: conversation(ref: $url) {
+      id
+      canonicalTimeline____last___v_last____before___v_before: canonicalTimeline(
+        last: $last
+        before: $before
+      ) {
+        connectionRef
+        edges {
+          node {
+            id
+            children____filter___o_childRole__e_COMMENTARY_c____last___l_1: children(
+              filter: {childRole: COMMENTARY}
+              last: 1
+            ) {
+              edges {
+                node {
+                  id
+                  source {
+                    __typename
+                    ... on ResolvedSource {
+                      node {
+                        __typename
+                        id
+                        ... on PublishedMessage {
+                          id
+                          text
+                        }
+                        ... on StreamingMessage {
+                          id
+                          text
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            children____filter___o_childRole__e_FINAL_REPLY_c____last___l_1: children(
+              filter: {childRole: FINAL_REPLY}
+              last: 1
+            ) {
+              edges {
+                node {
+                  id
+                  source {
+                    __typename
+                    ... on ResolvedSource {
+                      node {
+                        __typename
+                        id
+                        ... on PublishedMessage {
+                          id
+                          action {
+                            __typename
+                            invocation {
+                              __typename
+                              id
+                              actionPresentation {
+                                links {
+                                  kind
+                                  label
+                                  reference
+                                }
+                                request
+                                resultMessage {
+                                  id
+                                  action {
+                                    __typename
+                                    ... on MessageActionResult {
+                                      result
+                                    }
+                                  }
+                                  attachments____first___l_4: attachments(first: 4) {
+                                    edges {
+                                      node {
+                                        __typename
+                                        id
+                                        ... on HtmlVisualization {
+                                          id
+                                          content {
+                                            error
+                                            html
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                  author {
+                                    __typename
+                                    id
+                                    name
+                                  }
+                                  files {
+                                    id
+                                    filename
+                                    mediaType
+                                  }
+                                  text
+                                  visualizations {
+                                    artifactRef
+                                    error
+                                    markerIndex
+                                    mode
+                                    title
+                                  }
+                                }
+                                selector
+                                title
+                              }
+                              finishedAt
+                              outcome {
+                                summary
+                              }
+                              requester {
+                                __typename
+                                id
+                                name
+                              }
+                              startedAt
+                              state
+                              target {
+                                __typename
+                                id
+                                name
+                                ... on Coworker {
+                                  id
+                                  category
+                                }
+                              }
+                            }
+                            ... on MessageActionCall {
+                              input
+                              selector
+                              title
+                            }
+                            ... on MessageActionResult {
+                              result
+                            }
+                          }
+                          addressedActorRefs
+                          addressingMode
+                          attachments____first___l_4: attachments(first: 4) {
+                            edges {
+                              node {
+                                __typename
+                                id
+                                ... on HtmlVisualization {
+                                  id
+                                  content {
+                                    error
+                                    html
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          author {
+                            __typename
+                            id
+                            name
+                            ... on Coworker {
+                              id
+                              category
+                              handle
+                            }
+                          }
+                          authorActorRef
+                          files {
+                            id
+                            filename
+                            mediaType
+                          }
+                          occurredAt
+                          recipients____first___l_50: recipients(first: 50) {
+                            edges {
+                              node {
+                                __typename
+                                id
+                                name
+                                ... on Coworker {
+                                  id
+                                  category
+                                  handle
+                                }
+                              }
+                            }
+                          }
+                          text
+                          visualizations {
+                            artifactRef
+                            error
+                            markerIndex
+                            mode
+                            title
+                          }
+                        }
+                        ... on StreamingMessage {
+                          id
+                          addressedActorRefs
+                          addressingMode
+                          attachments____first___l_4: attachments(first: 4) {
+                            edges {
+                              node {
+                                __typename
+                                id
+                                ... on HtmlVisualization {
+                                  id
+                                  content {
+                                    error
+                                    html
+                                  }
+                                }
+                              }
+                            }
+                          }
+                          author {
+                            __typename
+                            id
+                            name
+                            ... on Coworker {
+                              id
+                              handle
+                            }
+                          }
+                          authorActorRef
+                          recipients____first___l_50: recipients(first: 50) {
+                            edges {
+                              node {
+                                __typename
+                                id
+                                name
+                                ... on Coworker {
+                                  id
+                                  handle
+                                }
+                              }
+                            }
+                          }
+                          text
+                          visualizations {
+                            artifactRef
+                            error
+                            markerIndex
+                            mode
+                            title
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            source {
+              __typename
+              ... on ResolvedSource {
+                node {
+                  __typename
+                  id
+                  ... on AdmittedInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    conversationRef
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    stopRequestedAt
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on AwaitingPersonInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    conversationRef
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    stopRequestedAt
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on BlockedInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on CompletedInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on FailedInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      error {
+                        message
+                      }
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on PublishedMessage {
+                    id
+                    action {
+                      __typename
+                      invocation {
+                        __typename
+                        id
+                        actionPresentation {
+                          links {
+                            kind
+                            label
+                            reference
+                          }
+                          request
+                          resultMessage {
+                            id
+                            action {
+                              __typename
+                              ... on MessageActionResult {
+                                result
+                              }
+                            }
+                            attachments____first___l_4: attachments(first: 4) {
+                              edges {
+                                node {
+                                  __typename
+                                  id
+                                  ... on HtmlVisualization {
+                                    id
+                                    content {
+                                      error
+                                      html
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            author {
+                              __typename
+                              id
+                              name
+                            }
+                            files {
+                              id
+                              filename
+                              mediaType
+                            }
+                            text
+                            visualizations {
+                              artifactRef
+                              error
+                              markerIndex
+                              mode
+                              title
+                            }
+                          }
+                          selector
+                          title
+                        }
+                        finishedAt
+                        outcome {
+                          summary
+                        }
+                        requester {
+                          __typename
+                          id
+                          name
+                        }
+                        startedAt
+                        state
+                        target {
+                          __typename
+                          id
+                          name
+                          ... on Coworker {
+                            id
+                            category
+                          }
+                        }
+                      }
+                      ... on MessageActionCall {
+                        input
+                        selector
+                        title
+                      }
+                      ... on MessageActionResult {
+                        result
+                      }
+                    }
+                    addressedActorRefs
+                    addressingMode
+                    attachments____first___l_4: attachments(first: 4) {
+                      edges {
+                        node {
+                          __typename
+                          id
+                          ... on HtmlVisualization {
+                            id
+                            content {
+                              error
+                              html
+                            }
+                          }
+                        }
+                      }
+                    }
+                    author {
+                      __typename
+                      id
+                      name
+                      ... on Coworker {
+                        id
+                        category
+                        handle
+                      }
+                    }
+                    authorActorRef
+                    files {
+                      id
+                      filename
+                      mediaType
+                    }
+                    occurredAt
+                    recipients____first___l_50: recipients(first: 50) {
+                      edges {
+                        node {
+                          __typename
+                          id
+                          name
+                          ... on Coworker {
+                            id
+                            category
+                            handle
+                          }
+                        }
+                      }
+                    }
+                    text
+                    visualizations {
+                      artifactRef
+                      error
+                      markerIndex
+                      mode
+                      title
+                    }
+                  }
+                  ... on RunningInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    conversationRef
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    stopRequestedAt
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on StoppedInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                  ... on StoppingInvocation {
+                    id
+                    actionPresentation {
+                      links {
+                        kind
+                        label
+                        reference
+                      }
+                      request
+                      resultMessage {
+                        id
+                        action {
+                          __typename
+                          ... on MessageActionResult {
+                            result
+                          }
+                        }
+                        attachments____first___l_4: attachments(first: 4) {
+                          edges {
+                            node {
+                              __typename
+                              id
+                              ... on HtmlVisualization {
+                                id
+                                content {
+                                  error
+                                  html
+                                }
+                              }
+                            }
+                          }
+                        }
+                        author {
+                          __typename
+                          id
+                          name
+                        }
+                        files {
+                          id
+                          filename
+                          mediaType
+                        }
+                        text
+                        visualizations {
+                          artifactRef
+                          error
+                          markerIndex
+                          mode
+                          title
+                        }
+                      }
+                      selector
+                      title
+                    }
+                    conversationRef
+                    currentExecution {
+                      latestActivityAt
+                      phase
+                      progress
+                    }
+                    finishedAt
+                    outcome {
+                      summary
+                    }
+                    requester {
+                      __typename
+                      id
+                      name
+                    }
+                    startedAt
+                    state
+                    stopRequestedAt
+                    target {
+                      __typename
+                      id
+                      name
+                    }
+                    targetActorRef
+                  }
+                }
+              }
+              ... on UnavailableSource {
+                presentation {
+                  text
+                }
+              }
+            }
+          }
+        }
+        pageInfo {
+          hasPreviousPage
+          startCursor
+        }
+        revision
+      }
+      legacyHistory____last___v_last____before___v_before: legacyHistory(
+        last: $last
+        before: $before
+      ) {
+        edges {
+          cursor
+          node {
+            __typename
+            id
+            ... on AdmittedInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on AwaitingPersonInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on BlockedInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on CompletedInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on FailedInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on PublishedMessage {
+              id
+              action {
+                __typename
+                invocation {
+                  __typename
+                  id
+                  actionPresentation {
+                    links {
+                      kind
+                      label
+                      reference
+                    }
+                    request
+                    resultMessage {
+                      id
+                      action {
+                        __typename
+                        ... on MessageActionResult {
+                          result
+                        }
+                      }
+                      attachments____first___l_4: attachments(first: 4) {
+                        edges {
+                          node {
+                            __typename
+                            id
+                            ... on HtmlVisualization {
+                              id
+                              content {
+                                error
+                                html
+                              }
+                            }
+                          }
+                        }
+                      }
+                      author {
+                        __typename
+                        id
+                        name
+                      }
+                      files {
+                        id
+                        filename
+                        mediaType
+                      }
+                      text
+                      visualizations {
+                        artifactRef
+                        error
+                        markerIndex
+                        mode
+                        title
+                      }
+                    }
+                    selector
+                    title
+                  }
+                  finishedAt
+                  outcome {
+                    summary
+                  }
+                  requester {
+                    __typename
+                    id
+                    name
+                  }
+                  startedAt
+                  state
+                  target {
+                    __typename
+                    id
+                    name
+                    ... on Coworker {
+                      id
+                      category
+                    }
+                  }
+                }
+                ... on MessageActionCall {
+                  input
+                  selector
+                  title
+                }
+                ... on MessageActionResult {
+                  result
+                }
+              }
+              addressedActorRefs
+              addressingMode
+              attachments____first___l_4: attachments(first: 4) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    ... on HtmlVisualization {
+                      id
+                      content {
+                        error
+                        html
+                      }
+                    }
+                  }
+                }
+              }
+              author {
+                __typename
+                id
+                name
+                ... on Coworker {
+                  id
+                  category
+                  handle
+                }
+              }
+              authorActorRef
+              files {
+                id
+                filename
+                mediaType
+              }
+              occurredAt
+              recipients____first___l_50: recipients(first: 50) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    name
+                    ... on Coworker {
+                      id
+                      category
+                      handle
+                    }
+                  }
+                }
+              }
+              text
+              visualizations {
+                artifactRef
+                error
+                markerIndex
+                mode
+                title
+              }
+            }
+            ... on RunningInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on StoppedInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on StoppingInvocation {
+              id
+              currentExecution {
+                progress
+              }
+              outcome {
+                summary
+              }
+              state
+            }
+            ... on StreamingMessage {
+              id
+              addressedActorRefs
+              addressingMode
+              attachments____first___l_4: attachments(first: 4) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    ... on HtmlVisualization {
+                      id
+                      content {
+                        error
+                        html
+                      }
+                    }
+                  }
+                }
+              }
+              author {
+                __typename
+                id
+                name
+                ... on Coworker {
+                  id
+                  handle
+                }
+              }
+              authorActorRef
+              recipients____first___l_50: recipients(first: 50) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    name
+                    ... on Coworker {
+                      id
+                      handle
+                    }
+                  }
+                }
+              }
+              text
+              visualizations {
+                artifactRef
+                error
+                markerIndex
+                mode
+                title
+              }
+            }
+          }
+        }
+        pageInfo {
+          hasPreviousPage
+          startCursor
+        }
+        revision
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+  "owner": {
+    "kind": "conversation",
+    "conversation_ref": "cwp://com.example.runtime/conversations/product_review_01"
+  },
+  "revision": 8,
+  "edges": [
+    {
+      "cursor": {
+        "version": 1,
+        "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+        "sibling_sequence": 8,
+        "item_ref": "cwp://com.example.runtime/publications/01JITEM/item"
+      },
+      "item": {
+        "item_ref": "cwp://com.example.runtime/publications/01JITEM/item",
+        "publication_ref": "cwp://com.example.runtime/publications/01JITEM",
+        "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+        "sibling_sequence": 8,
+        "content": {
+          "kind": "invocation",
+          "invocation_ref": "cwp://com.example.runtime/invocations/01JEXAMPLE"
+        },
+        "child_connection_ref": "cwp://com.example.runtime/publications/01JITEM/item/children"
+      }
+    }
+  ],
+  "page_info": {
+    "has_previous_page": true,
+    "has_next_page": false,
+    "start_cursor": {
+      "version": 1,
+      "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+      "sibling_sequence": 8,
+      "item_ref": "cwp://com.example.runtime/publications/01JITEM/item"
+    },
+    "end_cursor": {
+      "version": 1,
+      "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+      "sibling_sequence": 8,
+      "item_ref": "cwp://com.example.runtime/publications/01JITEM/item"
+    }
+  }
+}

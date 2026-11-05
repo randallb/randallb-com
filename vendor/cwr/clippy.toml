@@ -1,0 +1,2 @@
+too-many-lines-threshold = 200
+excessive-nesting-threshold = 6

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/loop",
+  "title": "Reusable CWR loop",
+  "description": "Packages a reusable resource graph and its configuration input contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/loop"
+    },
+    "exports": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/resourceObjects",
+      "default": []
+    },
+    "imports": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/resourceObjects",
+      "default": []
+    },
+    "input_schema": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/resourceObject"
+    },
+    "inputs": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/inputDeclarations"
+    },
+    "volumes": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/volumeDeclarations"
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "read_retained_data": {
+          "enum": [
+            "participants",
+            "all"
+          ],
+          "default": "participants",
+          "description": "Allow all callers in this runtime to read its retained data, or require conversation participation."
+        }
+      }
+    }
+  },
+  "not": {
+    "required": [
+      "inputs",
+      "input_schema"
+    ]
+  }
+}

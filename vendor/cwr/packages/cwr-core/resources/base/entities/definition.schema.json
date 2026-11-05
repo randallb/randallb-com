@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition",
+  "title": "Local entity definition experiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "ref",
+    "storage",
+    "value_schema"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+    },
+    "ref": {
+      "type": "string",
+      "format": "cwr-ref"
+    },
+    "storage": {
+      "const": "cwpdb"
+    },
+    "value_schema": {
+      "type": "object"
+    },
+    "record_kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "record_schema": {
+      "type": "string",
+      "format": "cwr-ref"
+    },
+    "lifetime": {
+      "enum": [
+        "durable",
+        "disposable"
+      ],
+      "default": "durable"
+    }
+  }
+}

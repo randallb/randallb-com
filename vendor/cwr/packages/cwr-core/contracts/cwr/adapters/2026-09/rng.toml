@@ -1,0 +1,13 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/rng"
+name = "RNG"
+authority_capabilities = []
+
+[coworker_params_schema]
+path = "./rng.coworker-params.schema.json"
+
+[integration_params_schema]
+path = "./rng.integration-params.schema.json"
+
+[actor_integration_params_schema]
+path = "./rng.actor-integration-params.schema.json"
