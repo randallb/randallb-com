@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Slack Actor Integration Parameters",
+  "description": "Maps a CWR actor to a native Slack user or a projected app presentation with an optional native mention identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "identity"
+  ],
+  "properties": {
+    "identity": {
+      "type": "object"
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "icon_emoji": {
+          "description": "A Slack emoji name including its surrounding colons.",
+          "type": "string",
+          "pattern": "^:[^:\\s]+:$"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "user_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "native_user"
+            },
+            "user_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "not": {
+        "required": [
+          "presentation"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "projected"
+            },
+            "mention_user_id": {
+              "description": "Optional Slack bot user ID whose native mention addresses this projected actor. This does not authorize incoming bot messages as that actor.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/runtime"
+
+[[exports]]
+path = "../entities/workspace-variable.toml"
+as = "variable"
+
+[[exports]]
+path = "../entities/workspace-secret.toml"
+as = "secret"

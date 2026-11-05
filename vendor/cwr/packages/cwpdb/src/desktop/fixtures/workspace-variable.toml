@@ -1,0 +1,28 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/wlp/entities/workspace-variable"
+storage = "cwpdb"
+record_kind = "wlp_environment_entry"
+record_schema = "cwp://org.coworkerprotocol/wlp/schemas/environment_entry/2026-09"
+
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["name", "kind", "value"]
+
+[value_schema.properties.record.properties.name]
+type = "string"
+pattern = "^[A-Za-z_][A-Za-z0-9_]*$"
+maxLength = 128
+
+[value_schema.properties.record.properties.kind]
+const = "variable"
+
+[value_schema.properties.record.properties.value]
+type = "string"
+maxLength = 16384
+pattern = '^[^\u0000]*$'

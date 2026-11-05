@@ -1,0 +1,6 @@
+# An action response is stored inside an invocation, so it has no type or ref.
+invocation_ref = "cwp://com.example.runtime/invocations/01JEXAMPLE"
+sequence = 2
+status = 200
+summary = "Finished the brief."
+result = { document_ref = "cwp://com.example/documents/cwr_schema_brief" }

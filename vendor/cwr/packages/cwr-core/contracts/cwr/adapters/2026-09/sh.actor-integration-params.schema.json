@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shell Actor Integration Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "execution_environment": {
+      "description": "Run this coworker's Shell adapter in a SmolVM guest. Omit to use the normal host route.",
+      "enum": ["smolvm"]
+    },
+    "host_gateway": {
+      "description": "For a configured gateway request route, require the originating host connection's registered executor instead of launching the Shell command. No handler means unavailable; this flag grants no credentials or action visibility.",
+      "type": "boolean"
+    },
+    "fail_on_nonzero": {
+      "description": "For configured commands and run--command, return action status 500 with command_failed and command diagnostics in error.details when the command exits nonzero (including signal termination). Defaults to false: the action succeeds and reports the command exit code. Does not change respond--message text responses.",
+      "type": "boolean",
+      "default": false
+    },
+    "stream_output": {
+      "description": "Copy command stdout and stderr to adapter stderr while retaining the capped streams in the terminal result. Also emit command PID, elapsed-time, exit, and pipe-closure diagnostics. Defaults to false.",
+      "type": "boolean",
+      "default": false
+    },
+    "timeout_ms": {
+      "description": "Maximum elapsed time for each shell command in milliseconds. Defaults to 600000 (10 minutes). run--command callers may override this value in their action input.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600000,
+      "default": 600000
+    },
+    "host_env_actions": {
+      "description": "Opt selected Workloop SMS actions into the resident's approved private bridge socket. The socket path is supplied by the host environment and is never authored in this resource. An absent host value fails the selected action.",
+      "type": "object",
+      "propertyNames": {
+        "enum": ["receive--message", "deliver--message", "handle--request"]
+      },
+      "additionalProperties": {
+        "const": "WORKLOOP_SMS_BRIDGE_SOCKET"
+      }
+    },
+    "activated_volumes": {
+      "description": "Runtime supplied local volume aliases and their approved paths/access modes. Shell receives this mapping privately in CWR_LOCAL_VOLUMES for configured actions; do not author this property.",
+      "type": "object",
+      "readOnly": true,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "access"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "access": {"enum": ["read", "read_write"]}
+        }
+      }
+    },
+    "progress_jsonl_stderr_actions": {
+      "description": "Canonical configured action names whose stderr may contain CWR_PROGRESS-tab-prefixed JSON lines. A record requires a nonblank one-line summary, may set published (boolean, default false), and may contain progress as defined by the action_response schema. Authored progress is best effort: records become ordered 102 events only when the complete encoded adapter event fits the platform pipe's atomic-write limit and the host output pipe can accept it without blocking. Other valid records are dropped rather than delaying the command deadline. Input records including prefix and newline must fit within 64 KiB. Malformed, oversized, and non-allowlisted records remain ordinary diagnostic stderr, drained incrementally with capped retention. Defaults to none.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*--[a-z][a-z0-9_]*$"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "command": {
+      "description": "A fixed shell command to run when no action-specific command matches.",
+      "type": "string",
+      "minLength": 1
+    },
+    "commands": {
+      "description": "Fixed shell commands keyed by canonical action name. A matching entry takes precedence over command. Every configured action receives its validated input as one JSON line on stdin; action input is never interpolated into shell source.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*--[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "message_commands": {
+      "description": "Allowlisted ordinary messages mapped to fixed shell commands. A leading actor handle is ignored when matching. When configured, unmatched messages return the available names instead of running shell input.",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "message_context_json_stdin": {
+      "description": "Run the fixed command for ordinary messages and send source_message plus the immediately preceding retained message as one JSON line on stdin. Defaults to false.",
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

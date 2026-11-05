@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/gateway",
+  "title": "Gateway definition",
+  "description": "A non-conversational gateway route backed by a role and configured integration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "role", "integration", "action_name"],
+  "properties": {
+    "type": {"const": "cwp://org.coworkerprotocol/2026-09/schemas/gateway"},
+    "imports": {"$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/resourceObjects", "default": []},
+    "exports": {"$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/resourceObjects", "default": []},
+    "authority": {"description": "Effects available to the gateway handler; they do not authorize a host connection or caller.", "type": "array", "uniqueItems": true, "items": {"enum": ["workspace.read", "workspace.write", "process.execute"]}, "default": []},
+    "inputs": {"$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/inputDeclarations"},
+    "role": {"$ref": "#/$defs/resourceRef"},
+    "integration": {"$ref": "#/$defs/resourceRef"},
+    "action_name": {"type": "string", "minLength": 1},
+    "ingress_action_name": {"type": "string", "minLength": 1},
+    "delivery_action_name": {"type": "string", "minLength": 1},
+    "connection_ref": {"type": "string", "minLength": 1},
+    "params": {"type": "object", "default": {}}
+  },
+  "$defs": {
+    "resourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1, "pattern": "^(?:~@(?:/[^\\s/#]+)*|cwp://(?!~)[^\\s#]+)$"},
+        "inputs": {"type": "object", "default": {}}
+      }
+    }
+  }
+}

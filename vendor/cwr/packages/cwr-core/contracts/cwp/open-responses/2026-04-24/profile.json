@@ -1,0 +1,654 @@
+{
+  "profile": "CWP Open Responses subset (2026-04-24)",
+  "profile_version": "2026-04-24",
+  "upstream": {
+    "title": "Open Responses",
+    "version": "2026-04-24",
+    "url": "https://www.openresponses.org/openapi/2026-04-24/openapi.json",
+    "commit": "4849f32442bc380852bb4068f0b6cfff347c2baa",
+    "bytes": 138849,
+    "sha256": "d598753c3a86fd8a2434828fe39dcc8786a7a694bbe46080a0d24c9fa40e72df",
+    "checked_in_file": "openapi.json"
+  },
+  "directions": {
+    "adapter_to_provider": "Input sent by a CWP adapter to its model provider.",
+    "provider_to_adapter": "Model output received by a CWP adapter from its provider.",
+    "replay": "An earlier provider item resent as input for continuation."
+  },
+  "request": {
+    "component": "CreateResponseBody",
+    "schema_pointer": "#/components/schemas/CreateResponseBody",
+    "directions": [
+      "adapter_to_provider"
+    ],
+    "required_fields": [],
+    "allowed_fields": [
+      {
+        "name": "model",
+        "required": false,
+        "schema_pointer": "#/components/schemas/CreateResponseBody/properties/model"
+      },
+      {
+        "name": "input",
+        "required": false,
+        "schema_pointer": "#/components/schemas/CreateResponseBody/properties/input",
+        "profile_values": [
+          "string",
+          "supported_input_item_array",
+          "null"
+        ]
+      },
+      {
+        "name": "previous_response_id",
+        "required": false,
+        "schema_pointer": "#/components/schemas/CreateResponseBody/properties/previous_response_id",
+        "identity": "opaque_provider_response_id"
+      }
+    ],
+    "additional_fields": "rejected_by_profile",
+    "string_input_role": "user"
+  },
+  "input_items": [
+    {
+      "component": "UserMessageItemParam",
+      "schema_pointer": "#/components/schemas/UserMessageItemParam",
+      "directions": [
+        "adapter_to_provider",
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "role",
+        "content"
+      ],
+      "allowed_fields": [
+        "id",
+        "type",
+        "role",
+        "content",
+        "status"
+      ],
+      "discriminators": {
+        "type": "message",
+        "role": "user"
+      },
+      "content": {
+        "string": true,
+        "components": [
+          "InputTextContentParam"
+        ]
+      }
+    },
+    {
+      "component": "SystemMessageItemParam",
+      "schema_pointer": "#/components/schemas/SystemMessageItemParam",
+      "directions": [
+        "adapter_to_provider",
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "role",
+        "content"
+      ],
+      "allowed_fields": [
+        "id",
+        "type",
+        "role",
+        "content",
+        "status"
+      ],
+      "discriminators": {
+        "type": "message",
+        "role": "system"
+      },
+      "content": {
+        "string": true,
+        "components": [
+          "InputTextContentParam"
+        ]
+      }
+    },
+    {
+      "component": "DeveloperMessageItemParam",
+      "schema_pointer": "#/components/schemas/DeveloperMessageItemParam",
+      "directions": [
+        "adapter_to_provider",
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "role",
+        "content"
+      ],
+      "allowed_fields": [
+        "id",
+        "type",
+        "role",
+        "content",
+        "status"
+      ],
+      "discriminators": {
+        "type": "message",
+        "role": "developer"
+      },
+      "content": {
+        "string": true,
+        "components": [
+          "InputTextContentParam"
+        ]
+      }
+    },
+    {
+      "component": "AssistantMessageItemParam",
+      "schema_pointer": "#/components/schemas/AssistantMessageItemParam",
+      "directions": [
+        "replay"
+      ],
+      "upstream_required_fields": [
+        "type",
+        "role",
+        "content"
+      ],
+      "profile_required_fields": [
+        "type",
+        "role",
+        "content",
+        "phase"
+      ],
+      "allowed_fields": [
+        "id",
+        "type",
+        "role",
+        "content",
+        "phase",
+        "status"
+      ],
+      "discriminators": {
+        "type": "message",
+        "role": "assistant"
+      },
+      "content": {
+        "string": true,
+        "components": [
+          "OutputTextContentParam"
+        ]
+      },
+      "phase_values": [
+        "commentary",
+        "final_answer"
+      ]
+    },
+    {
+      "component": "FunctionCallItemParam",
+      "schema_pointer": "#/components/schemas/FunctionCallItemParam",
+      "directions": [
+        "replay"
+      ],
+      "required_fields": [
+        "call_id",
+        "type",
+        "name",
+        "arguments"
+      ],
+      "allowed_fields": [
+        "id",
+        "call_id",
+        "type",
+        "name",
+        "arguments",
+        "status"
+      ],
+      "discriminators": {
+        "type": "function_call"
+      }
+    },
+    {
+      "component": "FunctionCallOutputItemParam",
+      "schema_pointer": "#/components/schemas/FunctionCallOutputItemParam",
+      "directions": [
+        "adapter_to_provider",
+        "replay"
+      ],
+      "required_fields": [
+        "call_id",
+        "type",
+        "output"
+      ],
+      "allowed_fields": [
+        "id",
+        "call_id",
+        "type",
+        "output",
+        "status"
+      ],
+      "discriminators": {
+        "type": "function_call_output"
+      },
+      "output": {
+        "string": true,
+        "components": [
+          "InputTextContentParam"
+        ]
+      },
+      "normal_model_output": false
+    }
+  ],
+  "content_components": [
+    {
+      "component": "InputTextContentParam",
+      "schema_pointer": "#/components/schemas/InputTextContentParam",
+      "directions": [
+        "adapter_to_provider",
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "text"
+      ],
+      "allowed_fields": [
+        "type",
+        "text"
+      ],
+      "discriminators": {
+        "type": "input_text"
+      }
+    },
+    {
+      "component": "OutputTextContentParam",
+      "schema_pointer": "#/components/schemas/OutputTextContentParam",
+      "directions": [
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "text"
+      ],
+      "allowed_fields": [
+        "type",
+        "text",
+        "annotations"
+      ],
+      "discriminators": {
+        "type": "output_text"
+      }
+    },
+    {
+      "component": "OutputTextContent",
+      "schema_pointer": "#/components/schemas/OutputTextContent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "text",
+        "annotations"
+      ],
+      "allowed_fields": [
+        "type",
+        "text",
+        "annotations",
+        "logprobs"
+      ],
+      "discriminators": {
+        "type": "output_text"
+      }
+    }
+  ],
+  "output_items": [
+    {
+      "component": "Message",
+      "schema_pointer": "#/components/schemas/Message",
+      "directions": [
+        "provider_to_adapter",
+        "replay"
+      ],
+      "upstream_required_fields": [
+        "type",
+        "id",
+        "status",
+        "role",
+        "content"
+      ],
+      "profile_required_fields": [
+        "type",
+        "id",
+        "status",
+        "role",
+        "content",
+        "phase"
+      ],
+      "allowed_fields": [
+        "type",
+        "id",
+        "status",
+        "role",
+        "content",
+        "phase"
+      ],
+      "discriminators": {
+        "type": "message",
+        "role": "assistant"
+      },
+      "content_components": [
+        "OutputTextContent"
+      ],
+      "phase_values": [
+        "commentary",
+        "final_answer"
+      ],
+      "missing_phase": "not_profile_conforming_and_never_commentary"
+    },
+    {
+      "component": "FunctionCall",
+      "schema_pointer": "#/components/schemas/FunctionCall",
+      "directions": [
+        "provider_to_adapter",
+        "replay"
+      ],
+      "required_fields": [
+        "type",
+        "id",
+        "call_id",
+        "name",
+        "arguments",
+        "status"
+      ],
+      "allowed_fields": [
+        "type",
+        "id",
+        "call_id",
+        "name",
+        "arguments",
+        "status"
+      ],
+      "discriminators": {
+        "type": "function_call"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "response.output_item.added",
+      "component": "ResponseOutputItemAddedStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseOutputItemAddedStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "output_index",
+        "item"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "output_index",
+        "item"
+      ],
+      "profile_payload": "non_null_supported_output_item"
+    },
+    {
+      "type": "response.output_item.done",
+      "component": "ResponseOutputItemDoneStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseOutputItemDoneStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "output_index",
+        "item"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "output_index",
+        "item"
+      ],
+      "profile_payload": "matching_completed_output_item"
+    },
+    {
+      "type": "response.content_part.added",
+      "component": "ResponseContentPartAddedStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseContentPartAddedStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "part"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "part"
+      ],
+      "profile_payload_components": [
+        "OutputTextContent"
+      ]
+    },
+    {
+      "type": "response.content_part.done",
+      "component": "ResponseContentPartDoneStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseContentPartDoneStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "part"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "part"
+      ],
+      "profile_payload_components": [
+        "OutputTextContent"
+      ]
+    },
+    {
+      "type": "response.output_text.delta",
+      "component": "ResponseOutputTextDeltaStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseOutputTextDeltaStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "delta"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "delta",
+        "logprobs",
+        "obfuscation"
+      ]
+    },
+    {
+      "type": "response.output_text.done",
+      "component": "ResponseOutputTextDoneStreamingEvent",
+      "schema_pointer": "#/components/schemas/ResponseOutputTextDoneStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "text"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "item_id",
+        "output_index",
+        "content_index",
+        "text",
+        "logprobs"
+      ]
+    },
+    {
+      "type": "error",
+      "component": "ErrorStreamingEvent",
+      "schema_pointer": "#/components/schemas/ErrorStreamingEvent",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "sequence_number",
+        "error"
+      ],
+      "allowed_fields": [
+        "type",
+        "sequence_number",
+        "error"
+      ],
+      "nested_required_fields": {
+        "error": [
+          "type",
+          "code",
+          "message",
+          "param"
+        ]
+      },
+      "nested_allowed_fields": {
+        "error": [
+          "type",
+          "code",
+          "message",
+          "param",
+          "headers"
+        ]
+      },
+      "terminal": true
+    }
+  ],
+  "error_components": [
+    {
+      "component": "ErrorPayload",
+      "schema_pointer": "#/components/schemas/ErrorPayload",
+      "directions": [
+        "provider_to_adapter"
+      ],
+      "required_fields": [
+        "type",
+        "code",
+        "message",
+        "param"
+      ],
+      "allowed_fields": [
+        "type",
+        "code",
+        "message",
+        "param",
+        "headers"
+      ]
+    }
+  ],
+  "ordering": [
+    {
+      "id": "sequence_numbers_increase",
+      "rule": "sequence_number strictly increases within one provider response stream"
+    },
+    {
+      "id": "output_item_lifecycle",
+      "rule": "response.output_item.added opens a unique output_index and item.id; response.output_item.done closes the same item after its content completes and its message content agrees with authoritative output_text.done values"
+    },
+    {
+      "id": "content_part_lifecycle",
+      "rule": "response.content_part.added opens a unique item_id/output_index/content_index tuple after its message item starts; response.content_part.done closes it after output text completes and part.text agrees with authoritative output_text.done text"
+    },
+    {
+      "id": "output_text_lifecycle",
+      "rule": "zero or more response.output_text.delta events occur between content_part.added and one response.output_text.done for the same tuple; done.text is authoritative and may repair or replace accumulated delta text"
+    },
+    {
+      "id": "phase_by_item_identity",
+      "rule": "assistant phase is retained on Message.id and must agree between item added and done; deltas inherit classification only through the matching item identity"
+    },
+    {
+      "id": "function_calls_have_no_argument_delta_lifecycle",
+      "rule": "FunctionCall arguments are complete on item events because function argument delta and done events are excluded"
+    },
+    {
+      "id": "error_terminates",
+      "rule": "error may terminate an open item or content part and no supported event follows it"
+    }
+  ],
+  "validation": {
+    "layers": [
+      {
+        "name": "pinned_schema",
+        "rule": "Validate the whole value against its referenced component in openapi.json."
+      },
+      {
+        "name": "cwp_profile",
+        "rule": "Reject unlisted fields, union members, content kinds, event types, directions, and orderings; enforce profile identity constraints."
+      }
+    ],
+    "unknown_provider_data": "bounded_privacy_filtered_diagnostics_only",
+    "unknown_data_is_model_text": false
+  },
+  "continuation": {
+    "request_field": "previous_response_id",
+    "identity": "opaque_provider_response_id",
+    "scope": "same_provider_integration_and_intended_conversation",
+    "not_equivalent_to": [
+      "cwp_conversation_ref",
+      "cwp_action_ref",
+      "cwp_invocation_ref",
+      "cwr_model_run_ref",
+      "open_responses_item_id",
+      "function_call_id"
+    ],
+    "must_not_be_inferred_from_cwp_lifecycle": true
+  },
+  "exclusions": [
+    "response.completed",
+    "all_response_resource_lifecycle_events",
+    "ResponseResource",
+    "FunctionCallOutput_as_provider_output_including_explicit_echoes",
+    "function_call_argument_delta_and_done_events",
+    "reasoning_items_and_events",
+    "reasoning_summary_items_and_events",
+    "refusal_content_and_events",
+    "annotation_streaming_events",
+    "compaction_items",
+    "media_content",
+    "item_references",
+    "unlisted_request_fields",
+    "websocket_control_events",
+    "http_or_sse_server_behavior",
+    "provider_extensions",
+    "all_other_unlisted_shapes"
+  ]
+}

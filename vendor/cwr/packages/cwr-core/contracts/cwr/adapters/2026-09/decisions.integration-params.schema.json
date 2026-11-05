@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Decisions Integration Parameters",
+  "description": "Selects a Decisions endpoint. The local host supplies credentials privately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "endpoint"
+  ],
+  "properties": {
+    "api_key": {
+      "description": "Bind a declared secret here. The local host delivers it privately to the provider process.",
+      "type": "string",
+      "minLength": 1
+    },
+    "endpoint": {
+      "description": "Complete HTTPS endpoint without credentials, query or fragment. HTTP is allowed only for localhost, 127.0.0.1 or [::1] test fixtures.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://"
+    }
+  }
+}

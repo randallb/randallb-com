@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shared signed grader input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "context",
+    "rubric"
+  ],
+  "properties": {
+    "context": {},
+    "rubric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "criterion",
+        "ungradable_when",
+        "grades"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "criterion": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "ungradable_when": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "grades": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "-3",
+            "-2",
+            "-1",
+            "1",
+            "2",
+            "3"
+          ],
+          "properties": {
+            "-3": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Clear miss. Supply a criterion-specific definition consistent with this anchor."
+            },
+            "-2": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Substantial miss. Supply a criterion-specific definition consistent with this anchor."
+            },
+            "-1": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Near miss; just below the bar. Supply a criterion-specific definition consistent with this anchor."
+            },
+            "1": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Barely meets the bar. Supply a criterion-specific definition consistent with this anchor."
+            },
+            "2": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Solidly meets the bar. Supply a criterion-specific definition consistent with this anchor."
+            },
+            "3": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S",
+              "description": "Strongly meets or exceeds the bar. Supply a criterion-specific definition consistent with this anchor."
+            }
+          },
+          "description": "Forced-choice ordinal scale, no neutral midpoint. Negative fails, positive passes. Magnitude is distance from the acceptance bar, not confidence. Zero is reserved for ungradable cases."
+        },
+        "categories": {
+          "type": "object",
+          "minProperties": 2,
+          "maxProperties": 255,
+          "propertyNames": {
+            "pattern": "\\S"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        }
+      }
+    }
+  }
+}

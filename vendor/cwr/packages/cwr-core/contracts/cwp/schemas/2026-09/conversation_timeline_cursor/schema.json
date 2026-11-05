@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_cursor",
+  "title": "Conversation timeline cursor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "connection_ref",
+    "sibling_sequence",
+    "item_ref"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "connection_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    },
+    "sibling_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "item_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    }
+  },
+  "$defs": {
+    "absolute_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^cwp://(?!~)[^\\s#]+$"
+    }
+  }
+}

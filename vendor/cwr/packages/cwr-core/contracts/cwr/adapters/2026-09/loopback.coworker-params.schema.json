@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Loopback Coworker Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "delay_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "report_progress": {
+      "type": "boolean",
+      "default": true
+    },
+    "mode": {
+      "enum": [
+        "feedback"
+      ]
+    },
+    "response_text": {
+      "description": "Return this fixed text for ordinary message responses.",
+      "type": "string",
+      "minLength": 1
+    },
+    "host_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "input"
+      ],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input": {}
+      }
+    },
+    "host_calls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/properties/host_call"
+      }
+    }
+  }
+}

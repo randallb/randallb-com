@@ -1,0 +1,8 @@
+{
+  "subject_actor_ref": "~@/actors/randall",
+  "publisher_session_id": "desktop-01K...",
+  "sequence": 17,
+  "target_actor_refs": ["~@/actors/feedback"],
+  "status": "composing",
+  "expires_at_unix_ms": 1788030005000
+}

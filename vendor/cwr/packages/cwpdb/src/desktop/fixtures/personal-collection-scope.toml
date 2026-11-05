@@ -1,0 +1,26 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_personal_collection_scope_v1/2026-09"
+storage = "cwpdb"
+record_kind = "desktop_personal_collection_scope_v1"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_personal_collection_scope_v1/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["workspace", "viewer", "ownerContextRef", "revision"]
+[value_schema.properties.record.properties.workspace]
+type = "string"
+minLength = 1
+maxLength = 16384
+[value_schema.properties.record.properties.viewer]
+type = "string"
+format = "cwr-ref"
+[value_schema.properties.record.properties.ownerContextRef]
+type = "string"
+maxLength = 16384
+[value_schema.properties.record.properties.revision]
+type = "string"
+pattern = '^(0|[1-9][0-9]*)$'

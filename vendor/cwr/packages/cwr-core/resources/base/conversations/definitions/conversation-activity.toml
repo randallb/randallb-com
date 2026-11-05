@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/conversation-activity"
+storage = "cwpdb"
+record_kind = "activity"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/activity/2026-09"
+
+# Existing CWR storage shape; domain relationships and authorization stay in CWR.
+value_schema = { "type" = "object", "required" = ["record"], "properties" = { "record" = { "type" = "object", "required" = ["activity_ref", "sequence", "event"], "properties" = { "activity_ref" = { "type" = "string" }, "sequence" = { "type" = "integer", "minimum" = 0 }, "event" = { "type" = "object", "required" = ["kind"], "properties" = { "kind" = { "type" = "string" } } } } } } }

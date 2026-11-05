@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+  "sibling_sequence": 8,
+  "item_ref": "cwp://com.example.runtime/publications/01JITEM/item"
+}

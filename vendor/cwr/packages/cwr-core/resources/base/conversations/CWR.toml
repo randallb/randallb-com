@@ -1,0 +1,13 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/runtime"
+
+[[exports]]
+path = "./definitions/CWR.toml"
+as = "entities"
+
+[[exports]]
+path = "./service.toml"
+as = "service"
+
+[[exports]]
+path = "./relationships.toml"
+as = "relationships"

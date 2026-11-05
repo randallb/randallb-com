@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Claude Integration Parameters",
+  "description": "The local host supplies the executable and credentials privately.",
+  "type": "object",
+  "additionalProperties": false
+}

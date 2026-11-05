@@ -1,0 +1,11 @@
+# Native conversation open parity
+
+Ada recovery increment, November2,2026. Ordinary NativeConversationStore::open now performs current-state classification and validation through read transactions. It acquires BEGIN IMMEDIATE only when physical initialization or an actual retained-data migration/binding/rollout change is needed. It repeats the decision after acquiring that write lock, so another first opener cannot race schema creation.
+
+Physical schema initialization and runtime metadata creation are one atomic transaction. An already-current store with the same workspace binding and rollout opens successfully while another connection holds BEGIN IMMEDIATE, and its connection total_changes remains zero. Runtime user_version must be0 and is checked during the read-only physical preflight, before permissions, WAL configuration or writable initialization. Invalid requested state/rollout/path options also fail before creating a database or parent.
+
+Read-only preflight preserves runtime/workspace identity checks, activated timeline writer requirements, monotonic rollout/repeated-placement rejection, current workspace-directory ownership and missing-original-directory relocation. Required cloud workspace binding, fingerprint normalization and legacy WorkUpdate attachment normalization still happen once under the write lock. Subsequent unchanged opens skip all mutation statements.
+
+Integration: copy manifest.owned_files and apply native-open.patch. Both are required: the NativeConversationStore::open patch removes the former unconditional second immediate initialization transaction. Summary/read/endpoint/Worker modules are untouched. Existing optional schedule-index startup behavior remains unchanged; no indexes are silently built during current native open.
+
+Evidence: five focused tests pass for held-writer read-only opens, unsupported user_version/database byte preservation, once-only legacy binding, workspace/path constraints and relocation, and fail-before-file-create invalid options. Full local cwpdb suite168passed/0failed/1ignored. All-target cwpdb Clippy with test-support passes. These are native storage checks; CWR startup/schema/recovery and hosted read integration remain coordinator/Kit acceptance work. No formal review cycle, deployment or merge is claimed.

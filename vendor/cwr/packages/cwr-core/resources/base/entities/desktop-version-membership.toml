@@ -1,0 +1,22 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/desktop-version-membership"
+storage = "cwpdb"
+record_kind = "desktop_version_membership_v1"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_version_membership_v1/2026-10-23"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["ready", "workspace", "fingerprint", "count"]
+[value_schema.properties.record.properties.ready]
+const = true
+[value_schema.properties.record.properties.workspace]
+type = "string"
+[value_schema.properties.record.properties.fingerprint]
+type = "string"
+[value_schema.properties.record.properties.count]
+type = "integer"
+minimum = 0

@@ -1,0 +1,22 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas"
+
+[[imports]]
+path = "service.toml"
+as = "service"
+
+[[imports]]
+path = "relationships.toml"
+as = "relationships"
+
+[[imports]]
+path = "definitions/installed-schedule.toml"
+as = "installed_schedule"
+
+[[imports]]
+path = "definitions/schedule-occurrence.toml"
+as = "occurrence"
+
+[[imports]]
+path = "definitions/schedule-owner.toml"
+as = "owner"
+

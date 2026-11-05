@@ -1,0 +1,10 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/decisions"
+name = "Decisions"
+authority_capabilities = []
+[coworker_params_schema]
+path = "./decisions.coworker-params.schema.json"
+[integration_params_schema]
+path = "./decisions.integration-params.schema.json"
+[actor_integration_params_schema]
+path = "./decisions.actor-integration-params.schema.json"

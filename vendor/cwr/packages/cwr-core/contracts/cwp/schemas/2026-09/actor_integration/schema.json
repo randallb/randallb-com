@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/actor_integration",
+  "title": "Actor Integration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "ref",
+    "actor_ref",
+    "integration_ref"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/actor_integration"
+    },
+    "ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "actor_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "integration_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "working_path": {
+      "description": "Execution cwd override, defaulting to the root CWR.toml directory. Relative paths resolve from that workspace root. CWR semantic validation requires an existing directory whose canonical path is the root or a descendant, including for absolute paths and symlinks. Does not change coworker artifact resolution or grant filesystem permissions.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "message_mode": {
+      "description": "How CWR handles ordinary messages for this actor integration. actions_only returns the actor's currently visible action catalog without starting the adapter.",
+      "type": "string",
+      "enum": ["conversational", "actions_only"],
+      "default": "conversational"
+    },
+    "params": {
+      "description": "Adapter-defined parameters for this actor on the integration.",
+      "type": "object",
+      "default": {}
+    }
+  }
+}

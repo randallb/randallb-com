@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model",
+    "action_name"
+  ],
+  "properties": {
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "rubric_version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "action_name": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "const": "respond_to--message"
+      },
+      "pattern": "\\S"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300
+    },
+    "questions": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 200,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "instructions"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "noul",
+              "choice",
+              "score"
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "criteria": {}
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "noul"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "criteria": {
+                  "type": "object",
+                  "required": [
+                    "true",
+                    "false"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "true": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    "false": {
+                      "type": "string",
+                      "pattern": "\\S"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "choice"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "criteria"
+              ],
+              "properties": {
+                "criteria": {
+                  "type": "object",
+                  "minProperties": 2,
+                  "maxProperties": 255,
+                  "propertyNames": {
+                    "pattern": "\\S"
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "score"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "criteria"
+              ],
+              "properties": {
+                "criteria": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 10,
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "propertyNames": {
+        "pattern": "\\S"
+      }
+    },
+    "contract": {
+      "const": "grader-v1",
+      "description": "Opt into the shared caller-supplied rubric contract. Model and transport remain role/host owned."
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "rubric_version",
+        "questions"
+      ],
+      "not": {
+        "required": [
+          "contract"
+        ]
+      }
+    },
+    {
+      "required": [
+        "contract"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "questions"
+            ]
+          },
+          {
+            "required": [
+              "rubric_version"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

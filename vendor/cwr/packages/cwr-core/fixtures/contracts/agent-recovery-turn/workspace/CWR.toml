@@ -1,0 +1,9 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas"
+
+[[imports]]
+path = "./coworkers/person/COWORKER.toml"
+as = "person"
+
+[[imports]]
+path = "./coworkers/helper/coworker.toml"
+as = "helper"

@@ -1,0 +1,17 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/claude"
+name = "Claude"
+authority_capabilities = [
+  "workspace.read",
+  "workspace.write",
+  "process.execute",
+]
+
+[coworker_params_schema]
+path = "./claude.coworker-params.schema.json"
+
+[integration_params_schema]
+path = "./claude.integration-params.schema.json"
+
+[actor_integration_params_schema]
+path = "./claude.actor-integration-params.schema.json"

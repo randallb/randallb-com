@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Brief Writer"
+slug = "brief_writer"
+authority = ["workspace.read", "workspace.write"]
+
+[[roles]]
+path = "../role/codex.example.toml"
+as = "behavior"

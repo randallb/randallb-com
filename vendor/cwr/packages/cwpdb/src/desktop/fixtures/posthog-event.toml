@@ -1,0 +1,29 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/posthog-event"
+storage = "cwpdb"
+lifetime = "disposable"
+record_kind = "posthog_event"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["sequence", "received", "destination", "quarantined", "event", "bytes"]
+[value_schema.properties.record.properties.sequence]
+type = "integer"
+minimum = 1
+[value_schema.properties.record.properties.received]
+type = "integer"
+[value_schema.properties.record.properties.destination]
+type = "string"
+minLength = 1
+maxLength = 512
+[value_schema.properties.record.properties.quarantined]
+type = "boolean"
+[value_schema.properties.record.properties.event]
+type = "string"
+[value_schema.properties.record.properties.bytes]
+type = "integer"
+minimum = 0

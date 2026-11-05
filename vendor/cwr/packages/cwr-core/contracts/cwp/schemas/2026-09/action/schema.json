@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/action",
+  "title": "Action",
+  "description": "A coworker operation with structured verb-object identity, presentation text, and input and output JSON Schema locators.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verb",
+    "object",
+    "title",
+    "description",
+    "input_schema",
+    "output_schema"
+  ],
+  "properties": {
+    "verb": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "object": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_schema": {
+      "$ref": "#/$defs/schemaLocator"
+    },
+    "output_schema": {
+      "$ref": "#/$defs/schemaLocator"
+    },
+    "execution_scope": {
+      "enum": [
+        "requesting_conversation",
+        "own_conversation"
+      ],
+      "default": "requesting_conversation"
+    },
+    "response_mode": {
+      "enum": [
+        "sync",
+        "async"
+      ],
+      "default": "sync"
+    },
+    "contract_revision": {
+      "type": "string",
+      "minLength": 1,
+      "default": "1",
+      "description": "Explicit action contract revision; changing it invalidates retained targets."
+    }
+  },
+  "$defs": {
+    "schemaLocator": {
+      "description": "Locates a JSON Schema by bundled file path or CWR ref.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "A JSON Schema file path relative to the coworker declaration that owns the action.",
+          "type": "string",
+          "pattern": "^\\./"
+        },
+        "ref": {
+          "description": "A CWR ref that resolves to a JSON Schema document.",
+          "type": "string",
+          "format": "cwr-ref",
+          "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "required": [
+            "ref"
+          ]
+        }
+      ]
+    }
+  }
+}

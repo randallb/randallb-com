@@ -1,0 +1,38 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/posthog-state"
+storage = "cwpdb"
+record_kind = "posthog_state"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["installation_id", "counters", "high_water", "migration_version"]
+[value_schema.properties.record.properties.installation_id]
+type = "string"
+minLength = 1
+maxLength = 128
+[value_schema.properties.record.properties.counters]
+type = "object"
+required = ["dropped"]
+maxProperties = 64
+[value_schema.properties.record.properties.counters.propertyNames]
+maxLength = 128
+[value_schema.properties.record.properties.counters.additionalProperties]
+type = "integer"
+[value_schema.properties.record.properties.high_water]
+type = "integer"
+minimum = 0
+[value_schema.properties.record.properties.migration_version]
+const = 1
+
+[value_schema.properties.record.properties.live_rows]
+type = "integer"
+minimum = 0
+maximum = 10000
+[value_schema.properties.record.properties.live_bytes]
+type = "integer"
+minimum = 0
+maximum = 8388608

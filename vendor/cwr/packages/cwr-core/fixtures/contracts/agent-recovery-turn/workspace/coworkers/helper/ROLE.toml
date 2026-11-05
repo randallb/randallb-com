@@ -1,0 +1,8 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/role"
+name = "Helper"
+
+[[adapters]]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/codex"
+
+[adapters.params]
+entrypoint = "./PROMPT.md"

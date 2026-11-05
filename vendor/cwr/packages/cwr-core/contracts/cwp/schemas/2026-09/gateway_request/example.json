@@ -1,0 +1,13 @@
+{
+  "type": "cwp://org.coworkerprotocol/2026-09/schemas/gateway_request",
+  "ref": "cwp://com.example.runtime/gateway-requests/123",
+  "requester_actor_ref": "cwp://com.example.runtime/actors/gmail-ops",
+  "resource_ref": "cwp://com.getworkloop/2026-09/connections/google/gmail",
+  "request": {
+    "method": "GET",
+    "path": "/gmail/v1/users/me/messages",
+    "query": {
+      "q": "newer_than:7d"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/coworker"
+name = "Person"
+slug = "person"
+
+[[roles]]
+path = "./ROLE.toml"
+as = "behavior"
+
+[[imports]]
+path = "../helper/coworker.toml"
+as = "helper"

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_message",
+  "title": "Conversation message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_ref",
+    "author_actor_ref",
+    "addressed_actor_refs",
+    "addressing_mode",
+    "text"
+  ],
+  "properties": {
+    "message_ref": {
+      "$ref": "#/$defs/cwr_ref"
+    },
+    "author_actor_ref": {
+      "$ref": "#/$defs/cwr_ref"
+    },
+    "addressed_actor_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/cwr_ref"
+      }
+    },
+    "addressing_mode": {
+      "enum": [
+        "implicit",
+        "explicit"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "reply_to_message_ref": {
+      "$ref": "#/$defs/cwr_ref"
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "activation",
+            "input"
+          ],
+          "properties": {
+            "kind": {
+              "const": "call"
+            },
+            "activation": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "input": true
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "activation",
+            "result"
+          ],
+          "properties": {
+            "kind": {
+              "const": "result"
+            },
+            "activation": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "result": true,
+            "outcome": {
+              "enum": [
+                "succeeded",
+                "failed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_ref",
+        "source_activity_ref"
+      ],
+      "properties": {
+        "invocation_ref": {
+          "$ref": "#/$defs/cwr_ref"
+        },
+        "source_activity_ref": {
+          "$ref": "#/$defs/cwr_ref"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 199
+        }
+      }
+    }
+  },
+  "$defs": {
+    "cwr_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    }
+  },
+  "not": {
+    "required": [
+      "action",
+      "progress"
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/actor",
+  "title": "Actor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "ref",
+    "coworker_ref"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/actor"
+    },
+    "ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "coworker_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+    },
+    "authority": {
+      "description": "Authority granted to this actor for the selected workspace. Omission grants none of the 2026-09 workspace effects.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "workspace.read",
+          "workspace.write",
+          "process.execute"
+        ]
+      },
+      "default": []
+    },
+    "default_participant_actor_refs": {
+      "description": "Actors considered one hop when this actor creates a conversation or is addressed, subject to its admission permissions.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "cwr-ref",
+        "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+      }
+    },
+    "name": {
+      "description": "An optional display name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "admission_actor_refs": {
+      "description": "Exact actors this actor may add to a conversation. Omission grants no admissions. Membership is shared; this list does not restrict addressing existing participants.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "cwr-ref",
+        "pattern": "^(?:~@(?:/[^\\s/#]+)*(?:#[^\\s#]+)?|cwp://(?!~)[^\\s#]+(?:#[^\\s#]+)?)$"
+      }
+    }
+  }
+}

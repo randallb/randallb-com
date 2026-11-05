@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex Integration Parameters",
+  "description": "The first local Codex integration has no authored parameters.",
+  "type": "object",
+  "additionalProperties": false
+}

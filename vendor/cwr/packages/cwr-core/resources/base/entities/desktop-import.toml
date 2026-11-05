@@ -1,0 +1,19 @@
+type = "cwp://org.coworkerprotocol/2026-10-22/schemas/entity-definition"
+ref = "cwp://org.coworkerprotocol/cwr/entities/desktop-import"
+storage = "cwpdb"
+record_kind = "desktop_storage_import_v1"
+record_schema = "cwp://org.coworkerprotocol/cwpdb/schemas/desktop_storage_import_v1/2026-09"
+[value_schema]
+type = "object"
+additionalProperties = false
+required = ["record"]
+[value_schema.properties.record]
+type = "object"
+additionalProperties = false
+required = ["source", "complete"]
+[value_schema.properties.record.properties.source]
+type = "string"
+[value_schema.properties.record.properties.complete]
+const = true
+[value_schema.properties.record.properties.format]
+const = 2

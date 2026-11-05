@@ -1,0 +1,5 @@
+type = "cwp://org.coworkerprotocol/2026-10-23/schemas/native-service"
+ref = "cwp://org.coworkerprotocol/cwr/services/schedules"
+provider = "cwr.schedules.v1"
+operations = ["list", "get", "pause", "resume", "recent-runs"]
+entities = ["installed-schedule", "schedule-occurrence", "schedule-owner"]

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Codex Coworker Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entrypoint"
+  ],
+  "properties": {
+    "entrypoint": {
+      "description": "A prompt file path relative to the coworker declaration.",
+      "type": "string",
+      "pattern": "^\\./"
+    },
+    "model": {
+      "description": "The concrete Codex model used for this coworker.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reasoning_effort": {
+      "description": "The reasoning effort used with the selected Codex model.",
+      "type": "string",
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ]
+    },
+    "isolated": {
+      "description": "Run the action read-only and offline without exposing CWR host tools. Intended for transforming untrusted input into a validated result.",
+      "type": "boolean",
+      "default": false
+    },
+    "selective_history": {
+      "description": "Deliver recent shared messages and participant-scoped history browsing for conversational Codex requests by default. Set false in the Codex role's adapters.params to receive full shared history; isolated and named-action requests always use full history.",
+      "type": "boolean",
+      "default": true
+    },
+    "context_window_tokens": {
+      "type": "integer",
+      "minimum": 16384,
+      "default": 131072,
+      "deprecated": true,
+      "description": "Legacy compatibility parameter. Retained when checking compatibility with an existing private Codex conversation; ignored for context budgeting. Codex resolves its model context window and manages token accounting and compaction. Leave this parameter unchanged on existing coworkers and omit it on new coworkers."
+    }
+  },
+  "dependentRequired": {
+    "model": [
+      "reasoning_effort"
+    ],
+    "reasoning_effort": [
+      "model"
+    ]
+  },
+  "not": {
+    "required": ["isolated", "selective_history"],
+    "properties": {
+      "isolated": {"const": true},
+      "selective_history": {"const": true}
+    }
+  }
+}

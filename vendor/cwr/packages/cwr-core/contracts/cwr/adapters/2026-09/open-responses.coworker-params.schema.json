@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Open Responses Coworker Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entrypoint",
+    "model"
+  ],
+  "properties": {
+    "entrypoint": {
+      "description": "A prompt file path relative to the coworker declaration.",
+      "type": "string",
+      "pattern": "^\\./"
+    },
+    "model": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "max_turns": {
+      "description": "Maximum provider responses per invocation; defaults to 16.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 256
+    },
+    "max_output_tokens": {
+      "description": "Maximum output tokens per provider response; defaults to 4096.",
+      "type": "integer",
+      "minimum": 16,
+      "maximum": 65536
+    },
+    "timeout_seconds": {
+      "description": "Total time including provider requests and host calls; defaults to 300 seconds.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "context_window_tokens": {
+      "type": "integer",
+      "minimum": 16384,
+      "default": 131072,
+      "description": "Provider input window used during adapter-owned context preparation. Set this to at most the selected model context window. The adapter conservatively counts UTF-8 bytes as tokens for supplied text and reserves room for instructions, tools, schemas, the exact action request and output; native usage replaces estimates when available."
+    }
+  }
+}

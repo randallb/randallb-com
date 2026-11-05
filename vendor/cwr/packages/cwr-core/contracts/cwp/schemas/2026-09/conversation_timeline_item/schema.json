@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_item",
+  "title": "Conversation timeline item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "item_ref",
+    "publication_ref",
+    "connection_ref",
+    "sibling_sequence",
+    "content"
+  ],
+  "properties": {
+    "item_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    },
+    "publication_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    },
+    "connection_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    },
+    "sibling_sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "content": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas/conversation_timeline_content"
+    },
+    "child_connection_ref": {
+      "$ref": "#/$defs/absolute_ref"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "content": {
+            "properties": {
+              "kind": {
+                "const": "invocation"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "child_connection_ref"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "child_connection_ref"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "absolute_ref": {
+      "type": "string",
+      "format": "cwr-ref",
+      "pattern": "^cwp://(?!~)[^\\s#]+$"
+    }
+  }
+}

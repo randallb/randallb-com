@@ -1,0 +1,13 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/adapter"
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/open-responses"
+name = "Open Responses"
+authority_capabilities = []
+
+[coworker_params_schema]
+path = "./open-responses.coworker-params.schema.json"
+
+[integration_params_schema]
+path = "./open-responses.integration-params.schema.json"
+
+[actor_integration_params_schema]
+path = "./open-responses.actor-integration-params.schema.json"

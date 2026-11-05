@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cwp://org.coworkerprotocol/2026-09/schemas/integration",
+  "title": "Integration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "adapter"
+  ],
+  "properties": {
+    "type": {
+      "const": "cwp://org.coworkerprotocol/2026-09/schemas/integration"
+    },
+    "exports": {
+      "$ref": "#/$defs/resourceObjects",
+      "default": []
+    },
+    "imports": {
+      "$ref": "#/$defs/resourceObjects",
+      "default": []
+    },
+    "input_schema": {
+      "$ref": "#/$defs/resourceObject"
+    },
+    "name": {
+      "type": "string"
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "A resource declaration path relative to the CWR.toml that contains this object.",
+          "type": "string",
+          "pattern": "^\\.{1,2}/"
+        },
+        "ref": {
+          "description": "The full CWR ref of an available resource or CWR.toml declaration.",
+          "type": "string",
+          "format": "cwr-ref",
+          "pattern": "^(?:~@(?:/[^\\s/#]+)*|cwp://(?!~)[^\\s#]+)$"
+        },
+        "as": {
+          "description": "An optional contextual namespace in the current root.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+        },
+        "inputs": {
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ref",
+                  "as"
+                ],
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "pattern": "^~@/[A-Za-z0-9_-]+$"
+                  },
+                  "as": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "path": {}
+          },
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "ref": {}
+          },
+          "required": [
+            "ref"
+          ]
+        }
+      ]
+    },
+    "params": {
+      "type": "object",
+      "default": {}
+    },
+    "inputs": {
+      "$ref": "cwp://org.coworkerprotocol/2026-09/schemas#/$defs/inputDeclarations"
+    }
+  },
+  "$defs": {
+    "resourceObjects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resourceObject"
+      }
+    },
+    "resourceObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "A resource declaration path relative to the CWR.toml that contains this object.",
+          "type": "string",
+          "pattern": "^\\.{1,2}/"
+        },
+        "ref": {
+          "description": "The full CWR ref of an available resource or CWR.toml declaration.",
+          "type": "string",
+          "format": "cwr-ref",
+          "pattern": "^(?:~@(?:/[^\\s/#]+)*|cwp://(?!~)[^\\s#]+)$"
+        },
+        "as": {
+          "description": "An optional contextual namespace in the current root.",
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"
+        },
+        "inputs": {
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ref",
+                  "as"
+                ],
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "pattern": "^~@/[A-Za-z0-9_-]+$"
+                  },
+                  "as": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          ],
+          "default": {}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "path": {}
+          },
+          "required": [
+            "path"
+          ]
+        },
+        {
+          "properties": {
+            "ref": {}
+          },
+          "required": [
+            "ref"
+          ]
+        }
+      ]
+    }
+  },
+  "not": {
+    "required": [
+      "inputs",
+      "input_schema"
+    ]
+  }
+}

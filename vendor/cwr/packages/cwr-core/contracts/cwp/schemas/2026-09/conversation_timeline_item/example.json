@@ -1,0 +1,11 @@
+{
+  "item_ref": "cwp://com.example.runtime/publications/01JITEM/item",
+  "publication_ref": "cwp://com.example.runtime/publications/01JITEM",
+  "connection_ref": "cwp://com.example.runtime/conversations/product_review_01/timeline",
+  "sibling_sequence": 8,
+  "content": {
+    "kind": "invocation",
+    "invocation_ref": "cwp://com.example.runtime/invocations/01JEXAMPLE"
+  },
+  "child_connection_ref": "cwp://com.example.runtime/publications/01JITEM/item/children"
+}

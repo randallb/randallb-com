@@ -1,0 +1,17 @@
+{
+  "request_ref": "cwp://com.example.runtime/gateway-requests/123",
+  "sequence": 1,
+  "status": 200,
+  "summary": "Gmail returned the matching message IDs.",
+  "result": {
+    "status": 200,
+    "body": {
+      "messages": [
+        {
+          "id": "example-message",
+          "threadId": "example-thread"
+        }
+      ]
+    }
+  }
+}

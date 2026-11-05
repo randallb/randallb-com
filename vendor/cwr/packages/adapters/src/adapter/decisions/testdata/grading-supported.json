@@ -1,0 +1,26 @@
+{
+  "context": {
+    "result": "The meeting is at 3 pm.",
+    "evidence": "Calendar: meeting at 3 pm."
+  },
+  "rubric": {
+    "id": "evidence-support",
+    "version": "4",
+    "criterion": "Does the result accurately reflect the supplied evidence?",
+    "ungradable_when": "There is no applicable factual claim, or the evidence supplies no basis to verify or contradict the claim.",
+    "grades": {
+      "-3": "Clear miss: directly contradicts material evidence or claims access explicitly unavailable.",
+      "-2": "Substantial miss: major factual errors leave the result substantially below the accuracy bar.",
+      "-1": "Near miss: a small material error leaves the result just below the accuracy bar.",
+      "1": "Barely meets the accuracy bar: material claims are supported, but precision or relevant qualification is only just adequate.",
+      "2": "Solidly meets the accuracy bar: accurate material claims and relevant qualifications.",
+      "3": "Strongly meets the accuracy bar: fully supported, precise, complete material claims and relevant qualifications."
+    },
+    "categories": {
+      "supported": "Claims supported by evidence.",
+      "contradiction": "Claims contradicted by evidence.",
+      "missing_evidence": "No basis to verify or contradict the claim.",
+      "unavailable_access": "Claims access to a source explicitly unavailable."
+    }
+  }
+}

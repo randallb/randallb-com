@@ -1,0 +1,47 @@
+type = "cwp://org.coworkerprotocol/2026-10-23/schemas/relationship-catalog"
+ref = "cwp://org.coworkerprotocol/cwr/relationships/schedules"
+
+[[relationships]]
+kind = "schedule_owner"
+source = ["runtime"]
+target = ["schedule_owner"]
+singleton = false
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "installed_schedule"
+source = ["schedule_owner"]
+target = ["installed_schedule"]
+singleton = false
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "schedule_occurrence"
+source = ["installed_schedule"]
+target = ["schedule_occurrence"]
+singleton = false
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "schedule_invocation"
+source = ["schedule_occurrence"]
+target = ["invocation"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }
+
+[[relationships]]
+kind = "schedule_conversation"
+source = ["schedule_occurrence"]
+target = ["conversation"]
+singleton = true
+ordered = false
+derived = false
+value_schema = { type = "object" }

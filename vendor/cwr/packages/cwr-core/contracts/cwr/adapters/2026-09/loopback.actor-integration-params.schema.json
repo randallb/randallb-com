@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Loopback Actor Integration Parameters",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "execution_environment": {
+      "description": "Execute using Workloop Cloud infrastructure. The host selects an executor; this value grants no authority or credentials. Omit for the normal local route.",
+      "enum": [
+        "workloop_cloud"
+      ]
+    }
+  }
+}

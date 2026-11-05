@@ -1,0 +1,17 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/workspace"
+
+[[volumes]]
+name = "reference"
+path = "../loop"
+
+[[runtimes]]
+name = "example"
+# Compatibility demonstration: a runtime selection can reuse a legacy /loop definition.
+path = "../loop/example.toml"
+source_roots = ["../loop"]
+working_directory = "../loop"
+volume = "reference"
+
+[[runtimes.volume_access]]
+volume = "reference"
+access = "read"

@@ -1,0 +1,25 @@
+# Adapted November 4, 2026: standalone CWR handoff workspace.
+[workspace]
+members = ["apps/cli", "apps/cwp-runtime", "packages/cwr-core", "packages/cwpdb", "packages/adapters"]
+resolver = "2"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+warnings = "deny"
+
+[workspace.lints.clippy]
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+dbg_macro = "deny"
+excessive_nesting = "deny"
+fn_params_excessive_bools = "deny"
+large_futures = "deny"
+large_stack_arrays = "deny"
+large_types_passed_by_value = "deny"
+struct_excessive_bools = "deny"
+todo = "deny"
+too_many_lines = "deny"
+undocumented_unsafe_blocks = "deny"
+unimplemented = "deny"
+unused_async = "deny"
+

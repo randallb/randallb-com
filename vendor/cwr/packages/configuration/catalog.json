@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "definitions": {
+    "accounts.demo": {
+      "kind": "startup",
+      "value_type": "boolean",
+      "default": false,
+      "scope": "application",
+      "source": {
+        "legacy_environments": [
+          "WORKLOOP_ACCOUNTS_DEMO",
+          "WORKLOOPUSERS_DEMO"
+        ]
+      },
+      "client_safe": false,
+      "lifecycle": "startup",
+      "title": "Demo accounts",
+      "description": "Use fixed local account identity and operator authorization."
+    },
+    "accounts.phone_auth": {
+      "kind": "startup",
+      "value_type": "boolean",
+      "default": true,
+      "scope": "application",
+      "source": {
+        "legacy_environments": ["WORKLOOP_PHONE_AUTH"]
+      },
+      "client_safe": false,
+      "lifecycle": "startup",
+      "title": "Phone authentication",
+      "description": "Enable SMS account sign-in."
+    },
+    "desktop.human_reply_inbox": {
+      "kind": "setting",
+      "value_type": "boolean",
+      "default": false,
+      "scope": "person_workspace",
+      "source": {
+        "workspace_parameter": "human_response_actions"
+      },
+      "client_safe": true,
+      "lifecycle": "live",
+      "title": "Human reply inbox",
+      "description": "Collect requests from coworkers in Needs reply. Turning this off stops new requests; existing requests stay available to answer."
+    },
+    "desktop.use_laufey_projection_transport": {
+      "kind": "startup",
+      "value_type": "boolean",
+      "default": false,
+      "scope": "application",
+      "source": {
+        "legacy_environments": []
+      },
+      "client_safe": true,
+      "lifecycle": "startup",
+      "title": "Laufey projection transport",
+      "description": "Send desktop projection batches through Laufey instead of the default loopback HTTP transport."
+    },
+    "desktop.use_native_isograph_tree": {
+      "kind": "startup",
+      "value_type": "boolean",
+      "default": true,
+      "scope": "application",
+      "source": {
+        "legacy_environments": []
+      },
+      "client_safe": true,
+      "lifecycle": "startup",
+      "title": "Native Isograph application tree",
+      "description": "Start Workloop Desktop with the clean Isograph-owned application tree."
+    },
+    "web.configuration_demo": {
+      "kind": "rollout",
+      "value_type": "boolean",
+      "default": false,
+      "scope": "person",
+      "source": {
+        "provider": "posthog"
+      },
+      "client_safe": true,
+      "lifecycle": "live",
+      "refresh_seconds": 60,
+      "stale_seconds": 300,
+      "title": "Configuration demo",
+      "description": "Demonstrate a server-enforced web rollout controlled by PostHog."
+    }
+  }
+}

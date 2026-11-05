@@ -1,0 +1,27 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/action_invocation"
+ref = "cwp://com.example.runtime/invocations/01JEXAMPLE"
+requester_actor_ref = "~@/actors/randallb"
+target_actor_ref = "~@/actors/looper"
+conversation_ref = "cwp://com.example.runtime/conversations/product_review_01"
+source_message_ref = "cwp://com.example.runtime/messages/01JREQUEST"
+timeline_publications = { "cwp://com.example.runtime/publications/01JEXAMPLE" = { kind = "root" } }
+actor_integration_ref = "~@/actor_integrations/looper_slack"
+action_name = "draft--brief"
+input = { topic = "How CWR schemas fit together" }
+state = "completed"
+admitted_at = "2026-08-25T14:00:00Z"
+started_at = "2026-08-25T14:00:01Z"
+finished_at = "2026-08-25T14:00:12Z"
+
+[[responses]]
+invocation_ref = "cwp://com.example.runtime/invocations/01JEXAMPLE"
+sequence = 1
+status = 102
+summary = "Drafting the brief."
+
+[[responses]]
+invocation_ref = "cwp://com.example.runtime/invocations/01JEXAMPLE"
+sequence = 2
+status = 200
+summary = "Finished the brief."
+result = { document_ref = "cwp://com.example/documents/cwr_schema_brief" }

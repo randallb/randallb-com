@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Slack Coworker Parameters",
+  "description": "The first Slack coworker binding has no authored parameters.",
+  "type": "object",
+  "additionalProperties": false
+}

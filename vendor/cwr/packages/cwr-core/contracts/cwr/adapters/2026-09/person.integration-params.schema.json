@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"properties":{"human_response_actions":{"type":"boolean","default":false}}}

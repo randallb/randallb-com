@@ -1,0 +1,5 @@
+type = "cwp://org.coworkerprotocol/2026-09/schemas/role"
+name = "Randall"
+
+[[adapters]]
+ref = "cwp://org.coworkerprotocol/2026-09/adapters/slack"
