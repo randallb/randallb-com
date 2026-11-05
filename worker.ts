@@ -1,6 +1,7 @@
 export interface SiteFile {
-  body: string;
+  asset: string;
   content_type: string;
+  noindex?: boolean;
 }
 export interface Site {
   revision: string;
@@ -8,11 +9,15 @@ export interface Site {
   routes: Record<string, SiteFile>;
   not_found: SiteFile;
 }
+export interface AssetEnvironment {
+  PREVIEW_ONLY?: boolean;
+  ASSETS: { fetch(request: Request): Promise<Response> };
+}
 
-// Content is supplied by the Drive build, never by repository page files.
+// Only explicit Drive routes can reach the uploaded, content-addressed assets.
 export function createWorker(site: Site) {
   return {
-    fetch(request: Request): Response {
+    async fetch(request: Request, env: AssetEnvironment): Promise<Response> {
       if (!["GET", "HEAD"].includes(request.method)) {
         return new Response(null, {
           status: 405,
@@ -27,11 +32,19 @@ export function createWorker(site: Site) {
         "Cache-Control": "no-store",
         "X-Content-Revision": site.revision,
       };
-      if (site.noindex) headers["X-Robots-Tag"] = "noindex";
-      const body = request.method === "HEAD"
-        ? null
-        : Uint8Array.from(atob(file.body), (char) => char.charCodeAt(0));
-      return new Response(body, { status: found ? 200 : 404, headers });
+      if (env.PREVIEW_ONLY || (file.noindex ?? site.noindex)) {
+        headers["X-Robots-Tag"] = "noindex";
+      }
+      if (request.method === "HEAD") {
+        return new Response(null, { status: found ? 200 : 404, headers });
+      }
+      const assetUrl = new URL(file.asset, request.url);
+      assetUrl.search = "";
+      const asset = await env.ASSETS.fetch(new Request(assetUrl));
+      if (asset.status !== 200) {
+        return new Response("Asset unavailable", { status: 502 });
+      }
+      return new Response(asset.body, { status: found ? 200 : 404, headers });
     },
   };
 }

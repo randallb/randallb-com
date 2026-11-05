@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Build and publish an explicit snapshot of a synced Google Drive folder."""
 import argparse
-import base64
 import hashlib
 import json
 from pathlib import Path
 import subprocess
+import shutil
+import tempfile
 from urllib.parse import urlsplit, unquote
 
 ROOT = Path(__file__).resolve().parent.parent
+MAX_SOURCE_BYTES = 100_000_000
+MAX_ASSET_BYTES = 25_000_000
 
 
 def build(source: Path, output: Path):
@@ -28,8 +31,10 @@ def build(source: Path, output: Path):
             raise ValueError("Source file escapes the content folder")
         data = path.read_bytes()
         total += len(data)
-        if total > 4_000_000:
-            raise ValueError("This inline publisher supports at most 4 MB of source")
+        if total > MAX_SOURCE_BYTES:
+            raise ValueError("Publisher supports at most 100 MB of mapped source")
+        if len(data) > MAX_ASSET_BYTES:
+            raise ValueError("Each static asset must be at most 25 MB")
         hashes[name] = hashlib.sha256(data).hexdigest()
         return data
 
@@ -50,8 +55,13 @@ def build(source: Path, output: Path):
         ):
             raise ValueError("Invalid content type")
         if name not in files:
-            files[name] = base64.b64encode(read_file(name)).decode("ascii")
-        return {"body": files[name], "content_type": content_type}
+            data = read_file(name)
+            files[name] = data
+        noindex = row.get("noindex", manifest["noindex"])
+        if type(noindex) is not bool:
+            raise ValueError("Expected boolean noindex")
+        return {"asset": "/" + hashlib.sha256(files[name]).hexdigest() + ".bin",
+                "content_type": content_type, "noindex": noindex}
 
     public = {}
     for route, row in routes.items():
@@ -69,13 +79,20 @@ def build(source: Path, output: Path):
             "routes": public, "not_found": not_found}
     # Write only after the full source has passed validation.
     output.mkdir(parents=True, exist_ok=True)
+    asset_dir = output / "assets"
+    staged = Path(tempfile.mkdtemp(prefix="assets-", dir=output))
+    for data in files.values():
+        (staged / (hashlib.sha256(data).hexdigest() + ".bin")).write_bytes(data)
+    if asset_dir.exists():
+        shutil.rmtree(asset_dir)
+    staged.rename(asset_dir)
     (output / "site-content.json").write_text(json.dumps(site) + "\n")
     (output / "entry.ts").write_text(
         'import { createWorker } from "../worker.ts";\n'
         'import site from "./site-content.json" with { type: "json" };\n'
         'export default createWorker(site);\n')
     receipt = {"source": str(source), "revision": revision, "hashes": hashes,
-               "route_count": len(public)}
+               "route_count": len(public), "source_bytes": total, "limit_bytes": MAX_SOURCE_BYTES}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     return receipt
 

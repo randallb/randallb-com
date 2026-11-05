@@ -9,5 +9,12 @@
       "pattern": "randallb.com",
       "custom_domain": true
     }
-  ]
+  ],
+  "assets": {
+    "directory": ".drive-build/assets",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  }
 }
