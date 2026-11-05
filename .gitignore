@@ -8,3 +8,7 @@ node_modules/
 vendor/cwr/target/
 .cwr-state/
 cwr/.cwr/
+
+.drive-build/
+__pycache__/
+migration/
