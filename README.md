@@ -20,6 +20,7 @@ deno task check
 deno task bundle
 deno task setup:cwr
 deno task check:cwr
+python3 scripts/cwr-verify.py
 ```
 
 The local app listens on `127.0.0.1:8000`. The CWR task builds and invokes the
@@ -54,8 +55,10 @@ are identical except for relocating the catalog import into `migration/`.
 ## URL replacement inventory
 
 `migration/url-catalog.csv` and `.json` record 17 discovered/known paths,
-including all five posts listed in the saved sitemap and RSS feed. Ten public
-pages were fetched. `migration/public-pages/`, `feed.xml`, and `sitemap.xml`
+including all five posts listed in the saved sitemap and RSS feed. The original ten Python page fetches failed with HTTP 403 and produced empty
+files. Those files were subsequently recovered with curl from the retained
+randallb.substack.com publication; see `migration/snapshot-recovery.json`. Ten public
+pages are now preserved. `migration/public-pages/`, `feed.xml`, and `sitemap.xml`
 preserve reference content. Service entry points were cataloged without submitting
 forms. This is a public inventory, not proof of exhaustive private/unlinked or
 historical coverage. Replace these paths as the real site is built. The deployed

@@ -1,0 +1,72 @@
+[
+  {
+    "path": "/p/written-by-me",
+    "source": "https://randallb.substack.com/p/written-by-me",
+    "status": 200,
+    "bytes": 140091,
+    "sha256": "87ffd3ba5c2ddf772c7f26178c55eed20ee65ad1d5f7a0283319d2cfdc7463fa"
+  },
+  {
+    "path": "/",
+    "source": "https://randallb.substack.com/",
+    "status": 200,
+    "bytes": 90969,
+    "sha256": "96a6802eb7dee53692940b51ad3e8c28918eef8f3c530743e48aabace7873b8b"
+  },
+  {
+    "path": "/p/coming-soon",
+    "source": "https://randallb.substack.com/p/coming-soon",
+    "status": 200,
+    "bytes": 103714,
+    "sha256": "0ab70d6341536dbe6848d670059bfb5e6c11ade35ce78f29b6a9aadea8497306"
+  },
+  {
+    "path": "/about",
+    "source": "https://randallb.substack.com/about",
+    "status": 200,
+    "bytes": 99265,
+    "sha256": "43f27aeb332e8e2eb34fcd6a7de80a08c68d7d9ea2ff08c5981b1b65adf70b29"
+  },
+  {
+    "path": "/p/the-5-levels-of-agentic-engineering",
+    "source": "https://randallb.substack.com/p/the-5-levels-of-agentic-engineering",
+    "status": 200,
+    "bytes": 139161,
+    "sha256": "5fc645b3c8d151fd81fe087632fd77f236dd5f557afbc3f6df4e825aa0ddbc92"
+  },
+  {
+    "path": "/s/ship-more-build-less-podcast",
+    "source": "https://randallb.substack.com/s/ship-more-build-less-podcast",
+    "status": 200,
+    "bytes": 92346,
+    "sha256": "a7a51187060af5b4f6346570d5331c6fd755aac9b219ba743a0e1027a9165b6d"
+  },
+  {
+    "path": "/p/build-less-ship-more-the-three-pillars",
+    "source": "https://randallb.substack.com/p/build-less-ship-more-the-three-pillars",
+    "status": 200,
+    "bytes": 136418,
+    "sha256": "b85607768842ef2088bff608d8f0c26ca38d55b40268aade47ff36957e9d43c7"
+  },
+  {
+    "path": "/p/build-less-ship-more-inference-engineering",
+    "source": "https://randallb.substack.com/p/build-less-ship-more-inference-engineering",
+    "status": 200,
+    "bytes": 139197,
+    "sha256": "99c350ba976cf43b356d22e2601836d881c4aa91d45df6201f86c6903d5c0c89"
+  },
+  {
+    "path": "/newsletters",
+    "source": "https://randallb.substack.com/newsletters",
+    "status": 200,
+    "bytes": 93823,
+    "sha256": "211292562d8ad15959e80c2c480a2c6935e69aff7eefb82ea482426715984fa0"
+  },
+  {
+    "path": "/archive",
+    "source": "https://randallb.substack.com/archive",
+    "status": 200,
+    "bytes": 138839,
+    "sha256": "76c83ec28ac7d8166ac547403c21b2e37201a4cb3a5e5cf8b4119e938886d8dc"
+  }
+]
