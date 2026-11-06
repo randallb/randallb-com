@@ -2,7 +2,7 @@
 
 This package exposes the first conversation/action slice from the maintained
 literate rbel chapter. It includes the same import-free `core.wasm` for JavaScript
-embedding and for the native executable's embedded Wasm engine. Only this slice
+embedding and as the input to the native executable's WABT/C compilation. Only this slice
 is implemented; the chapter lists unmigrated protocol standards.
 
 ## Build
