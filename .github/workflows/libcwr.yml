@@ -1,0 +1,44 @@
+name: Literate libcwr Wasm
+on:
+  pull_request:
+    paths:
+      - projects/bel-wasm/**
+      - .github/workflows/libcwr.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: libcwr-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  wasm:
+    # Apple Silicon label: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: projects/bel-wasm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Bootstrap existing rbel compiler
+        run: |
+          test "$(uname -m)" = arm64
+          rustup toolchain install 1.95.0 --profile minimal
+          cargo build --locked -p bel-rust-repl --bins
+          npm install --prefix target/bel-wasm-tools --no-save --ignore-scripts wabt@1.0.39
+          python3 experiments/bel-rust-repl/wasm/verify-selfhost.py
+          python3 experiments/bel-rust-repl/wasm/command/setup-tools.py
+          python3 experiments/bel-rust-repl/wasm/command/build-command.py
+      - name: Verify actual libcwr Wasm and runner failures
+        run: python3 libcwr/verify.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libcwr-evidence
+          path: |
+            projects/bel-wasm/target/libcwr/results.json
+            projects/bel-wasm/target/libcwr/verification.json
+          if-no-files-found: error

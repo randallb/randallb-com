@@ -12,3 +12,8 @@ cwr/.cwr/
 .drive-build/
 __pycache__/
 migration/
+
+# Isolated project compiler and verification output
+/projects/**/target/
+/projects/**/artifacts/
+__pycache__/

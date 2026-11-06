@@ -1,0 +1,26 @@
+{
+  "reference_only": true,
+  "source_control": "Sapling",
+  "revision": "2aabe143b8a1ed65f4adc1b452ad7074581b5091",
+  "files": {
+    "memos/policy/cwp/coworker-protocol.md": "b537b8c6a845cf16581148c0fbb32be109303310b5a95013e8e8b7443767f874",
+    "memos/policy/cwr/actor-authority.md": "fca40f6b0c40943111933e55c6ba3ea2a7e3cf016ed143f8c11fa3bf2772fd79",
+    "memos/policy/cwr/cwr-conversation-participation.md": "5f3e9f68cd27b15386abc7c1a101cf87bf4beffb907420b598f44888c11c7e19",
+    "memos/policy/cwr/api-identity.md": "bf1e90291d0dc4b5f10f62d5de183bb76e4cc2eaa2d1de999ceb806f633a1929",
+    "memos/policy/cwr/coworker-runtime.md": "43fc5d9c2bc1b7e41b20f28593f79191dbfabe25852daa1c6d9394977ca86610",
+    "memos/policy/cwr/cwr-subjects-actors-and-tool-activation.md": "5d5d58c492b93870747f833ab5c27fffb071d9b0d58eeaac7d963dded7103203",
+    "memos/policy/cwr/application-boundaries.md": "607dbf1b9d7aa04db715c7719b5005b20492a798f7fad15d84dc6aa1f86eeab3",
+    "memos/policy/cwr/ref-storage.md": "a66ede6700d16b3c59f3f18de823ca5e40cfd93b968ba08692453f3806673407",
+    "packages/cwr-core/README.md": "ec7cb8fbfabff331222778276cb6552d695fa22a34e4faa7f3fb76055ccdd95a",
+    "packages/cwr-core/src/v2026_09/invocation/state/transaction.rs": "c2f5bc9333757638bf0c36bff506cde3668cf812ca3ccb3f47cea413a71d7937",
+    "packages/cwr-core/src/v2026_09/invocation/model.rs": "6459c4f6606ae8e363386c6cdaaaa219dfb1f1bbe250c843526dde6ac2894d4d",
+    "packages/cwr-core/src/v2026_09/invocation/state/core.rs": "eae97ed11bbfa29f9e98b25b452e7a36d7fac717f8f3dd100a60d374d0b1535a"
+  },
+  "implementation_base": "50461bcecd716bd935a9875e9dc9a51e1b9550ea",
+  "uncommitted_summary": {
+    "files": 14,
+    "consulted_paths_modified": false,
+    "status_sha256": "31d42c93789fe002891824bd2805638f76cc200183d11a66b317b0d3671b5c3b",
+    "scope": "Unrelated coworker configuration and credential tooling; no consulted protocol paths differ."
+  }
+}

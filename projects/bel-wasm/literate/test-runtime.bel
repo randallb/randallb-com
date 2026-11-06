@@ -1,0 +1,11 @@
+; Generic compiled test continuations. No protocol definitions here.
+(def rt-request (operation arguments continuation)
+  (join 'await (join operation (join arguments (join continuation nil)))))
+(def rt-done () '(done))
+(def rt-equal (a b)
+  (if (id a b) t
+    (if (id (type a) 'pair) (if (id (type b) 'pair)
+      (if (rt-equal (car a) (car b)) (rt-equal (cdr a) (cdr b)) nil) nil) nil)))
+(def rt-assert (name actual expected continuation)
+  (rt-request 'assert (join name (join (rt-equal actual expected)
+    (join actual (join expected nil)))) continuation))
