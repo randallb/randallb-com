@@ -70,7 +70,7 @@ def main():
                     destination.unlink(missing_ok=True)
                     if kind == 'symlink': destination.symlink_to(source)
                     else: os.link(source, destination)
-                for suffix in ['', '.json', '.node-license.txt']:
+                for suffix in ['', '.json', '.runtime-license.txt']:
                     # Exercise collisions by each of the builder's three outputs.
                     output = destination
                     if suffix:
@@ -79,8 +79,8 @@ def main():
                         alias = output.with_name(output.name + suffix)
                         alias.unlink(missing_ok=True)
                         os.link(source, alias)
-                    options = SimpleNamespace(wasm=copied / 'core.wasm', main=tree / 'libcwr/embedding/native-main.cjs',
-                                              node=Path(sys.executable), node_license=ROOT / 'LICENSE', output=output)
+                    options = SimpleNamespace(wasm=copied / 'core.wasm', tools=work / 'tools', runtime=work / 'runtime',
+                                              cc=Path(sys.executable), runtime_license=ROOT / 'LICENSE', output=output)
                     try:
                         builder.build(options)
                     except ValueError as error:

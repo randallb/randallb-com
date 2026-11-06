@@ -11,13 +11,14 @@ From `projects/bel-wasm`, using the existing compiler bundle:
 
 ```sh
 python3 libcwr/embedding/build.py
+python3 experiments/bel-rust-repl/wasm/command/setup-tools.py
+python3 experiments/bel-rust-repl/wasm/native/setup-runtime.py
 python3 libcwr/embedding/build-native.py
 ```
 
 `--rbel PATH` selects a relocated native or portable compiler bundle. The output
-is `target/libcwr-embedding`. Native packaging requires a Node release supporting
-`--build-sea`; select an official standalone Node executable with `--node PATH`.
-Build tools are not needed when running the resulting executable. See [native build details](native-build.md) for the pinned official runtime and license notices. Native packages
+is `target/libcwr-embedding`. Native compilation uses WABT 1.0.39 `wasm2c` and a system C compiler.
+The resulting executable needs only system libraries. See [native build details](native-build.md) for tools and license notices. Native packages
 are specific to their build operating system and architecture.
 
 ## Embed the core
@@ -51,9 +52,9 @@ claim tokens or receipts. Keep this boundary when connecting another application
 
 ## Native host
 
-The executable embeds both the Wasm engine and the exact `core.wasm` asset. It
-runs the Wasm core internally; this is not direct native compilation of rbel.
-Its local host persists state and receipts and performs the chapter's deterministic
+The executable compiles the exact `core.wasm` through WABT `wasm2c` and C,
+using the existing rbel native build architecture. It has no Node/V8 or separately
+installed Wasm-engine runtime dependency. Its C host persists state and receipts and performs the chapter's deterministic
 `store--text` and `append--text` actions in a dedicated local directory.
 
 Supply a trusted context file and feed one event per line:
