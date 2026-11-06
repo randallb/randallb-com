@@ -32,7 +32,7 @@ def main():
         if not marker.is_file() or json.loads(marker.read_text()).get('format') != 'libcwr-embedding-v1':
             raise ValueError('refusing to replace an unrecognized output directory')
     source = ROOT / 'libcwr/workflow.rbel.md'
-    inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', HERE / 'native-main.cjs',
+    inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c']],
               ROOT / 'literate/wasm-values.mjs', ROOT / 'literate/test.py', Path(__file__).resolve(),
               HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py',
               *[ROOT / name for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']],
@@ -68,7 +68,7 @@ def main():
         (staging / 'values.cjs').write_text(values.replace('export class WasmValues', 'class WasmValues') + '\nmodule.exports = {WasmValues};\n')
         (staging / 'core.mjs').write_text(core.replace(original_import, "import {WasmValues} from './values.mjs';"))
         (staging / 'core.cjs').write_text(core.replace(original_import, "const {WasmValues} = require('./values.cjs');").replace('export class Core', 'class Core') + '\nmodule.exports = {Core};\n')
-        for name in ['host.cjs', 'native-main.cjs']:
+        for name in ['host.cjs']:
             (staging / name).write_bytes(snapshots[HERE / name])
         # Source attribution and redistribution notices accompany both products.
         for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']:

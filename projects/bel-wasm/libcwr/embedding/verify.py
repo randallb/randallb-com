@@ -44,7 +44,7 @@ def main():
             'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
             *['libcwr/embedding/' + name for name in [
                 'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'core.mjs',
-                'host.cjs', 'native-main.cjs', 'readme.md', 'native-build.md',
+                'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'readme.md', 'native-build.md',
                 'example-context.json', 'example-events.jsonl']],
         }
         def inputs_current():
@@ -57,7 +57,7 @@ def main():
         check('packaging-regressions', True)
         native = json.loads((package / 'libcwr.json').read_text())
         check('native-core-and-executable-integrity', sha(package / 'core.wasm') == native['core_wasm_sha256'] and sha(executable) == native['executable_sha256'])
-        check('native-module-correspondence', all(sha(package / name.removeprefix('./')) == digest for name, digest in native['module_sha256'].items()))
+        check('native-source-correspondence', native['format'] == 'libcwr-native-wasm2c-v1' and set(native['native_source_sha256']) == {'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c'} and all(sha(HERE / name) == digest for name, digest in native['native_source_sha256'].items()))
         report['core_wasm_sha256'] = sha(package / 'core.wasm')
         report['native_sha256'] = sha(executable)
         reports = []
@@ -110,7 +110,7 @@ if(!closed) throw Error('closed core');
                 env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
             check('broken-packaged-core-cannot-fall-back-to-test-module', run.returncode != 0)
         # Normal executable acceptance uses an empty PATH and hostile Node options.
-        # The executable contains the runtime, ignores runtime-extension variables,
+        # The executable contains compiled C and ignores Node-specific variables,
         # and accepts events only, unlike the explicitly selected fixture interface.
         env = {k: v for k, v in os.environ.items() if k not in ['NODE_OPTIONS', 'NODE_PATH']}
         env.update(PATH='/nonexistent', NODE_OPTIONS='--require=/nonexistent/injection.cjs', NODE_PATH='/nonexistent')
@@ -134,6 +134,26 @@ if(!closed) throw Error('closed core');
             run = invoke(state, [events[2]])
             check('fresh-process-restores-completion-without-repeating-effect', run.returncode == 0 and json.loads(run.stdout)[0] == 'completed'
                 and len((state / 'executions.jsonl').read_text().splitlines()) == 1)
+            # Independent digest vectors cover C SHA256 padding and UTF-8/NUL transport.
+            texts = ['', 'a' * 55, 'b' * 56, 'c' * 63, 'd' * 64, 'e' * 65,
+                     'f' * 127, 'g' * 128, '\x00naïve 世界🙂\n']
+            for index, body in enumerate(texts):
+                changed = json.loads(json.dumps(events))
+                for row in changed[1]:
+                    if row[0] == 'input': row[1] = [{'char': c} for c in body]
+                vector_state = work / f'digest-{index}'
+                result = invoke(vector_state, changed)
+                digest = hashlib.sha256(body.encode()).hexdigest()
+                value = json.loads(result.stdout.splitlines()[-1]) if result.stdout else []
+                artifact = vector_state / ('artifact-' + hashlib.sha256(dict(changed[2])['ref'].encode()).hexdigest() + '.txt')
+                check(f'native-digest-and-text-vector-{index}', result.returncode == 0 and value[0] == 'completed'
+                      and ''.join(c['char'] for c in dict(value[1])['result']) == digest
+                      and artifact.read_bytes() == body.encode())
+            for index, raw in enumerate([b'\xff\n', b'[["op",{"char":"a","char":"b"}]]\n',
+                                         b'[' * 140 + b']' * 140 + b'\n']):
+                result = subprocess.run([str(standalone), '--directory', str(work / f'bad-c-json-{index}'),
+                                         '--context', str(context_path)], input=raw, capture_output=True, env=env, timeout=30)
+                check(f'native-strict-json-vector-{index}', result.returncode != 0)
             controls = invoke(state, [{'operation': 'configure', 'arguments': [['caller', 'evil']]}])
             check('normal-interface-rejects-fixture-controls', controls.returncode != 0)
             reference = dict(events[2])['ref']
@@ -171,7 +191,7 @@ if(!closed) throw Error('closed core');
                 if process.poll() is None:
                     process.kill(); process.communicate(timeout=5)
             license_run = subprocess.run([str(standalone), '--runtime-license'], capture_output=True, env=env, timeout=30)
-            check('embedded-runtime-license', license_run.returncode == 0 and license_run.stdout == (package / 'libcwr.node-license.txt').read_bytes())
+            check('embedded-wabt-runtime-license', license_run.returncode == 0 and license_run.stdout == (package / 'libcwr.runtime-license.txt').read_bytes())
         check('maintained-inputs-remain-current', inputs_current())
         check('source-remains-current', report['source_sha256'] == sha(ROOT / 'libcwr/workflow.rbel.md'))
         report['passed'] = True

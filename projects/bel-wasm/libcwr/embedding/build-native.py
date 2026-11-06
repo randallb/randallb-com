@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Build a local native executable containing the Wasm core and Node runtime.
-
-The generated executable needs neither Node on PATH nor external JS/Wasm files.
-This is packaging only: protocol rules remain in the bundled core.wasm.
-"""
+"""Compile the packaged libcwr Wasm core through WABT wasm2c and a system C compiler."""
 import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -16,175 +13,165 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+SOURCES = ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c']
 
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def bundle(sources):
-    """Bundle the four fixed first-party modules; no dependency discovery/eval."""
-    factories = []
-    for name, data in sources.items():
-        body = data.decode('utf-8')
-        if body.startswith('#!'):
-            body = body.partition('\n')[2]
-        factories.append(json.dumps(name) + ': function(module, exports, require) {\n' + body + '\n}')
-    return ("'use strict';\nconst nativeRequire = require;\nconst factories = {\n" +
-            ',\n'.join(factories) + "\n};\nconst cache = Object.create(null);\n" +
-            "function load(name) {\n"
-            "  if (!Object.hasOwn(factories, name)) throw Error('unbundled module: ' + name);\n"
-            "  if (Object.hasOwn(cache, name)) return cache[name].exports;\n"
-            "  const module = {exports: {}}; cache[name] = module;\n"
-            "  factories[name](module, module.exports, dependency => {\n"
-            "    if (dependency.startsWith('node:')) return nativeRequire(dependency);\n"
-            "    return load(dependency);\n"
-            "  });\n"
-            "  return module.exports;\n"
-            "}\nload('./native-main.cjs');\n")
-
-
 def build(args):
-    wasm = args.wasm.resolve()
-    main = args.main.resolve()
-    selected_node = shutil.which(str(args.node))
-    if selected_node is None:
-        raise ValueError('Node executable not found; building requires Node with --build-sea')
-    node = Path(selected_node).resolve()
-    output = args.output.resolve()
-    manifest = output.with_name(output.name + '.json')
-    license_output = output.with_name(output.name + '.node-license.txt')
-    license_source = (args.node_license or node.parent.parent / 'LICENSE').resolve()
-    inputs = {
-        './values.cjs': wasm.parent / 'values.cjs',
-        './core.cjs': wasm.parent / 'core.cjs',
-        './host.cjs': wasm.parent / 'host.cjs',
-        './native-main.cjs': main,
-    }
-    # Protect the entire standalone package, including adapters, docs and notices.
-    # Fixed names also protect incomplete packages; the manifest covers additions.
-    package_names = {
-        'manifest.json', 'core.wasm', 'core.mjs', 'core.cjs', 'values.mjs', 'values.cjs',
-        'host.cjs', 'native-main.cjs', 'workflow.rbel.md', 'readme.md', 'native-build.md',
-        'example-context.json', 'example-events.jsonl', 'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
-    }
+    wasm, output = args.wasm.resolve(), args.output.resolve()
+    tools, runtime = args.tools.resolve(), args.runtime.resolve()
+    license_source = args.runtime_license.resolve()
+    selected_cc = shutil.which(str(args.cc))
+    if selected_cc is None:
+        raise ValueError('C compiler not found')
+    cc = Path(selected_cc).resolve()
+    manifest_output = output.with_name(output.name + '.json')
+    license_output = output.with_name(output.name + '.runtime-license.txt')
+    outputs = [output, manifest_output, license_output]
     package_manifest = wasm.parent / 'manifest.json'
-    if package_manifest.exists():
-        metadata = json.loads(package_manifest.read_text())
+    package_names = {'manifest.json', 'core.wasm', 'core.mjs', 'core.cjs', 'values.mjs', 'values.cjs',
+                     'host.cjs', 'readme.md', 'native-build.md', 'example-context.json',
+                     'example-events.jsonl', 'LICENSE', 'NOTICE.txt', 'ORIGIN.json', 'workflow.rbel.md'}
+    metadata = json.loads(package_manifest.read_text()) if package_manifest.exists() else None
+    maintained = [*HERE.iterdir(), ROOT / 'libcwr/workflow.rbel.md', ROOT / 'literate/wasm-values.mjs',
+                  ROOT / 'literate/test.py', *[ROOT / n for n in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']]]
+    if metadata:
         for name in metadata['files']:
             if Path(name).name != name or name in ('.', '..'):
-                raise ValueError('invalid package filename in manifest')
+                raise ValueError('invalid package filename')
             package_names.add(name)
-    maintained = [ROOT / name for name in [
-        'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
-        'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
-        *['libcwr/embedding/' + name for name in [
-            'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'core.mjs',
-            'host.cjs', 'native-main.cjs', 'readme.md', 'native-build.md',
-            'example-context.json', 'example-events.jsonl']],
-    ]]
-    protected = [wasm, node, license_source, Path(__file__).resolve(), *inputs.values(), *maintained,
+        for name in metadata['inputs']:
+            path = (ROOT / name).resolve()
+            if not path.is_relative_to(ROOT):
+                raise ValueError('invalid maintained input path')
+            maintained.append(path)
+    runtime_files = sorted(p for p in runtime.iterdir() if p.is_file()) if runtime.exists() else []
+    tool_files = [tools / 'wasm2c', tools / 'wasm-validate']
+    protected = [wasm, cc, license_source, *maintained, *runtime_files, *tool_files,
                  *[(wasm.parent / name).resolve() for name in package_names]]
-    outputs = [output, manifest, license_output]
     for index, destination in enumerate(outputs):
-        if (destination.is_relative_to(ROOT) and not destination.is_relative_to(ROOT / 'target')) or destination.is_relative_to(node.parent):
-            raise ValueError('native outputs must be outside source and Node executable directories')
+        if ((destination.is_relative_to(ROOT) and not destination.is_relative_to(ROOT / 'target'))
+                or destination.is_relative_to(tools) or destination.is_relative_to(runtime)):
+            raise ValueError('native outputs must be outside source and tool/runtime directories')
         for source in protected + outputs[:index]:
             if destination == source or (destination.exists() and source.exists() and destination.samefile(source)):
                 raise ValueError('native output aliases an input, runtime, or another output')
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Every validated new attempt invalidates old success products.
     for destination in outputs:
         destination.unlink(missing_ok=True)
-    snapshots = {name: path.read_bytes() for name, path in inputs.items()}
-    license_bytes = license_source.read_bytes()
-    if not license_bytes or b'Node' not in license_bytes:
-        raise ValueError('Node distribution LICENSE with third-party notices is required')
-    binary = wasm.read_bytes()
-    if binary[:8] != b'\x00asm\x01\x00\x00\x00':
+    compiler_bytes = cc.read_bytes()
+    snapshots = {HERE / name: (HERE / name).read_bytes() for name in SOURCES}
+    snapshots.update({path: path.read_bytes() for path in runtime_files + tool_files + [wasm, license_source]})
+    snapshots[cc] = compiler_bytes
+    if snapshots[wasm][:8] != b'\0asm\x01\0\0\0':
         raise ValueError('expected a version-1 Wasm module')
-    env = {key: value for key, value in os.environ.items() if key not in ('NODE_OPTIONS', 'NODE_PATH')}
-    help_output = subprocess.check_output([str(node), '--help'], env=env, timeout=30, text=True)
-    if '--build-sea' not in help_output:
-        raise ValueError('this Node executable lacks --build-sea (requires Node 25.5 or newer)')
-    runtime = json.loads(subprocess.check_output(
-        [str(node), '-p', 'JSON.stringify({version:process.version,platform:process.platform,arch:process.arch})'],
-        env=env, timeout=30, text=True))
-    node_hash = sha(node.read_bytes())
-    linkage = None
-    if sys.platform == 'darwin':
-        linkage = subprocess.check_output(['/usr/bin/otool', '-L', str(node)], text=True, timeout=30)
-        dependencies = [line.strip().split(' (')[0] for line in linkage.splitlines()[1:] if line.strip()]
-        if any(not path.startswith(('/usr/lib/', '/System/Library/')) for path in dependencies):
-            raise ValueError('Node has non-system dylib dependencies; use an official portable Node distribution via --node')
+    if not metadata or metadata.get('format') != 'libcwr-embedding-v1':
+        raise ValueError('recognized standalone package manifest required')
+    def current_package():
+        return (all(sha((ROOT / name).read_bytes()) == digest for name, digest in metadata['inputs'].items())
+                and all(sha((wasm.parent / name).read_bytes()) == digest for name, digest in metadata['files'].items())
+                and json.loads(package_manifest.read_text()) == metadata)
+    if not current_package():
+        raise ValueError('standalone package inputs or artifacts are stale')
+    license_bytes = snapshots[license_source]
+    if b'Apache License' not in license_bytes:
+        raise ValueError('WABT license required')
+    for tool in tool_files:
+        if subprocess.check_output([str(tool), '--version'], text=True, timeout=30).strip() != '1.0.39':
+            raise ValueError('requires WABT 1.0.39 matching pinned runtime sources')
     try:
         with tempfile.TemporaryDirectory(prefix='.libcwr-native-', dir=output.parent) as directory:
             work = Path(directory)
-            script = work / 'main.cjs'
-            script.write_text(bundle(snapshots))
-            asset = work / 'core.wasm'
-            asset.write_bytes(binary)
-            license_asset = work / 'node-license.txt'
-            license_asset.write_bytes(license_bytes)
-            executable = work / ('libcwr.exe' if sys.platform == 'win32' else 'libcwr')
-            config = {
-                'main': str(script), 'mainFormat': 'commonjs',
-                'output': str(executable), 'assets': {'core.wasm': str(asset), 'node-license.txt': str(license_asset)},
-                'useCodeCache': False, 'useSnapshot': False,
-                'disableExperimentalSEAWarning': True, 'execArgvExtension': 'none',
-            }
-            config_path = work / 'sea.json'
-            config_path.write_text(json.dumps(config, indent=2) + '\n')
-            subprocess.run([str(node), '--build-sea', str(config_path)], check=True, env=env, timeout=120)
+            for name in SOURCES:
+                (work / name).write_bytes(snapshots[HERE / name])
+            runtime_copy = work / 'runtime'
+            runtime_copy.mkdir()
+            for path in runtime_files:
+                (runtime_copy / path.name).write_bytes(snapshots[path])
+            binary = work / 'core.wasm'
+            binary.write_bytes(snapshots[wasm])
+            (work / 'runtime-license.h').write_text('static const char NATIVE_RUNTIME_LICENSE[] = ' + json.dumps(license_bytes.decode()) + ';\n')
+            subprocess.run([str(tools / 'wasm-validate'), str(binary)], check=True, timeout=60)
+            subprocess.run([str(tools / 'wasm2c'), str(binary), '-n', 'bel', '-o', str(work / 'module.c')], check=True, timeout=120)
+            candidate = work / 'libcwr'
+            command = [str(cc), '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror',
+                       '-Wno-unused-function', '-Wno-unused-parameter', '-Wno-unused-but-set-variable',
+                       '-fno-optimize-sibling-calls', '-frounding-math', '-D_POSIX_C_SOURCE=200809L',
+                       '-DWASM_RT_USE_MMAP=0', '-DWASM_RT_MEMCHECK_BOUNDS_CHECK=1',
+                       '-DWASM_RT_MEMCHECK_GUARD_PAGES=0', '-DWASM_RT_STACK_DEPTH_COUNT=1',
+                       '-DWASM_RT_STACK_EXHAUSTION_HANDLER=0', '-DWASM_RT_MAX_CALL_STACK_DEPTH=1024',
+                       '-I', str(runtime_copy), '-I', str(work),
+                       *[str(work / n) for n in SOURCES if n.endswith('.c')], str(work / 'module.c'),
+                       *[str(runtime_copy / n) for n in ['wasm-rt-impl.c', 'wasm-rt-mem-impl.c', 'wasm-rt-exceptions-impl.c']],
+                       '-lm', '-pthread', '-o', str(candidate)]
+            # Keep strict warnings for authored C; wasm2c's TRAP macro emits a
+            # known unused comma-result warning under GCC, confined to generated C.
+            source_start = command.index(str(work / 'native-values.c'))
+            flags = command[:source_start]
+            source_files = [work / n for n in SOURCES if n.endswith('.c')] + [work / 'module.c'] + [
+                runtime_copy / n for n in ['wasm-rt-impl.c', 'wasm-rt-mem-impl.c', 'wasm-rt-exceptions-impl.c']]
+            objects = []
+            for index, source in enumerate(source_files):
+                obj = work / f'part-{index}.o'
+                warning_flags = ['-Wno-unused-value'] if source.name == 'module.c' else []
+                subprocess.run([*flags, *warning_flags, '-c', str(source), '-o', str(obj)], check=True, timeout=180)
+                objects.append(str(obj))
+            subprocess.run([str(cc), *objects, '-lm', '-pthread', '-o', str(candidate)], check=True, timeout=60)
+            if cc.read_bytes() != compiler_bytes:
+                raise ValueError('C compiler changed during native compilation')
+            linkage = None
             if sys.platform == 'darwin':
-                subprocess.run(['/usr/bin/codesign', '--force', '--sign', '-', str(executable)],
-                               check=True, timeout=60)
-            executable.chmod(0o755)
-            if wasm.read_bytes() != binary or any(inputs[name].read_bytes() != data for name, data in snapshots.items()):
-                raise ValueError('embedding inputs changed during native packaging')
-            if license_source.read_bytes() != license_bytes:
-                raise ValueError('Node license changed during native packaging')
-            if sha(node.read_bytes()) != node_hash:
-                raise ValueError('Node runtime changed during native packaging')
+                linkage = subprocess.check_output(['/usr/bin/otool', '-L', str(candidate)], text=True, timeout=30)
+                deps = [line.strip().split(' (')[0] for line in linkage.splitlines()[1:] if line.strip()]
+                if any(not p.startswith(('/usr/lib/', '/System/Library/')) for p in deps):
+                    raise ValueError('native executable has non-system dynamic libraries')
+            if any(p.read_bytes() != data for p, data in snapshots.items()) or not current_package():
+                raise ValueError('native build inputs changed during compilation')
             evidence = {
-                'format': 'libcwr-native-sea-v1',
-                'runtime': runtime, 'runtime_sha256': node_hash,
-                'node_license_sha256': sha(license_bytes),
+                'format': 'libcwr-native-wasm2c-v1',
+                'runtime': {'platform': sys.platform, 'arch': platform.machine(), 'backend': 'WABT wasm2c 1.0.39; system C compiler'},
                 'runtime_linkage': linkage,
-                'core_wasm_sha256': sha(binary),
-                'module_sha256': {name: sha(data) for name, data in snapshots.items()},
-                'bundled_main_sha256': sha(script.read_bytes()),
-                'executable_sha256': sha(executable.read_bytes()),
-                'executable_bytes': executable.stat().st_size,
-                'runtime_dependencies': 'platform system libraries; embedded Node and V8/Wasm runtime',
-                'signing': 'ad hoc' if sys.platform == 'darwin' else 'not signed by this builder',
-                'source': 'https://nodejs.org/api/single-executable-applications.html',
+                'runtime_license_sha256': sha(license_bytes),
+                'core_wasm_sha256': sha(snapshots[wasm]),
+                'native_source_sha256': {p.name: sha(snapshots[p]) for p in [HERE / n for n in SOURCES]},
+                'runtime_source_sha256': {p.name: sha(snapshots[p]) for p in runtime_files},
+                'tool_sha256': {p.name: sha(snapshots[p]) for p in tool_files},
+                'compiler_sha256': sha(compiler_bytes),
+                'build_inputs': {'tools': str(tools), 'runtime': str(runtime), 'runtime_license': str(license_source), 'cc': str(cc)},
+                'generated_c_sha256': sha((work / 'module.c').read_bytes()),
+                'executable_sha256': sha(candidate.read_bytes()),
+                'executable_bytes': candidate.stat().st_size,
+                'runtime_dependencies': 'platform system libraries only; no Node or separately installed Wasm engine',
+                'signing': 'compiler default; no release signing or notarization',
             }
-            temporary_manifest = work / 'manifest.json'
-            temporary_manifest.write_text(json.dumps(evidence, indent=2) + '\n')
-            os.replace(executable, output)
-            os.replace(temporary_manifest, manifest)
-            os.replace(license_asset, license_output)
+            (work / 'manifest.json').write_text(json.dumps(evidence, indent=2) + '\n')
+            (work / 'license.txt').write_bytes(license_bytes)
+            candidate.chmod(0o755)
+            os.replace(candidate, output)
+            os.replace(work / 'manifest.json', manifest_output)
+            os.replace(work / 'license.txt', license_output)
     except BaseException:
         for destination in outputs:
             destination.unlink(missing_ok=True)
         raise
-    print(f'Native embedded-Wasm executable: {output}')
-    print(f'Packaging manifest: {manifest}')
+    print(f'Native wasm2c executable: {output} ({evidence["executable_bytes"]} bytes)')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--wasm', type=Path, default=ROOT / 'target/libcwr-embedding/core.wasm')
-    parser.add_argument('--main', type=Path, default=HERE / 'native-main.cjs')
     parser.add_argument('--output', type=Path, default=ROOT / 'target/libcwr-embedding/libcwr')
-    parser.add_argument('--node', type=Path, default=Path('node'))
-    parser.add_argument('--node-license', type=Path, help='Node LICENSE including third-party notices; defaults beside distribution bin/')
-    args = parser.parse_args()
+    parser.add_argument('--tools', type=Path, default=ROOT / 'target/wabt-native-build')
+    parser.add_argument('--runtime', type=Path, default=ROOT / 'target/wabt-native-1.0.39/wasm2c')
+    parser.add_argument('--runtime-license', type=Path, default=ROOT / 'target/wabt-native-1.0.39/LICENSE')
+    parser.add_argument('--cc', default='/usr/bin/clang' if sys.platform == 'darwin' else 'cc')
     try:
-        build(args)
+        build(parser.parse_args())
     except (OSError, ValueError, subprocess.SubprocessError) as error:
-        print(f'libcwr native packaging: {error}', file=sys.stderr)
+        print(f'libcwr native compilation: {error}', file=sys.stderr)
         return 1
     return 0
 

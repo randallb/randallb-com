@@ -1,57 +1,56 @@
-# Building the native host
+# Building the native host through WABT
 
-The executable embeds the same `core.wasm` as the browser/JavaScript package,
-its host adapter, and Node's V8/Wasm runtime. It executes Wasm internally;
-protocol transitions remain in the module. The executable does not load scripts
-or Wasm from the checkout and does not need `node`, Python, or build tools on PATH.
+The native app uses the existing rbel native architecture:
 
-First generate the core package under `target/libcwr-embedding`. Then, from
-`projects/bel-wasm`, use an official portable Node distribution with
-[`--build-sea`](https://nodejs.org/api/single-executable-applications.html):
-
-```sh
-python3 libcwr/embedding/build-native.py \
-  --node target/native-node-v26.12.0/node-v26.12.0-darwin-arm64/bin/node
+```text
+literate rbel definitions → core.wasm → WABT wasm2c → C → libcwr executable
 ```
 
-The outputs are `target/libcwr-embedding/libcwr`, `libcwr.json` (input/runtime and
-executable hashes), and `libcwr.node-license.txt` (Node's full license including
-third-party notices). The license is also embedded and available through
-`libcwr --runtime-license`. Keep the license notice with any distribution.
+The compiled module implements protocol transitions. Freshly authored C code
+supplies bounded JSON/value transport, local storage, deterministic actions,
+receipts, and the line-oriented command. WABT's C runtime is linked into the
+executable. Running the app needs only platform system libraries; Node, V8,
+Python, WABT tools, compiler tools and separate Wasm/JavaScript files are not
+runtime dependencies. The standalone Wasm package remains available for embedding.
 
-For local builds, the selected Node distribution must contain its `LICENSE` at
-its root, beside `bin/`. `--node-license PATH` supports another location.
-`--wasm`, `--main`, and `--output` select the module, first-party main entry and
-executable destination. `core.cjs`, `values.cjs`, and `host.cjs` must be beside
-the selected Wasm module. The builder statically bundles those explicit modules
-and permits only explicit bundled modules and `node:` builtins at runtime.
+From `projects/bel-wasm`, generate the core with the existing compiler, prepare
+the pinned native WABT tools/runtime, then compile the app:
 
-On macOS the builder checks the selected runtime's dylibs and rejects non-system
-dependencies. A Homebrew Node binary may depend on Homebrew's `libnode` and many
-other dylibs; copying it into a SEA would not make it independently portable.
-The tested official Node v26.12.0 `darwin-arm64` binary links only macOS system
-libraries. Build the executable on the intended OS and architecture; this builder
-does not claim cross compilation or verification on other platforms.
+```sh
+python3 libcwr/embedding/build.py --rbel /path/to/rbel-bundle/bin/rbel
+python3 experiments/bel-rust-repl/wasm/command/setup-tools.py
+python3 experiments/bel-rust-repl/wasm/native/setup-runtime.py
+python3 libcwr/embedding/build-native.py
+python3 libcwr/embedding/verify.py --rbel /path/to/rbel-bundle/bin/rbel
+```
 
-The verified local bootstrap archive is:
+Native compilation requires a C11 compiler and WABT 1.0.39. The setup uses the
+existing checksum-pinned official WABT archive and pinned PicoSHA2 build input.
+Node may be used by developer tests or the portable Wasm compiler bootstrap;
+the native app and its C compilation do not use Node. With the existing native
+macOS rbel bundle, core generation also uses its native tools.
 
-- URL: <https://nodejs.org/dist/v26.12.0/node-v26.12.0-darwin-arm64.tar.xz>
-- SHA-256: `a2e255e35347f727f29aa158c552a60140b17b6ba68719d5d6fc46c7d058aa75`
-- Checksum listing: <https://nodejs.org/dist/v26.12.0/SHASUMS256.txt>
+`--tools DIR`, `--runtime DIR`, `--runtime-license FILE`, and `--cc COMPILER`
+select trusted tool/runtime inputs. For an existing native rbel bundle, use
+`libexec/rbel`, `share/rbel/runtime`, and `licenses/WABT-LICENSE` respectively.
+`--wasm FILE` selects a recognized standalone package's core. `--output FILE`
+selects the native executable. Build on the intended operating system and
+architecture; no cross-compilation is claimed.
 
-Download the archive into ignored `target/native-node-v26.12.0`, verify its SHA-256
-against that value and the official listing, and extract there. The original
-archive and checksum listing are retained locally as build evidence. The archive
-supplies the runtime license and third-party notices; its implementation is a
-platform runtime dependency, not a CWR implementation dependency.
+The default outputs are `target/libcwr-embedding/libcwr`, `libcwr.json`, and
+`libcwr.runtime-license.txt`. The manifest records exact core, host C sources,
+generated C, compiler, WABT tool/runtime sources and executable hashes. The WABT
+license is embedded, accessible through `libcwr --runtime-license`, and supplied
+as a notice alongside the executable. Project attribution remains in the package.
+Release signing/notarization and publication are separate actions.
 
-Build inputs and aliases are checked before old executable products are cleared.
-A failed validated build leaves no success executable or manifest. Build inputs
-are captured, packaged from those bytes, and checked again before publishing the
-executable. The builder strips `NODE_OPTIONS`/`NODE_PATH` while building and sets
-SEA `execArgvExtension` to `none`. macOS binaries are signed ad hoc for local use;
-release signing/notarization and publishing are separate work.
+Outputs and aliases are checked against maintained source, package files,
+compiler/tool/runtime inputs and each other before old native success products
+are removed. Compilation uses captured source bytes in private staging and
+rechecks source/package hashes before publishing success. A failed validated
+attempt leaves no success executable/manifest/license.
 
-The runtime makes the executable much larger than `core.wasm`. Inspect
-`executable_bytes` in `libcwr.json`; this is an embedded runtime distribution,
-not a small direct-machine-code compilation of the rbel core.
+The host retains the existing explicit trusted-context boundary and dedicated
+local directory. Its process recovery and atomic replacement are not power-loss
+or distributed-storage guarantees. It does not implement provider/network or
+general-purpose filesystem actions, and fixture controls require `--test-host`.

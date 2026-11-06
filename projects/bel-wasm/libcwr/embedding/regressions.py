@@ -70,7 +70,7 @@ def main():
                     destination.unlink(missing_ok=True)
                     if kind == 'symlink': destination.symlink_to(source)
                     else: os.link(source, destination)
-                for suffix in ['', '.json', '.node-license.txt']:
+                for suffix in ['', '.json', '.runtime-license.txt']:
                     # Exercise collisions by each of the builder's three outputs.
                     output = destination
                     if suffix:
@@ -79,8 +79,8 @@ def main():
                         alias = output.with_name(output.name + suffix)
                         alias.unlink(missing_ok=True)
                         os.link(source, alias)
-                    options = SimpleNamespace(wasm=copied / 'core.wasm', main=tree / 'libcwr/embedding/native-main.cjs',
-                                              node=Path(sys.executable), node_license=ROOT / 'LICENSE', output=output)
+                    options = SimpleNamespace(wasm=copied / 'core.wasm', tools=work / 'tools', runtime=work / 'runtime',
+                                              cc=Path(sys.executable), runtime_license=ROOT / 'LICENSE', output=output)
                     try:
                         builder.build(options)
                     except ValueError as error:
@@ -91,6 +91,34 @@ def main():
                     if suffix: alias.unlink()
                 if kind != 'direct': destination.unlink()
         print('PASS package and maintained inputs survive direct, symlink, hardlink and sidecar collisions')
+        # Execute a real compiler wrapper that changes itself after successful linking.
+        # No stale executable or manifest may survive, and the package stays intact.
+        native = json.loads((package / 'libcwr.json').read_text())
+        build_inputs = native['build_inputs']
+        wrapper = work / 'changing-cc'
+        wrapper.write_text('#!' + sys.executable + '\n' +
+            'import pathlib, subprocess, sys\n' +
+            'result = subprocess.run([' + repr(build_inputs['cc']) + '] + sys.argv[1:])\n' +
+            'if result.returncode == 0 and "-c" not in sys.argv[1:]:\n' +
+            '    pathlib.Path(__file__).write_text("changed compiler bytes")\n' +
+            'sys.exit(result.returncode)\n')
+        wrapper.chmod(0o755)
+        (copied / 'core.wasm').write_bytes((package / 'core.wasm').read_bytes())
+        output = work / 'compiler-drift-native'
+        options = SimpleNamespace(wasm=copied / 'core.wasm', output=output, cc=wrapper,
+                                  tools=Path(build_inputs['tools']), runtime=Path(build_inputs['runtime']),
+                                  runtime_license=Path(build_inputs['runtime_license']))
+        try:
+            builder.build(options)
+        except ValueError as error:
+            assert 'compiler changed' in str(error), str(error)
+        else:
+            raise AssertionError('changed compiler received successful provenance')
+        assert not any(path.exists() for path in [output, output.with_name(output.name + '.json'),
+                                                  output.with_name(output.name + '.runtime-license.txt')])
+        assert (copied / 'core.wasm').read_bytes() == (package / 'core.wasm').read_bytes()
+        print('PASS compiler drift invalidates executable and provenance')
+
 
 
 if __name__ == '__main__':

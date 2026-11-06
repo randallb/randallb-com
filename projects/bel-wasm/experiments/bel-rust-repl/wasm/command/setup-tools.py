@@ -26,8 +26,6 @@ def download(url, digest):
 
 
 def main():
-    if sys.platform != 'darwin':
-        raise ValueError('this command bundle currently targets macOS')
     source, build = ROOT / 'target/wabt-source-1.0.39', ROOT / 'target/wabt-native-build'
     if not (source / 'CMakeLists.txt').exists():
         blob = download(f'https://codeload.github.com/WebAssembly/wabt/tar.gz/refs/tags/{VERSION}', SHA)
@@ -62,8 +60,8 @@ def main():
             subprocess.run([sys.executable, '-m', 'pip', 'install', '--target',
                             str(ROOT / 'target/cmake-tools'), 'cmake==3.31.6'], check=True)
     subprocess.run([str(cmake), '-S', str(source), '-B', str(build), '-G', 'Unix Makefiles',
-                    '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=/usr/bin/clang',
-                    '-DCMAKE_CXX_COMPILER=/usr/bin/clang++', '-DCMAKE_MAKE_PROGRAM=/usr/bin/make',
+                    '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_C_COMPILER=' + ('/usr/bin/clang' if sys.platform == 'darwin' else shutil.which('cc') or 'cc'),
+                    '-DCMAKE_CXX_COMPILER=' + ('/usr/bin/clang++' if sys.platform == 'darwin' else shutil.which('c++') or 'c++'),
                     '-DBUILD_TESTS=OFF', '-DBUILD_LIBWASM=OFF', '-DBUILD_TOOLS=ON',
                     '-DUSE_INTERNAL_SHA256=ON'], check=True)
     subprocess.run([str(cmake), '--build', str(build), '--target', 'wat2wasm', 'wasm2c', 'wasm-validate', '-j', '8'], check=True)
