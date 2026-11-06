@@ -49,6 +49,10 @@ def main():
         spec = importlib.util.spec_from_file_location('native_builder', HERE / 'build-native.py')
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
+        # Load the copied builder so all maintained-source collision tests stay isolated.
+        spec = importlib.util.spec_from_file_location('isolated_native_builder', tree / 'libcwr/embedding/build-native.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
         copied = work / 'package'
         copied.mkdir()
         for name in [*manifest['files'], 'manifest.json']:
@@ -56,14 +60,16 @@ def main():
         # Corrupt Wasm: a faulty validator would delete the output before noticing.
         (copied / 'core.wasm').write_bytes(b'not wasm')
         original = {p: p.read_bytes() for p in copied.iterdir()}
-        for name in [*manifest['files'], 'manifest.json']:
+        for source in [*[copied / name for name in [*manifest['files'], 'manifest.json']],
+                       *[tree / name for name in manifest['inputs']]]:
+            original[source] = source.read_bytes()
             for kind in ['direct', 'symlink', 'hardlink']:
-                destination = copied / name
+                destination = source
                 if kind != 'direct':
                     destination = work / ('alias-' + kind)
                     destination.unlink(missing_ok=True)
-                    if kind == 'symlink': destination.symlink_to(copied / name)
-                    else: os.link(copied / name, destination)
+                    if kind == 'symlink': destination.symlink_to(source)
+                    else: os.link(source, destination)
                 for suffix in ['', '.json', '.node-license.txt']:
                     # Exercise collisions by each of the builder's three outputs.
                     output = destination
@@ -72,19 +78,19 @@ def main():
                         output = work / 'custom-native'
                         alias = output.with_name(output.name + suffix)
                         alias.unlink(missing_ok=True)
-                        os.link(copied / name, alias)
-                    options = SimpleNamespace(wasm=copied / 'core.wasm', main=HERE / 'native-main.cjs',
+                        os.link(source, alias)
+                    options = SimpleNamespace(wasm=copied / 'core.wasm', main=tree / 'libcwr/embedding/native-main.cjs',
                                               node=Path(sys.executable), node_license=ROOT / 'LICENSE', output=output)
                     try:
                         builder.build(options)
                     except ValueError as error:
-                        assert 'aliases an input' in str(error), str(error)
+                        assert 'aliases an input' in str(error) or 'outside source' in str(error), str(error)
                     else:
                         raise AssertionError('accepted protected output: ' + str(output))
                     assert all(p.read_bytes() == data for p, data in original.items())
                     if suffix: alias.unlink()
                 if kind != 'direct': destination.unlink()
-        print('PASS package inputs survive direct, symlink, hardlink and sidecar collisions')
+        print('PASS package and maintained inputs survive direct, symlink, hardlink and sidecar collisions')
 
 
 if __name__ == '__main__':
