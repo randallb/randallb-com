@@ -316,13 +316,14 @@ static int chat_action(const char *directory, const char *verb, const char *argu
   V *reply = NULL;
   if (!strcmp(verb, "start") || !strcmp(verb, "new")) {
     char generated[65];
-    if (!argument) { chat_name(generated, sizeof(generated), "chat"); argument = generated; }
+    const char *name = argument;
+    if (!name) { chat_name(generated, sizeof(generated), "chat"); name = generated; }
     V *request = event("create");
-    field(request, "conversation", reference("conversations", argument));
+    field(request, "conversation", reference("conversations", name));
     field(request, "owner", v_record_get(host_environment(), "context"));
     reply = host_event(request);
     if (v_isstr(at(reply, 0), "created") || v_isstr(at(reply, 0), "existing")) {
-      snprintf(selection, 65, "%s", argument);
+      snprintf(selection, 65, "%s", name);
       printf("Conversation: %s | coworker: uppercase (local rbel)\n", selection);
     }
   } else if (!strcmp(verb, "use")) {

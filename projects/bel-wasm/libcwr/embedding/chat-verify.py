@@ -226,6 +226,29 @@ def main():
             check('long-chat-message-crosses-action-chunks-and-preserves-nonascii',
                   [text(v['text']) for v in long_history] == [long_body, long_upper] and executions(long_state) == 1)
 
+            # Exercise enough retained turns to expose workspace-wide resource
+            # costs that a single short action cannot reveal.
+            capacity_state = root / 'sixty-turn-chat'
+            turns = [f'turn {index}' for index in range(60)]
+            capacity = run('chat', workspace=capacity_state,
+                           body='\n'.join(turns) + '\n/status\n/history\n/exit\n')
+            expected_capacity = [value for turn in turns for value in [turn, turn.upper()]]
+            capacity_history = history(workspace=capacity_state)
+            capacity_invocations = [record(v) for v in machine('list', 'invocations', workspace=capacity_state)['value']]
+            check('sixty-turn-chat-retains-all-sources-and-replies',
+                  [text(v['text']) for v in capacity_history] == expected_capacity and
+                  executions(capacity_state) == 60 and capacity.stdout.count('uppercase: TURN 59') >= 1)
+            check('sixty-turn-chat-has-no-lost-or-running-invocations',
+                  len(capacity_invocations) == 60 and
+                  all(v.get('phase') == 'completed' for v in capacity_invocations) and not capacity.stderr)
+            capacity_restart = run('chat', workspace=capacity_state,
+                                   body='/history\nafter restart\n/status\n/exit\n')
+            check('sixty-turn-chat-reopens-and-accepts-another-turn',
+                  'TURN 59' in capacity_restart.stdout and 'AFTER RESTART' in capacity_restart.stdout and
+                  [text(v['text']) for v in history(workspace=capacity_state)] ==
+                  expected_capacity + ['after restart', 'AFTER RESTART'] and
+                  executions(capacity_state) == 61 and not capacity_restart.stderr)
+
             unrelated = root / 'unrelated'
             unrelated.mkdir()
             (unrelated / 'notes.txt').write_text('keep unrelated work\n')
