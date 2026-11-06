@@ -43,7 +43,7 @@ def main():
             'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
             'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
             *['libcwr/embedding/' + name for name in [
-                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'cli-verify.py', 'cli-guide.md', 'core.mjs',
+                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'cli-verify.py', 'cli-guide.md', 'chat-verify.py', 'chat-guide.md', 'core.mjs',
                 'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'readme.md', 'native-build.md',
                 'example-context.json', 'example-events.jsonl']],
         }
@@ -77,8 +77,8 @@ def main():
                 env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
             (evidence / f'{mode}.txt').write_text(run.stdout)
             result = json.loads(path.read_text()) if path.exists() else {}
-            check(f'{mode}-adjacent-workflow', run.returncode == 0 and result.get('passed') and len(result['cases']) == 17
-                  and sum(len(c['assertions']) for c in result['cases']) == 114)
+            check(f'{mode}-adjacent-workflow', run.returncode == 0 and result.get('passed') and len(result['cases']) == 18
+                  and sum(len(c['assertions']) for c in result['cases']) == 128)
             reports.append(result)
         def observable(result):
             return [(c['name'], c['assertions'], c.get('host')) for c in result['cases']]
@@ -196,6 +196,8 @@ if(!closed) throw Error('closed core');
             check('embedded-wabt-runtime-license', license_run.returncode == 0 and license_run.stdout == (package / 'libcwr.runtime-license.txt').read_bytes())
         subprocess.run([sys.executable, str(HERE / 'cli-verify.py'), '--executable', str(executable), '--report', str(evidence / 'cli.json')], check=True, timeout=120)
         check('native-user-cli', True)
+        subprocess.run([sys.executable, str(HERE / 'chat-verify.py'), '--executable', str(executable), '--report', str(evidence / 'chat.json')], check=True, timeout=120)
+        check('native-chat-coworker', True)
         check('maintained-inputs-remain-current', inputs_current())
         check('source-remains-current', report['source_sha256'] == sha(ROOT / 'libcwr/workflow.rbel.md'))
         report['passed'] = True

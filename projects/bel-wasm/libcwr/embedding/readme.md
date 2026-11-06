@@ -115,3 +115,7 @@ exactly-once external effects. The core adapter enforces value depth/node bounds
 embedders also own request sizes, process timeouts and service-level resource
 isolation. Browser compatibility is based on the standard WebAssembly and ESM
 interfaces; an actual browser run must be recorded separately before claiming it.
+
+## Chat with a software coworker
+
+`libcwr chat --directory ./workspace` opens a conversation with the local rbel uppercase coworker. Ordinary text submits and runs an action, retaining both authors and the reply link. See the [chat guide](chat-guide.md). No arguments on a terminal starts chat; `repl` keeps the explicit command interface.

@@ -53,7 +53,7 @@ containing spaces; single and double quotes and backslash escaping are supported
 These commands do not invoke a shell: `$()`, backticks, and semicolons inside
 text remain literal text. Enter each command on one line.
 
-Running `./libcwr` with no arguments in a terminal also opens the REPL.
+Running `./libcwr` with no arguments in a terminal opens the [chat experience](chat-guide.md). Use `./libcwr repl` for the explicit command REPL.
 Without a terminal, no arguments prints help; scripts can explicitly select
 `repl` and pipe commands into it. The workspace directory is fixed for the
 session: choose it at launch, rather than putting `--directory` on each prompt

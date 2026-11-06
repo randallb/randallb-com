@@ -120,7 +120,18 @@ function createSession({engineFactory, directory, environment, fixtures = false}
     const input = get(invocation, 'input');
     const body = text(input);
     const action = exact[3];
-    if (action === 'store--text') {
+    let result = chars(hash(body));
+    if (action === 'uppercase--text') {
+      result = [];
+      for (let offset = 0; offset < (input?.length ?? 0); offset += 256) {
+        const value = engine.transition(null, [['op', 'uppercase-value'], ['input', input.slice(offset, offset + 256)]], null);
+        if (value?.[1]?.[0] !== 'transformed') throw Error('compiled uppercase action failed');
+        result.push(...(value[1][1] ?? []));
+      }
+      const temporary = artifactPath(reference) + '.new';
+      writeFileSync(temporary, text(result), {mode: 0o600});
+      renameSync(temporary, artifactPath(reference));
+    } else if (action === 'store--text') {
       const temporary = artifactPath(reference) + '.new';
       writeFileSync(temporary, body, {mode: 0o600});
       renameSync(temporary, artifactPath(reference));
@@ -131,7 +142,7 @@ function createSession({engineFactory, directory, environment, fixtures = false}
     }
     appendFileSync(join(directory, 'executions.jsonl'), JSON.stringify({reference, action, sha256: hash(body)}) + '\n');
     const evidence = [['ref', reference], ['claim', get(invocation, 'claim')],
-      ['target', exact], ['input', input], ['result', chars(hash(body))]];
+      ['target', exact], ['input', input], ['result', result]];
     if (fault === 'lose-receipt') {
       fault = null;
       return null;

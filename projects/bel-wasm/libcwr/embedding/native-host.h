@@ -8,6 +8,8 @@ V *host_init(const char *directory);
 V *host_event(V *event);
 V *host_state(void);
 V *host_environment(void);
+void host_chat_binding(void);
+V *host_chat_send(V *conversation, const char *name, const char *text);
 V *host_artifact(V *reference);
 void host_close(void);
 int cli_main(int argc, char **argv);

@@ -6,6 +6,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #define CLI_TEXT_LIMIT (256u * 1024u)
 static V *at(V *value, size_t index) {
@@ -25,8 +28,9 @@ static V *event(const char *operation) {
 static void help(void) {
   puts("libcwr - a local, inspectable conversation/action runtime\n"
        "\n"
+       "  chat [--directory DIR]            Chat with the local rbel coworker\n"
        "  repl [--directory DIR]            Start an interactive session\n"
-       "  (no arguments on a terminal also starts the REPL)\n"
+       "  (no arguments on a terminal starts chat)\n"
        "  Inside: use NAME, submit INVOCATION --text TEXT, history, exit\n"
        "  Quotes and backslashes group text; no shell expansion.\n"
        "\n"
@@ -108,19 +112,13 @@ static V *read_record(const char *kind, V *ref) {
   return host_event(request);
 }
 static V *visible_records(const char *kind, const char *collection) {
-  V *records = v_record_get(host_state(), collection);
-  V *visible = v_array();
-  if (records && records->type != VT_ARRAY) {
-    v_fail("invalid local record collection");
-  }
-  for (size_t i = 0; records && i < records->n; i++) {
-    V *ref = v_record_get(records->items[i], "ref");
-    V *response = read_record(kind, ref);
-    if (v_isstr(at(response, 0), "found")) {
-      v_push(visible, at(response, 1));
-    }
-  }
-  return visible;
+  (void)collection;
+  V *request = event("list");
+  field(request, "kind", v_string(kind));
+  V *response = host_event(request);
+  if (!v_isstr(at(response, 0), "found")) v_fail("record listing unavailable");
+  V *records = at(response, 1);
+  return records ? records : v_array();
 }
 static V *overview(void) {
   V *result = v_object();
@@ -271,6 +269,176 @@ static int split_line(char *line, char **words, int limit) {
   }
   return count;
 }
+static void chat_name(char *name, size_t size, const char *prefix) {
+  unsigned char random[12];
+  int fd = open("/dev/urandom", O_RDONLY);
+  if (fd < 0) v_fail("cannot generate chat identity");
+  size_t got = 0;
+  while (got < sizeof(random)) {
+    ssize_t n = read(fd, random + got, sizeof(random) - got);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) { close(fd); v_fail("cannot generate chat identity"); }
+    got += (size_t)n;
+  }
+  close(fd);
+  char hex[25];
+  for (size_t i = 0; i < sizeof(random); i++) snprintf(hex + i * 2, 3, "%02x", random[i]);
+  snprintf(name, size, "%s-%s", prefix, hex);
+}
+static void chat_text(V *text) {
+  char *quoted = v_json(v_string(v_text(text)));
+  size_t n = strlen(quoted);
+  if (n >= 2 && fwrite(quoted + 1, 1, n - 2, stdout) != n - 2) v_fail("chat output failed");
+}
+/* Each operation reopens authoritative state and releases the owning lock. */
+static int chat_action(const char *directory, const char *verb, const char *argument,
+                       const char *text, char *selection) {
+  jmp_buf top;
+  jmp_buf *previous = v_handler;
+  v_handler = &top;
+  if (setjmp(top)) {
+    fprintf(stderr, "libcwr: %s\n", v_error);
+    if (!strcmp(verb, "send")) fputs("Use /status to inspect retained work before retrying.\n", stderr);
+    host_close();
+    v_handler = previous;
+    return 1;
+  }
+  if (!strcmp(verb, "start")) {
+    struct stat st;
+    if (lstat(directory, &st) < 0) {
+      if (errno != ENOENT) v_fail("cannot inspect chat workspace");
+      host_init(directory);
+      host_close();
+    }
+  }
+  host_open(directory, NULL);
+  host_chat_binding();
+  V *reply = NULL;
+  if (!strcmp(verb, "start") || !strcmp(verb, "new")) {
+    char generated[65];
+    if (!argument) { chat_name(generated, sizeof(generated), "chat"); argument = generated; }
+    V *request = event("create");
+    field(request, "conversation", reference("conversations", argument));
+    field(request, "owner", v_record_get(host_environment(), "context"));
+    reply = host_event(request);
+    if (v_isstr(at(reply, 0), "created") || v_isstr(at(reply, 0), "existing")) {
+      snprintf(selection, 65, "%s", argument);
+      printf("Conversation: %s | coworker: uppercase (local rbel)\n", selection);
+    }
+  } else if (!strcmp(verb, "use")) {
+    reply = read_record("conversation", reference("conversations", argument));
+    if (v_isstr(at(reply, 0), "found")) {
+      snprintf(selection, 65, "%s", argument);
+      printf("Conversation: %s\n", selection);
+    }
+  } else if (!strcmp(verb, "send")) {
+    if (strlen(text) > CLI_TEXT_LIMIT) v_fail("text exceeds 256 KiB command bound");
+    char name[65];
+    chat_name(name, sizeof(name), "turn");
+    reply = host_chat_send(reference("conversations", selection), name, text);
+    if (v_isstr(at(reply, 0), "completed")) {
+      fputs("uppercase: ", stdout);
+      chat_text(v_record_get(at(reply, 1), "result"));
+      putchar('\n');
+    } else {
+      printf("Work %s: %s; inspect /status before retrying.\n", name,
+             at(reply, 0) && at(reply, 0)->type == VT_STRING ? at(reply, 0)->s : "unknown");
+    }
+  } else if (!strcmp(verb, "history")) {
+    reply = read_record("conversation", reference("conversations", selection));
+    if (v_isstr(at(reply, 0), "found")) {
+      V *messages = v_record_get(at(reply, 1), "messages");
+      if (!messages || !messages->n) puts("No messages yet.");
+      for (size_t i = messages ? messages->n : 0; i > 0; i--) {
+        V *message = messages->items[i - 1];
+        V *author = v_record_get(message, "author");
+        V *caller = v_record_get(host_environment(), "caller");
+        int you = author && caller && author->type == VT_STRING && caller->type == VT_STRING && !strcmp(author->s, caller->s);
+        printf("%s: ", you ? "you" : display_name(author));
+        chat_text(v_record_get(message, "text"));
+        putchar('\n');
+      }
+    }
+  } else if (!strcmp(verb, "status") || !strcmp(verb, "recover")) {
+    output(verb, !strcmp(verb, "recover") ? "recovered" : "ok", overview(), 0);
+  } else if (!strcmp(verb, "reconcile") || !strcmp(verb, "run")) {
+    V *request = event(verb);
+    field(request, "ref", reference("invocations", argument));
+    reply = host_event(request);
+    output(verb, at(reply, 0)->s, at(reply, 1), 0);
+    if (!strcmp(verb, "reconcile") && v_isstr(at(reply, 0), "reconciliation-required") &&
+        v_isstr(v_record_get(at(reply, 1), "checked"), "t") &&
+        v_isstr(v_record_get(v_record_get(host_environment(), "binding"), "repeat-safe"), "t") &&
+        !strcmp(v_json(v_record_get(at(reply, 1), "target")),
+                v_json(v_record_get(v_record_get(host_environment(), "binding"), "target")))) {
+      printf("Receipt checked. Use /run %s to request a safe retry; current authority will be checked.\n", argument);
+    }
+  }
+  int ok = !reply || (at(reply, 0) && at(reply, 0)->type == VT_STRING && successful(at(reply, 0)->s));
+  if (!ok) printf("%s: %s\n", verb, at(reply, 0) && at(reply, 0)->type == VT_STRING ? at(reply, 0)->s : "invalid response");
+  if (fflush(stdout) || ferror(stdout)) v_fail("chat output failed");
+  host_close();
+  v_handler = previous;
+  return ok ? 0 : 1;
+}
+static void chat_help(void) {
+  puts("Type a message and the local rbel coworker replies in uppercase.\n"
+       "ASCII a-z change; other characters stay unchanged. No model is connected.\n"
+       "/new [NAME]       Create/select a conversation\n"
+       "/use NAME         Reopen a saved conversation\n"
+       "/history          Read saved user and coworker messages\n"
+       "/coworker [uppercase]  Show/select the local coworker\n"
+       "/status, /recover, /reconcile INVOCATION  Inspect/recover work\n"
+       "/run INVOCATION    Retry only after reconciliation permits it\n"
+       "/help, /exit      Help or leave (EOF also exits)\n"
+       "Prefix // to send a literal leading slash. Quotes in messages are literal.");
+}
+static int chat_main(const char *directory) {
+  char selection[65] = "";
+  if (chat_action(directory, "start", "chat", NULL, selection)) return 1;
+  puts("Type /help for controls. Your messages and replies are saved here.");
+  const size_t bound = CLI_TEXT_LIMIT + 4096u;
+  char *line = malloc(bound + 1);
+  if (!line) { fputs("libcwr: allocation failed\n", stderr); return 1; }
+  int interactive = isatty(STDIN_FILENO), result = 0;
+  for (;;) {
+    if (interactive) {
+      printf("you[%s]> ", selection);
+      if (fflush(stdout)) { result = 1; break; }
+    }
+    size_t n = 0;
+    int c, oversized = 0, nul = 0;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+      if (!c) nul = 1;
+      if (n < bound) line[n++] = (char)c; else oversized = 1;
+    }
+    if (ferror(stdin)) { fputs("libcwr: input read failed\n", stderr); result = 1; break; }
+    if (c == EOF && !n && !oversized) break;
+    line[n] = 0;
+    if (oversized || nul) { fputs("libcwr: message exceeds bound or contains NUL\n", stderr); continue; }
+    if (!n) continue;
+    if (line[0] != '/' || line[1] == '/') {
+      chat_action(directory, "send", NULL, line + (line[0] == '/'), selection);
+      continue;
+    }
+    char *words[4];
+    int count = split_line(line + 1, words, 4);
+    if (count < 1) { fputs("libcwr: invalid slash command; use /help\n", stderr); continue; }
+    const char *verb = words[0];
+    if (count == 1 && (!strcmp(verb, "exit") || !strcmp(verb, "quit"))) break;
+    if (count == 1 && !strcmp(verb, "help")) { chat_help(); continue; }
+    if (!strcmp(verb, "coworker") && (count == 1 || (count == 2 && !strcmp(words[1], "uppercase")))) {
+      puts("uppercase: local rbel ASCII uppercase coworker"); continue;
+    }
+    int single = count == 1 && (!strcmp(verb, "history") || !strcmp(verb, "status") || !strcmp(verb, "recover"));
+    int named = count == 2 && (!strcmp(verb, "use") || !strcmp(verb, "reconcile") || !strcmp(verb, "run"));
+    int create = !strcmp(verb, "new") && count <= 2;
+    if (single || named || create) chat_action(directory, verb, count == 2 ? words[1] : NULL, NULL, selection);
+    else fputs("libcwr: unknown slash command or arguments; use /help\n", stderr);
+  }
+  free(line);
+  return result;
+}
 static int cli_command(int argc, char **argv, char *selection);
 static int repl_main(const char *directory) {
   const size_t bound = CLI_TEXT_LIMIT + 4096u;
@@ -309,7 +477,7 @@ static int repl_main(const char *directory) {
       }
       continue;
     }
-    int forbidden = !strcmp(words[0], "repl");
+    int forbidden = !strcmp(words[0], "repl") || !strcmp(words[0], "chat");
     for (int i = 0; i < count; i++) {
       /* The value after --text is literal, even if it resembles an option. */
       if (!strcmp(words[i], "--text") && i + 1 < count) { i++; continue; }
@@ -338,7 +506,7 @@ static int repl_main(const char *directory) {
   return result;
 }
 static int cli_command(int argc, char **argv, char *selection) {
-  if (argc == 1 && isatty(STDIN_FILENO)) return repl_main(".libcwr");
+  if (argc == 1 && isatty(STDIN_FILENO)) return chat_main(".libcwr");
   jmp_buf top;
   jmp_buf *previous = v_handler;
   volatile int status = 1;
@@ -418,6 +586,11 @@ static int cli_command(int argc, char **argv, char *selection) {
     return 0;
   }
   const char *command = words[0];
+  if (!strcmp(command, "chat")) {
+    if (count != 1 || text || json) { status = 2; v_fail("chat accepts only --directory and --help"); }
+    v_handler = previous;
+    return chat_main(directory);
+  }
   if (!strcmp(command, "repl")) {
     if (count != 1 || text || json) {
       status = 2;
