@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Whole-slice checks, meaningful negative runs, and existing language regressions."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -14,6 +15,8 @@ SOURCE = HERE / 'workflow.rbel.md'
 OUTPUT = ROOT / 'target/libcwr'
 OUTPUT.mkdir(parents=True, exist_ok=True)
 results = []
+COMPILER = ROOT / 'target/rbel-command/bin/rbel'
+SKIP_NATIVE = False
 
 
 def check(name, arguments, expected=0, contains=None):
@@ -31,7 +34,7 @@ def check(name, arguments, expected=0, contains=None):
 
 
 def test_command(path, *extra):
-    return [sys.executable, RUNNER, path, *extra]
+    return [sys.executable, RUNNER, path, '--rbel', COMPILER, *extra]
 
 
 def main():
@@ -97,15 +100,53 @@ def main():
             raise ValueError('hardlink alias damaged source')
         mutation.write_bytes((base + "~~~rbel test=tilde\n(rt-assert 'ok t t (fn (ignored) (rt-done)))\n~~~\n").replace('\n', '\r\n').encode())
         check('crlf-tilde-format', test_command(mutation), contains='1 assertions passed')
+        # Reproduce unsafe evidence destinations without touching the real bundle.
+        import shutil
+        bundle = work / 'compiler-bundle'
+        shutil.copytree(COMPILER.resolve().parent.parent, bundle)
+        assembler = bundle / 'libexec/rbel/wat2wasm'
+        before_tool = assembler.read_bytes()
+        check('compiler-resource-output-protected', test_command(mutation, '--rbel', bundle / 'bin/rbel', '--report', assembler),
+              expected=1, contains='must not overwrite')
+        if assembler.read_bytes() != before_tool:
+            raise ValueError('compiler resource was altered')
+        tool_alias = work / 'assembler-hardlink'
+        tool_alias.hardlink_to(assembler)
+        check('compiler-resource-hardlink-protected', test_command(mutation, '--rbel', bundle / 'bin/rbel', '--docs', tool_alias),
+              expected=1, contains='must not overwrite')
+        if assembler.read_bytes() != before_tool:
+            raise ValueError('compiler resource alias was altered')
+        check('compiler-bundle-new-output-protected', test_command(mutation, '--rbel', bundle / 'bin/rbel', '--docs', bundle / 'new-docs.md'),
+              expected=1, contains='must not overwrite')
+        mutation.write_text(base + "```rbel test=captured-source\n(rt-request 'rewrite nil (fn (ignored) (rt-assert 'snapshot t t (fn (ignored) (rt-done)))))\n```\n")
+        host = work / 'rewrite-host.mjs'
+        host.write_text("import {readFileSync,writeFileSync} from 'node:fs';\n" +
+            "export function createHost() { return { request() { const p=" + json.dumps(str(mutation)) +
+            "; writeFileSync(p,readFileSync(p,'utf8').replace(\"rt-assert 'snapshot t t\",\"rt-assert 'snapshot t nil\")); return null; } }; }\n")
+        check('source-drift-invalidates-evidence', test_command(mutation, '--host', host, '--report', proof, '--docs', docs),
+              expected=1, contains='source changed during verification')
+        if proof.exists() or docs.exists():
+            raise ValueError('source drift left success evidence')
+
 
     check('pinned-foundation', [sys.executable, ROOT / 'literate/check.py', '--extract-only'])
     check('extractor-regressions', [sys.executable, ROOT / 'literate/check_test.py'])
     check('existing-foundation-on-wasm', test_command(ROOT / 'literate/foundation.rbel.md'), contains='67 cases')
     check('existing-reader-on-wasm', test_command(ROOT / 'literate/reader.rbel.md'), contains='12 cases')
-    check('native-foundation-regression', [ROOT / 'target/rbel-command/bin/rbel', 'check', ROOT / 'literate/foundation.rbel.md'])
-    check('native-reader-regression', [ROOT / 'target/rbel-command/bin/rbel', 'check', ROOT / 'literate/reader.rbel.md'])
+    if not SKIP_NATIVE:
+        check('native-foundation-regression', [COMPILER, 'check', ROOT / 'literate/foundation.rbel.md'])
+        check('native-reader-regression', [COMPILER, 'check', ROOT / 'literate/reader.rbel.md'])
+    else:
+        print('UNVERIFIED here: native compiler regressions (portable Wasm bootstrap selected); run default verification on macOS ARM64')
     print(f'{len(results)} verification groups passed')
 
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--rbel', type=Path, default=COMPILER)
+parser.add_argument('--skip-native', action='store_true', help='portable bootstrap only; explicitly leave native checks unverified here')
+arguments = parser.parse_args()
+COMPILER = arguments.rbel.resolve()
+SKIP_NATIVE = arguments.skip_native
 
 try:
     main()
@@ -115,6 +156,8 @@ except (ValueError, OSError, subprocess.SubprocessError) as error:
 finally:
     (OUTPUT / 'verification.json').write_text(json.dumps({'passed': bool(results) and all(r['passed'] for r in results)
         and not getattr(sys, 'exitCode', 0), 'source_sha256': hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
+        'native_checks_requested': not SKIP_NATIVE,
+        'native_checks_performed': all(any(g['name'] == name for g in results) for name in ('native-foundation-regression', 'native-reader-regression')), 'compiler': str(COMPILER),
         'groups': results}, indent=2) + '\n')
 if getattr(sys, 'exitCode', 0):
     sys.exit(1)

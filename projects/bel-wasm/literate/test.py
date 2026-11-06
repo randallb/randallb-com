@@ -14,8 +14,9 @@ FENCE = re.compile(r' {0,3}(`{3,}|~{3,})([^\r\n]*)\r?\n?\Z')
 HEADER = re.compile(r'rbel (definition|example|test)=([a-z][a-z0-9-]*)\Z')
 
 
-def blocks(path):
-    data = path.read_bytes()
+def blocks(path, data=None):
+    if data is None:
+        data = path.read_bytes()
     if len(data) > 131072:
         raise ValueError(f'{path}: source exceeds 128 KiB')
     lines = data.decode('utf-8').splitlines(keepends=True)
@@ -47,10 +48,10 @@ def blocks(path):
     return result
 
 
-def prepare(paths, entry):
+def prepare(paths, entry, snapshots=None):
     items, names = [], set()
     for path in paths:
-        for item in blocks(path):
+        for item in blocks(path, None if snapshots is None else snapshots[path]):
             if item['name'] in names:
                 raise ValueError(f"{item['path']}:{item['line']}: duplicate block {item['name']}")
             names.add(item['name'])
@@ -95,16 +96,23 @@ def run(args):
                          ROOT / 'literate/test-runner.mjs', ROOT / 'literate/wasm-values.mjs', Path(__file__).resolve()]
     if args.host:
         protected.append(args.host.resolve())
+    bundle = args.rbel.resolve().parent.parent
+    # The installed compiler's resources are inputs too. Protect the complete
+    # bundle, including aliases that live outside it, before clearing outputs.
+    protected.extend(p for p in bundle.rglob('*') if p.is_file())
     outputs = [p.resolve() for p in (args.docs, args.report) if p]
     def aliases(a, b):
         return a == b or (a.exists() and b.exists() and a.samefile(b))
     for index, output in enumerate(outputs):
-        if any(aliases(output, source) for source in protected + outputs[:index]):
+        if output.is_relative_to(bundle) or any(aliases(output, source) for source in protected + outputs[:index]):
             raise ValueError('output must not overwrite an input, tool, or another output')
     # Clear previous success evidence only after validating every output alias.
     for output in outputs:
         output.unlink(missing_ok=True)
-    source, cases, definitions = prepare(paths, args.entry)
+    snapshots = {p: p.read_bytes() for p in paths}
+    source, cases, definitions = prepare(paths, args.entry, snapshots)
+    if len(source.encode('utf-8')) > 131072:
+        raise ValueError('combined compiler input exceeds 128 KiB')
     rbel = args.rbel.resolve()
     assembler = rbel.parent.parent / 'libexec/rbel/wat2wasm'
     # Every run uses a new private output directory. No prior success can be reused.
@@ -155,7 +163,7 @@ def run(args):
         manifest = work / 'tests.json'
         manifest.write_text(json.dumps({
             'cases': [{k: c[k] for k in ('name', 'line', 'path', 'kind')} for c in cases],
-            'provenance': {'sources': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
+            'provenance': {'sources': {str(p): hashlib.sha256(snapshots[p]).hexdigest() for p in paths},
                 'compiler_sha256': hashlib.sha256(rbel.read_bytes()).hexdigest(),
                 'wasm_sha256': hashlib.sha256(wasm.read_bytes()).hexdigest(),
                 'host_sha256': hashlib.sha256(args.host.read_bytes()).hexdigest() if args.host else None}
@@ -170,13 +178,21 @@ def run(args):
         result = subprocess.run(command, timeout=args.timeout)
         if result.returncode:
             raise ValueError(f'Wasm tests failed (exit {result.returncode})')
+    try:
+        unchanged = all(p.read_bytes() == snapshots[p] for p in paths)
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        for output in outputs:
+            output.unlink(missing_ok=True)
+        raise ValueError('source changed during verification; no success evidence retained')
     if args.docs:
         # Generated docs are the exact authored chapter, with a source hash.
         output = args.docs.resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text('<!-- Generated from maintained literate sources; do not edit. -->\n' +
-            '\n'.join(f'<!-- {p.name}: sha256 {hashlib.sha256(p.read_bytes()).hexdigest()} -->\n' +
-                      p.read_text() for p in paths))
+            '\n'.join(f'<!-- {p.name}: sha256 {hashlib.sha256(snapshots[p]).hexdigest()} -->\n' +
+                      snapshots[p].decode('utf-8') for p in paths))
 
 
 def main():
