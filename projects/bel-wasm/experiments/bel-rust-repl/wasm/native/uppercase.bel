@@ -1,0 +1,32 @@
+; Byte-list stdin/stdout filter. Only ASCII lowercase bytes are changed.
+(def uppercase (xs)
+  (if xs (join (upper-byte (car xs)) (uppercase (cdr xs))) nil))
+
+(def upper-byte (c)
+ 
+    (if (id c \a) \A
+    (if (id c \b) \B
+    (if (id c \c) \C
+    (if (id c \d) \D
+    (if (id c \e) \E
+    (if (id c \f) \F
+    (if (id c \g) \G
+    (if (id c \h) \H
+    (if (id c \i) \I
+    (if (id c \j) \J
+    (if (id c \k) \K
+    (if (id c \l) \L
+    (if (id c \m) \M
+    (if (id c \n) \N
+    (if (id c \o) \O
+    (if (id c \p) \P
+    (if (id c \q) \Q
+    (if (id c \r) \R
+    (if (id c \s) \S
+    (if (id c \t) \T
+    (if (id c \u) \U
+    (if (id c \v) \V
+    (if (id c \w) \W
+    (if (id c \x) \X
+    (if (id c \y) \Y
+    (if (id c \z) \Z c)))))))))))))))))))))))))))

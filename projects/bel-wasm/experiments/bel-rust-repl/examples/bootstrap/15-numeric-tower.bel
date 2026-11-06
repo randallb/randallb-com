@@ -1,0 +1,90 @@
+(def + ns
+  (foldr (fn (x y)
+           (apply buildnum ((of c+ cddr) x y)))
+         0
+         ns))
+
+(def - ns
+  (if (no ns)       0
+      (no (cdr ns)) (inv (car ns))
+                    (+ (car ns) (inv (apply + (cdr ns))))))
+
+(def * ns
+  (foldr (fn (x y)
+           (apply buildnum ((of c* cddr) x y)))
+         1
+         ns))
+
+(def / ns
+  (if (no ns)
+      1
+      (* (car ns) (recip (apply * (cdr ns))))))
+
+(def inc (n) (+ n 1))
+
+(def dec (n) (- n 1))
+
+(def pos (x ys (o f =))
+  (if (no ys)        nil
+      (f (car ys) x) 1
+                     (aif (pos x (cdr ys) f) (+ it 1))))
+
+(def len (xs)
+  (if (no xs) 0 (inc:len:cdr xs)))
+
+(def charn (c)
+  (dec:pos c chars caris))
+
+(def < args
+  (pairwise bin< args))
+
+(def > args
+  (apply < (rev args)))
+
+(def list< (x y)
+  (if (no x) y
+      (no y) nil
+             (or (< (car x) (car y))
+                 (and (= (car x) (car y))
+                      (< (cdr x) (cdr y))))))
+
+(def bin< args
+  (aif (all no args)                    nil
+       (find [all (car _) args] comfns) (apply (cdr it) args)
+                                        (err 'incomparable)))
+
+(set comfns nil)
+
+(def com (f g)
+  (set comfns (put f g comfns)))
+
+(com real (of sr< numr))
+
+(com char (of < charn))
+
+(com string list<)
+
+(com symbol (of list< nom))
+
+(def int (n)
+  (and (real n) (= (srden:numr n) i1)))
+
+(def whole (n)
+  (and (int n) (~< n 0)))
+
+(def pint (n)
+  (and (int n) (> n 0)))
+
+(def yc (f)
+  ([_ _] [f (fn a (apply (_ _) a))]))
+
+(mac rfn (name . rest)
+  `(yc (fn (,name) (fn ,@rest))))
+
+(mac afn args
+  `(rfn self ,@args))
+
+(def wait (f)
+  ((afn (v) (if v v (self (f))))
+   (f)))
+

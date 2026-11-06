@@ -1,0 +1,3 @@
+Source extracted from getworkloop/wlp-mono, revision 2aabe143b8a1ed65f4adc1b452ad7074581b5091.
+Copyright 2026 Coworker Protocol. Apache License 2.0; see LICENSE.
+Upstream source files retain their original names and contents. Standalone packaging, root documentation, and build files were added for randallb.com.

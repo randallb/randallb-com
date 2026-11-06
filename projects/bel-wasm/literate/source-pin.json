@@ -1,0 +1,17 @@
+{
+  "upstream": {
+    "repository": "getworkloop/wlp-mono",
+    "revision": "2aabe143b8a1ed65f4adc1b452ad7074581b5091",
+    "upstream_path": "experiments/bel-rust-repl",
+    "published_name": "bel-wasm",
+    "source_files_unchanged": true
+  },
+  "foundation": {
+    "path": "experiments/bel-rust-repl/examples/bootstrap/00-foundation.bel",
+    "sha256": "e0cf70f73230a87694e9ee68512c0c700c867ce29b2eca433261ffb59b5f3ccd"
+  },
+  "bootstrap": {
+    "sha256": "bb00bc772b28eb0feb5f9c2db318ad2b28d09abe2574a80fb5e172f2885d4169",
+    "fragments": 31
+  }
+}

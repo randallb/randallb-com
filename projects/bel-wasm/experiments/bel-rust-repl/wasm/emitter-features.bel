@@ -1,0 +1,18 @@
+; A compact semantic regression for the compiler facilities used by the emitter.
+(def feature-probe (flag symbol)
+  (if (id flag 'pair)
+      (wasm-bootstrap-copy (wasm-bootstrap-next (wasm-list-name
+        (feature-protected-parameter symbol symbol symbol symbol symbol symbol symbol symbol symbol symbol))))
+      (if flag
+      (join (nom symbol) (join (feature-literal) (feature-quoted)))
+      (join (id (feature-literal) (feature-literal))
+            (join (id "same" "same")
+                  (join (id \a (car "a")) (id symbol (feature-symbol))))))))
+(def feature-literal () "literal")
+(def feature-quoted () '"quoted")
+(def feature-symbol () 'unknown)
+(def feature-protected-parameter (no list append cons reduce scope globe map hug letu) no)
+; Compiler-private names are outside the published bootstrap snapshot.
+(def wasm-list-name (x) x)
+(def wasm-bootstrap-next (x) x)
+(def wasm-bootstrap-copy (x) x)

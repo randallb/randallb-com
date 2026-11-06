@@ -1,0 +1,32 @@
+
+(mac eif (var (o expr) (o fail) (o ok))
+  (with (v (uvar)
+         w (uvar)
+         c (uvar))
+    `(let ,v (join)
+       (let ,w (ccc (fn (,c)
+                      (dyn err [,c (cons ,v _)] ,expr)))
+         (if (caris ,w ,v id)
+             (let ,var (cdr ,w) ,fail)
+             (let ,var ,w ,ok))))))
+
+(mac onerr (e1 e2)
+  (let v (uvar)
+    `(eif ,v ,e2 ,e1 ,v)))
+
+(mac safe (expr)
+  `(onerr nil ,expr))
+
+(def literal (e)
+  (or (in e t nil o apply)
+      (in (type e) 'char 'stream)
+      (caris e 'lit)
+      (string e)))
+
+(def variable (e)
+  (if (atom e)
+      (no (literal e))
+      (id (car e) vmark)))
+
+(def isa (name)
+  [begins _ `(lit ,name) id])

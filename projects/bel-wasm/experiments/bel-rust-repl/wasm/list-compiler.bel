@@ -1,0 +1,153 @@
+; First-order definitions with direct calls, shared literal values and text.
+; Source validation and all compilation decisions remain in Bel.
+(def wasm-list-name (s)
+  (and (id (type s) 'symbol) (variable s)
+       (nom s) (all [mem _ "abcdefghijklmnopqrstuvwxyz-0123456789"] (nom s))
+       (no (mem s '(def fn if quote lit dyn after ccc where bquote mac set thread
+                    join car cdr id type nom err)))))
+
+(def wasm-list-find (name definitions)
+  (if definitions
+      (if (id name (car (cdr (car definitions))))
+          (car definitions)
+          (wasm-list-find name (cdr definitions)))))
+
+; Definitions cannot mutate the published bootstrap's macro/global environment.
+; Snapshotting precedes all compiler libraries. The only two names introduced
+; by the snapshot implementation itself are not published bootstrap bindings.
+(def wasm-list-definition-name (name)
+  (and (wasm-list-name name)
+       (or (mem name '(wasm-bootstrap-next wasm-bootstrap-copy))
+           (no (wasm-bootstrap-bound name wasm-bootstrap-names)))))
+
+(def wasm-list-parameters (xs)
+  (if xs
+      (if (and (id (type xs) 'pair) (wasm-list-name (car xs))
+               (no (mem (car xs) (cdr xs))))
+          (wasm-list-parameters (cdr xs))
+          (wasm-reject))
+      t))
+
+(def wasm-list-definition (source)
+  (if (and (wasm-four source) (id (car source) 'def)
+           (wasm-list-definition-name (car (cdr source))))
+      (wasm-list-parameters (car (cdr (cdr source))))
+      (wasm-reject)))
+
+(def wasm-list-definitions (sources)
+  (if sources
+      (if (id (type sources) 'pair)
+          (do (wasm-list-definition (car sources))
+              (if (wasm-list-find (car (cdr (car sources))) (cdr sources))
+                  (wasm-reject)
+                  (wasm-list-definitions (cdr sources))))
+          (wasm-reject))
+      t))
+
+(def wasm-list-same-arity (a b)
+  (if (and (no a) (no b)) t
+      (and (id (type a) 'pair) (id (type b) 'pair))
+        (wasm-list-same-arity (cdr a) (cdr b))
+      nil))
+
+(def wasm-list-literal (x)
+  (and x (or (wasm-text-string x)
+             (and (id (type x) 'symbol) (no (mem x '(t pair symbol char)))))))
+
+(def wasm-list-constant (x path)
+  (if (id x nil) "(i32.const 0)"
+      (id x t) "(i32.const 1)"
+      (id x 'pair) "(i32.const 9)"
+      (id x 'symbol) "(i32.const 17)"
+      (id x 'char) "(i32.const 25)"
+      (id (type x) 'char) (wasm-text-char x)
+      (wasm-list-literal x) (list "(global.get $literal-" path ")")
+      (wasm-reject)))
+
+(def wasm-list-arguments (xs parameters definitions path)
+  (if xs
+      (list " " (wasm-list-expr (car xs) parameters definitions (cons \a path))
+            (wasm-list-arguments (cdr xs) parameters definitions (cons \d path)))))
+
+(def wasm-list-expr (x parameters definitions path)
+  (if (id x nil) "(i32.const 0)"
+      (id x t) "(i32.const 1)"
+      (mem x parameters) (list "(local.get $p-" (nom x) ")")
+      (or (wasm-text-string x) (id (type x) 'char)) (wasm-list-constant x path)
+      (and (wasm-two x) (id (car x) 'quote))
+        (wasm-list-constant (car (cdr x)) path)
+      (and (wasm-four x) (id (car x) 'if))
+        (list "(if (result i32) "
+          (wasm-list-expr (car (cdr x)) parameters definitions (cons \a path))
+          " (then "
+          (wasm-list-expr (car (cdr (cdr x))) parameters definitions (cons \a (cons \d path)))
+          ") (else "
+          (wasm-list-expr (car (cdr (cdr (cdr x)))) parameters definitions (cons \a (cons \d (cons \d path))))
+          "))")
+      (and (wasm-three x) (mem (car x) '(join id)))
+        (list "(call $" (nom (car x))
+          (wasm-list-arguments (cdr x) parameters definitions path) ")")
+      (and (wasm-two x) (mem (car x) '(car cdr type nom err)))
+        (list "(call $" (nom (car x))
+          (wasm-list-arguments (cdr x) parameters definitions path) ")")
+      (and (id (type x) 'pair) (wasm-list-find (car x) definitions)
+           (wasm-list-same-arity (cdr x)
+             (car (cdr (cdr (wasm-list-find (car x) definitions))))))
+        (list "(call $bel-" (nom (car x))
+          (wasm-list-arguments (cdr x) parameters definitions path) ")")
+      (wasm-reject)))
+
+(def wasm-list-params (parameters)
+  (map [list " (param $p-" (nom _) " i32)"] parameters))
+
+(def wasm-list-emit (source definitions)
+  (if (some [wasm-list-find _ definitions] (car (cdr (cdr source))))
+      (wasm-reject)
+      (list "(func $bel-" (nom (car (cdr source)))
+        (wasm-list-params (car (cdr (cdr source)))) " (result i32) "
+        (wasm-list-expr (car (cdr (cdr (cdr source))))
+          (car (cdr (cdr source))) definitions (cons \_ (nom (car (cdr source))))) ")")))
+
+; Paths distinguish source occurrences. Literal strings are initialized once,
+; preserving the identity of a literal reused by successive function calls.
+(def wasm-list-literals (x path)
+  (if (and x (wasm-text-string x)) (list (list path x))
+      (and (wasm-two x) (id (car x) 'quote))
+        (if (wasm-list-literal (car (cdr x))) (list (list path (car (cdr x)))))
+      (id (type x) 'pair) (wasm-list-arg-literals (cdr x) path)))
+
+(def wasm-list-arg-literals (xs path)
+  (if xs
+      (append (wasm-list-literals (car xs) (cons \a path))
+              (wasm-list-arg-literals (cdr xs) (cons \d path)))))
+
+(def wasm-list-all-literals (forms)
+  (if forms
+      (append
+        (wasm-list-literals (car (cdr (cdr (cdr (car forms)))))
+          (cons \_ (nom (car (cdr (car forms))))))
+        (wasm-list-all-literals (cdr forms)))))
+
+(def wasm-list-init-literal (entry)
+  (list "(global.set $literal-" (car entry) " "
+    (if (id (type (car (cdr entry))) 'symbol)
+        (list "(call $intern " (wasm-text-build (nom (car (cdr entry)))) ")")
+        (wasm-text-build (car (cdr entry)))) ")"))
+
+(def wasm-list-module (forms literals)
+  (list "(module " (wasm-list-runtime) (wasm-text-runtime)
+    (map [list "(global $literal-" (car _) " (mut i32) (i32.const 0))"] literals)
+    (map [wasm-list-emit _ forms] forms)
+    "(func $initialize " (wasm-text-reserved)
+    (map wasm-list-init-literal literals) ")(start $initialize)"
+    "(func (export \"choose\")"
+    (wasm-list-params (car (cdr (cdr (car forms)))))
+    " (result i32) (call $valid (call $bel-" (nom (car (cdr (car forms))))
+    (map [list " (call $valid (local.get $p-" (nom _) "))"]
+      (car (cdr (cdr (car forms))))) "))) )"))
+
+(def wasm-compile-lists (forms)
+  (if forms
+      (do (wasm-list-definitions forms)
+          (wasm-list-module forms (wasm-list-all-literals forms)))
+      (wasm-reject)))

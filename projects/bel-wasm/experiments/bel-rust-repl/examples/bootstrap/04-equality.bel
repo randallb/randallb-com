@@ -1,0 +1,21 @@
+
+(def = args
+  (if (no (cdr args))  t
+      (some atom args) (all [id _ (car args)] (cdr args))
+                       (and (apply = (map car args))
+                            (apply = (map cdr args)))))
+
+(def symbol (x) (= (type x) 'symbol))
+
+(def pair   (x) (= (type x) 'pair))
+
+(def char   (x) (= (type x) 'char))
+
+(def stream (x) (= (type x) 'stream))
+
+(def proper (x)
+  (or (no x)
+      (and (pair x) (proper (cdr x)))))
+
+(def string (x)
+  (and (proper x) (all char x)))

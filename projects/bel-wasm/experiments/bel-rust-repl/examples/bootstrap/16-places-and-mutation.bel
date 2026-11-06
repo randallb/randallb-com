@@ -1,0 +1,110 @@
+(def runs (f xs (o fon (and xs (f (car xs)))))
+  (if (no xs)
+      nil
+      (let (as bs) (split (if fon ~f f) xs)
+        (cons as (runs f bs (no fon))))))
+
+(def whitec (c)
+  (in c \sp \lf \tab \cr))
+
+(def tokens (xs (o break whitec))
+  (let f (if (function break) break (is break))
+    (keep ~f:car (runs f xs))))
+
+(def dups (xs (o f =))
+  (if (no xs)                   nil
+      (mem (car xs) (cdr xs) f) (cons (car xs)
+                                      (dups (rem (car xs) (cdr xs) f) f))
+                                (dups (cdr xs) f)))
+
+(set simple (cor atom number))
+
+(mac do1 args
+  (letu v
+    `(let ,v ,(car args)
+       ,@(cdr args)
+       ,v)))
+
+(def gets (v kvs (o f =))
+  (find [f (cdr _) v] kvs))
+
+(def consif (x y)
+  (if x (cons x y) y))
+
+(mac check (x f (o alt))
+  (letu v
+    `(let ,v ,x
+       (if (,f ,v) ,v ,alt))))
+
+(mac withs (parms . body)
+  (if (no parms)
+      `(do ,@body)
+      `(let ,(car parms) ,(cadr parms)
+         (withs ,(cddr parms) ,@body))))
+
+(mac bind (var expr . body)
+  `(dyn ,var ,expr (do ,@body)))
+
+(mac atomic body
+  `(bind lock t ,@body))
+
+(def tail (f xs)
+  (if (no xs) nil
+      (f xs)  xs
+              (tail f (cdr xs))))
+
+(set dock rev:cdr:rev)
+
+(def lastcdr (xs)
+  (if (no (cdr xs))
+      xs
+      (lastcdr (cdr xs))))
+
+(set last car:lastcdr)
+
+(def newq ()
+  (list nil))
+
+(def enq (x q)
+  (atomic (xar q (snoc (car q) x)))
+  q)
+
+(def deq (q)
+  (atomic (do1 (car (car q))
+               (xar q (cdr (car q))))))
+
+(mac set args
+  (cons 'do
+        (map (fn ((p (o e t)))
+               (letu v
+                 `(atomic (let ,v ,e
+                            (let (cell loc) (where ,p t)
+                              ((case loc a xar d xdr) cell ,v))))))
+             (hug args))))
+
+(mac zap (op place . args)
+  (letu (vo vc vl va)
+    `(atomic (with (,vo       ,op
+                    (,vc ,vl) (where ,place)
+                    ,va       (list ,@args))
+               (case ,vl
+                 a (xar ,vc (apply ,vo (car ,vc) ,va))
+                 d (xdr ,vc (apply ,vo (cdr ,vc) ,va))
+                   (err 'bad-place))))))
+
+(mac ++ (place (o n 1))
+  `(zap + ,place ,n))
+
+(mac -- (place (o n 1))
+  `(zap - ,place ,n))
+
+(mac push (x place)
+  (letu v
+    `(let ,v ,x
+       (zap [cons ,v _] ,place))))
+
+(mac pull (x place . rest)
+  (letu v
+    `(let ,v ,x
+       (zap [rem ,v _ ,@rest] ,place))))
+

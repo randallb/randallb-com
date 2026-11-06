@@ -1,0 +1,55 @@
+; Source validation and every lowering decision live here. The Rust batch
+; host only evaluates files and writes the final character tree.
+
+(def wasm-one (xs)
+  (and (id (type xs) 'pair) (no (cdr xs))))
+
+(def wasm-two (xs)
+  (and (id (type xs) 'pair) (wasm-one (cdr xs))))
+
+(def wasm-three (xs)
+  (and (id (type xs) 'pair) (wasm-two (cdr xs))))
+
+(def wasm-four (xs)
+  (and (id (type xs) 'pair) (wasm-three (cdr xs))))
+
+(def wasm-reject ()
+  (err 'unsupported-wasm-source))
+
+(def wasm-expr (source parameter)
+  (if (id source nil) "(i32.const 0)"
+      (id source t)   "(i32.const 1)"
+      (id source parameter) "(local.get 0)"
+      (and (wasm-two source) (id (car source) 'quote))
+        (if (id (car (cdr source)) nil) "(i32.const 0)"
+            (id (car (cdr source)) t) "(i32.const 1)"
+            (wasm-reject))
+      (and (wasm-four source) (id (car source) 'if))
+        (list "(if (result i32) "
+                (wasm-expr (car (cdr source)) parameter)
+                " (then "
+                (wasm-expr (car (cdr (cdr source))) parameter)
+                ") (else "
+                (wasm-expr (car (cdr (cdr (cdr source)))) parameter)
+                "))")
+      (wasm-reject)))
+
+(def wasm-function (source)
+  (if (and (wasm-three source)
+           (id (car source) 'fn)
+           (wasm-one (car (cdr source))))
+    (let parameter (car (car (cdr source)))
+      (if (and (id (type parameter) 'symbol)
+               (variable parameter)
+               (no (mem parameter '(fn if quote))))
+        (list "(module (func (export \"choose\") (param i32) (result i32) "
+                (wasm-expr (car (cdr (cdr source))) parameter)
+                "))")
+        (wasm-reject)))
+    (wasm-reject)))
+
+; The transport quotes ALL input forms; Bel enforces exactly one function.
+(def wasm-compile-forms (forms)
+  (if (wasm-one forms)
+      (wasm-function (car forms))
+      (wasm-reject)))

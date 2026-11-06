@@ -1,0 +1,70 @@
+(form quote ((e) a s r m)
+  (mev s (cons e r) m))
+
+(form if (es a s r m)
+  (if (no es)
+      (mev s (cons nil r) m)
+      (mev (cons (list (car es) a)
+                 (if (cdr es)
+                     (cons (fu (s r m)
+                             (if2 (cdr es) a s r m))
+                           s)
+                     s))
+           r
+           m)))
+
+(def if2 (es a s r m)
+  (mev (cons (list (if (car r)
+                       (car es)
+                       (cons 'if (cdr es)))
+                   a)
+             s)
+       (cdr r)
+       m))
+
+(form where ((e (o new)) a s r m)
+  (mev (cons (list e a)
+             (list (list smark 'loc new) nil)
+             s)
+       r
+       m))
+
+(form dyn ((v e1 e2) a s r m)
+  (if (variable v)
+      (mev (cons (list e1 a)
+                 (fu (s r m) (dyn2 v e2 a s r m))
+                 s)
+           r
+           m)
+      (sigerr 'cannot-bind s r m)))
+
+(def dyn2 (v e2 a s r m)
+  (mev (cons (list e2 a)
+             (list (list smark 'bind (cons v (car r)))
+                   nil)
+             s)
+       (cdr r)
+       m))
+
+(form after ((e1 e2) a s r m)
+  (mev (cons (list e1 a)
+             (list (list smark 'prot e2) a)
+             s)
+       r
+       m))
+
+(form ccc ((f) a s r m)
+  (mev (cons (list (list f (list 'lit 'cont s r))
+                   a)
+             s)
+       r
+       m))
+
+(form thread ((e) a s r (p g))
+  (mev s
+       (cons nil r)
+       (list (cons (list (list (list e a))
+                         nil)
+                   p)
+             g)))
+

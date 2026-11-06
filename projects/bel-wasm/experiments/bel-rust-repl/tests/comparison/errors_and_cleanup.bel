@@ -1,0 +1,9 @@
+; Escape from error handlers, as published eif does, before resuming the prompt.
+; Compare recovery rather than engine-specific diagnostic strings.
+((ccc (lit clo nil (k) (dyn escape k (dyn err (lit clo nil (e) (escape 'caught)) missing-variable)))) caught)
+((ccc (lit clo nil (k) (dyn escape k (dyn err (lit clo nil (e) (escape 'caught)) ((lit clo nil (x) x)))))) caught)
+((ccc (lit clo nil (k) (dyn escape k (dyn err (lit clo nil (e) (escape 'caught)) ((lit clo nil nil 'ok) 'extra))))) caught)
+((ccc (lit clo nil (k) (dyn escape k (dyn err (lit clo nil (e) (escape 'caught)) (car 'atom))))) caught)
+((ccc (lit clo nil (k) (dyn escape k (dyn err (lit clo nil (e) (escape 'caught)) (after (car 'atom) (xar cleanup-marker 'clean)))))) caught)
+(cleanup-marker (clean))
+('recovered recovered)

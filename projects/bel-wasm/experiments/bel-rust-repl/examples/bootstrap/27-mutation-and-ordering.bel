@@ -1,0 +1,66 @@
+(mac pop (place)
+  `(let (cell loc) (where ,place)
+     (let xs ((case loc a car d cdr) cell)
+       ((case loc a xar d xdr) cell (cdr xs))
+       (car xs))))
+
+(mac clean (f place)
+  (letu v
+    `(let ,v (compose no ,f)
+       (zap [keep ,v _] ,place))))
+
+(mac swap places
+  (let vs (map [nof 3 (uvar)] places)
+    `(atomic (withs ,(fuse (fn (place (cell loc val))
+                             (list (list cell loc)
+                                   `(where ,place)
+                                   val
+                                   `((case ,loc a car d cdr) ,cell)))
+                           places
+                           vs)
+               ,@(map (fn ((cellx locx valx) (celly locy valy))
+                        `((case ,locx a xar d xdr) ,cellx ,valy))
+                      vs
+                      (snoc (cdr vs) (car vs)))))))
+
+(def adjoin (x ys (o f =))
+  (if (mem x ys f) ys (cons x ys)))
+
+(mac pushnew (x place (o f '=))
+  (letu v
+    `(let ,v ,x
+       (zap [adjoin ,v _ ,f] ,place))))
+
+(def dedup (xs (o f =))
+  (rev (foldl (trap adjoin f) nil xs)))
+
+(def insert (f x ys)
+  (if (no ys)        (list x)
+      (f x (car ys)) (cons x ys)
+                     (cons (car ys) (insert f x (cdr ys)))))
+
+(def sort (f xs)
+  (foldr (part insert f) nil (rev xs)))
+
+(set best car:sort)
+
+(def max args
+  (best > args))
+
+(def min args
+  (best < args))
+
+(def even (n)
+  (int (/ n 2)))
+
+(set odd (cand int ~even))
+
+(def round (n)
+  (let r (fn (n)
+           (withs (f (floor n)
+                   d (- n f))
+             (if (or (> d 1/2) (and (= d 1/2) (odd f)))
+                 (ceil n)
+                 f)))
+    (if (< n 0) (-:r:- n) (r n))))
+

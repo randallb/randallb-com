@@ -1,0 +1,81 @@
+(def function (x)
+  (find [(isa _) x] '(prim clo)))
+
+(def con (x)
+  (fn args x))
+
+(def compose fs
+  (reduce (fn (f g)
+            (fn args (f (apply g args))))
+          (or fs (list idfn))))
+
+(def combine (op)
+  (fn fs
+    (reduce (fn (f g)
+              (fn args
+                (op (apply f args) (apply g args))))
+            (or fs (list (con (op)))))))
+
+(set cand (combine and)
+     cor  (combine or))
+
+(def foldl (f base . args)
+  (if (or (no args) (some no args))
+      base
+      (apply foldl f
+                   (apply f (snoc (map car args) base))
+                   (map cdr args))))
+
+(def foldr (f base . args)
+  (if (or (no args) (some no args))
+      base
+      (apply f (snoc (map car args)
+                     (apply foldr f base (map cdr args))))))
+
+(def of (f g)
+  (fn args (apply f (map g args))))
+
+(def upon args
+  [apply _ args])
+
+(def pairwise (f xs)
+  (or (no (cdr xs))
+      (and (f (car xs) (cadr xs))
+           (pairwise f (cdr xs)))))
+
+(def fuse (f . args)
+  (apply append (apply map f args)))
+
+(mac letu (v . body)
+  (if ((cor variable atom) v)
+      `(let ,v (uvar) ,@body)
+      `(with ,(fuse [list _ '(uvar)] v)
+         ,@body)))
+
+(mac pcase (expr . args)
+  (if (no (cdr args))
+      (car args)
+      (letu v
+        `(let ,v ,expr
+           (if (,(car args) ,v)
+               ,(cadr args)
+               (pcase ,v ,@(cddr args)))))))
+
+(def match (x pat)
+  (if (= pat t)                t
+      (function pat)           (pat x)
+      (or (atom x) (atom pat)) (= x pat)
+                               (and (match (car x) (car pat))
+                                    (match (cdr x) (cdr pat)))))
+
+(def split (f xs (o acc))
+  (if ((cor atom f:car) xs)
+      (list acc xs)
+      (split f (cdr xs) (snoc acc (car xs)))))
+
+(mac when (expr . body)
+  `(if ,expr (do ,@body)))
+
+(mac unless (expr . body)
+  `(when (no ,expr) ,@body))
+

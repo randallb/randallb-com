@@ -1,0 +1,52 @@
+; Snapshot bootstrap binding names before any compiler libraries are loaded.
+; Chunked tail accumulation/search keep large environments under host depth limits.
+(def wasm-bootstrap-next (xs)
+  (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))))))))))
+
+(def wasm-bootstrap-copy (xs names)
+  (if xs
+      (wasm-bootstrap-copy (wasm-bootstrap-next xs)
+        (join (car (car xs))
+          (join (car (car (cdr xs)))
+            (join (car (car (cdr (cdr xs))))
+              (join (car (car (cdr (cdr (cdr xs)))))
+                (join (car (car (cdr (cdr (cdr (cdr xs))))))
+                  (join (car (car (cdr (cdr (cdr (cdr (cdr xs)))))))
+                    (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr xs))))))))
+                      (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))
+                        (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs))))))))))
+                          (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))))
+                            (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs))))))))))))
+                              (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))))))
+                                (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs))))))))))))))
+                                  (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))))))))
+                                    (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs))))))))))))))))
+                                      (join (car (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr xs)))))))))))))))))
+                                        names)))))))))))))))))
+      names))
+
+; Only the two private helpers above precede this snapshot. The implicit scope
+; value is protected too, even when it has no explicit global binding.
+(set wasm-bootstrap-names (join 'scope (wasm-bootstrap-copy globe nil)))
+
+(def wasm-bootstrap-bound (name names)
+  (if names
+      (if
+        (id name (car names)) t
+        (id name (car (cdr names))) t
+        (id name (car (cdr (cdr names)))) t
+        (id name (car (cdr (cdr (cdr names))))) t
+        (id name (car (cdr (cdr (cdr (cdr names)))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr names))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr names)))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr names))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names)))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names)))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names))))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names)))))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names))))))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names)))))))))))))))) t
+        (id name (car (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr (cdr names))))))))))))))))) t
+        (wasm-bootstrap-bound name (wasm-bootstrap-next names)))
+      nil))

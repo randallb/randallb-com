@@ -1,0 +1,55 @@
+(def litnum (r (o i srzero))
+  (list 'lit 'num r i))
+
+(def number (x)
+  (let r (fn (y)
+           (match y (list [in _ '+ '-] proper proper)))
+    (match x `(lit num ,r ,r))))
+
+(set numr car:cddr
+     numi cadr:cddr)
+
+(set rpart litnum:numr
+     ipart litnum:numi)
+
+(def real (x)
+  (and (number x) (= (numi x) srzero)))
+
+(def inv (x)
+  (litnum (srinv:numr x) (srinv:numi x)))
+
+(def abs (x)
+  (litnum (cons '+ (cdr (numr x)))))
+
+(def simplify ((s n d))
+  (if (= n i0) (list '+ n i1)
+      (= n d)  (list s i1 i1)
+               (let g (apply i* ((of common factor) n d))
+                 (list s (car:i/ n g) (car:i/ d g)))))
+
+(def factor (x (o d i2))
+  (if (i< x d)
+      nil
+      (let (q r) (i/ x d)
+        (if (= r i0)
+            (cons d (factor q d))
+            (factor x (i+ d i1))))))
+
+(def common (xs ys)
+  (if (in nil xs ys)
+      nil
+      (let (a b) (split (is (car xs)) ys)
+        (if b
+            (cons (car xs)
+                  (common (cdr xs) (append a (cdr b))))
+            (common (cdr xs) ys)))))
+
+(set buildnum (of litnum simplify))
+
+(def recip (x)
+  (with (r (numr x)
+         i (numi x))
+    (let d (sr+ (sr* r r) (sr* i i))
+      (buildnum (sr/ r d)
+                (sr/ (srinv i) d)))))
+

@@ -1,0 +1,55 @@
+(def prnum (r i s)
+  (unless (and (= r srzero) (~= i srzero))
+    (if (caris r '-) (prc \- s))
+    (map [prc _ s] (rrep (cdr r))))
+  (unless (= i srzero)
+    (print (car i) s)
+    (unless (apply = (cdr i))
+      (map [prc _ s] (rrep (cdr i))))
+    (prc \i s)))
+
+(def rrep ((n d) (o base i10))
+  (append (irep n base)
+          (if (= d i1) nil (cons \/ (irep d base)))))
+
+(def irep (x base)
+  (if (i< x base)
+      (list (intchar x))
+      (let (q r) (i/ x base)
+        (snoc (irep q base) (intchar r)))))
+
+(def intchar (x)
+  (car (udrop x "0123456789abcdef")))
+
+(def prpair (x s names hist)
+  (prc \( s)
+  (do1 (prelts x s names hist)
+       (prc \) s)))
+
+(def prelts ((x . rest) s names hist)
+  (let newhist (print x s names hist)
+    (if (or (and rest (simple rest))
+            (ustring rest names)
+            (get rest names id))
+        (do (map [prc _ s] " . ")
+            (print rest s names newhist))
+        (if rest
+            (do (prc \sp s)
+                (prelts rest s names newhist))
+            newhist))))
+
+(def prn args
+  (map [do (print _) (prc \sp)] args)
+  (prc \lf)
+  (last args))
+
+(def pr args
+  (map prnice args))
+
+(def prnice (x (o s outs))
+  (pcase x
+    char   (prc x s)
+    string (map [prc _ s] x)
+           (print x s nil))
+  x)
+

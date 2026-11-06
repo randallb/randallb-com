@@ -1,0 +1,60 @@
+(def print (x (o s outs) (o names (namedups x)) (o hist))
+  (aif (simple x)        (do (prsimple x s) hist)
+       (ustring x names) (prstring x s names hist)
+       (get x names id)  (do (prc \# s)
+                             (print (cdr it) s)
+                             (if (mem x hist id)
+                                 hist
+                                 (do (prc \= s)
+                                     (if (ustring (cdr x) names)
+                                         (prstring x s names (cons x hist))
+                                         (prpair x s names (cons x hist))))))
+                         (prpair x s names hist)))
+
+(def namedups (x (o n 0))
+  (map [cons _ (++ n)] (dups (cells x) id)))
+
+(def cells (x (o seen))
+  (if (simple x)      seen
+      (mem x seen id) (snoc seen x)
+                      (cells (cdr x)
+                             (cells (car x) (snoc seen x)))))
+
+(def prc (c (o s outs))
+  (if (atom s)
+      (aif (get c chars)
+           (map [wrb _ s] (cdr it))
+           (err 'unknown char))
+      (enq c s))
+  c)
+
+(def ustring (x names)
+  (and x (string x) (~tail [get _ names id] x)))
+
+(def prstring (x s names hist)
+  (prc \" s)
+  (presc x \" s)
+  (prc \" s)
+  hist)
+
+(def presc (cs esc s)
+  (map (fn (c)
+         (if (in c esc \\) (prc \\ s))
+         (prc c s))
+       cs))
+
+(def prsimple (x s)
+  (pcase x
+    symbol (prsymbol x s)
+    char   (do (prc \\ s) (prc x s))
+    stream (map [prc _ s] "<stream>")
+    number (prnum (numr x) (numi x) s)
+           (err 'cannot-print)))
+
+(def prsymbol (x s)
+  (let cs (nom x)
+    (let odd (~= (saferead (list cs)) x)
+      (if odd (prc \¦ s))
+      (presc cs \¦ s)
+      (if odd (prc \¦ s)))))
+

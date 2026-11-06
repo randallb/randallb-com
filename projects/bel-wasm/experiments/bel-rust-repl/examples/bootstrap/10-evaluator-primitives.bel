@@ -1,0 +1,52 @@
+(def okenv (a)
+  (and (proper a) (all pair a)))
+
+(def okstack (s)
+  (and (proper s)
+       (all [and (proper _) (cdr _) (okenv (cadr _))]
+            s)))
+
+(def okparms (p)
+  (if (no p)       t
+      (variable p) t
+      (atom p)     nil
+      (caris p t)  (oktoparm p)
+                   (and (if (caris (car p) o)
+                            (oktoparm (car p))
+                            (okparms (car p)))
+                        (okparms (cdr p)))))
+
+(def oktoparm ((tag (o var) (o e) . extra))
+  (and (okparms var) (or (= tag o) e) (no extra)))
+
+(set prims '((id join xar xdr wrb ops)
+             (car cdr type sym nom rdb cls stat sys)
+             (coin)))
+
+(def applyprim (f args s r m)
+  (aif (some [mem f _] prims)
+       (if (udrop (cdr it) args)
+           (sigerr 'overargs s r m)
+           (with (a (car args)
+                  b (cadr args))
+             (eif v (case f
+                      id   (id a b)
+                      join (join a b)
+                      car  (car a)
+                      cdr  (cdr a)
+                      type (type a)
+                      xar  (xar a b)
+                      xdr  (xdr a b)
+                      sym  (sym a)
+                      nom  (nom a)
+                      wrb  (wrb a b)
+                      rdb  (rdb a)
+                      ops  (ops a b)
+                      cls  (cls a)
+                      stat (stat a)
+                      coin (coin)
+                      sys  (sys a))
+                    (sigerr v s r m)
+                    (mev s (cons v r) m))))
+       (sigerr 'unknown-prim s r m)))
+

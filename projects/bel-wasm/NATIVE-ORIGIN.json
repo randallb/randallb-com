@@ -1,0 +1,78 @@
+{
+  "description": "Recovered previously developed native and self-hosting pipeline from the connected randallb.com site source export; maintained here from this point. Original bootstrap pins and ORIGIN remain unchanged.",
+  "date": "2026-11-05",
+  "source": "randallb.com/Projects/Launch/Website/projects/bel-wasm/source",
+  "files": [
+    {
+      "path": "experiments/bel-rust-repl/src/eval.rs",
+      "sha256": "a8380469219e35c4a364a9e2212cbaf7235d4748ca3e1b77e0cfc649971961e1"
+    },
+    {
+      "path": "experiments/bel-rust-repl/src/bin/bel-eval-text.rs",
+      "sha256": "8c0294426c1351a94a9442a2a734e6f705a1f7b31f591645b29ed1fd7f8c459f"
+    },
+    {
+      "path": "experiments/bel-rust-repl/src/bin/bel-read-json.rs",
+      "sha256": "8dcd07fa6521b661c7c161f405010f05e694ef6d0d5ce440eabd830d135b1ec8"
+    },
+    {
+      "path": "experiments/bel-rust-repl/tests/text_output.rs",
+      "sha256": "10695db912528624e2836a5a828cd29cd12dc9c95730a499b57502806956e860"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/SELFHOST.md",
+      "sha256": "0c585a1b81806d297910f761aa562ee27e8250d6b4d1d98c1060c0769944a37d"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/self-compile.py",
+      "sha256": "e23c3e21c9c5e2e0d826398cbe682a141d7734d2975bcb3ddd3018f49125b607"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/self-compiler.bel",
+      "sha256": "31c3eeea890e2034be2c8e1cdde39e0a62cf6445c9502545d26afabb67bf5a57"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/self-wat.mjs",
+      "sha256": "fe7e155f39f5c27965389ff113fb305c57b90f2d4e8c5d402f1cbaa20a37db2e"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/verify-selfhost.py",
+      "sha256": "c16d27e6a127f36567e8e798d1bf3ff095d1b830b262359ded7ef6576066aa2a"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/filter-main.c",
+      "sha256": "ecb0d071a492860ce1424fb8719658e94db2089496595f44a068d55ee55bfb53"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/setup-runtime.py",
+      "sha256": "80565bc8e01f6ca3a997abfa6185074ceedbcfb71102c13ba4867e847e7584b5"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/README.md",
+      "sha256": "ed6f98650ba05306d66659a3af54ea08c926e614f4e9cdcfa6ae8e7a69aa9dec"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/uppercase.bel",
+      "sha256": "a44a299eb0b11a36ffd816340f46fea1e4f7f849f2e1af021eef0f13bd8568fe"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/verify-native.py",
+      "sha256": "55e208ce38a924af7b9d5a91492fb639fe2c84b506bb7543c009f9688c797bfb"
+    },
+    {
+      "path": "experiments/bel-rust-repl/wasm/native/build-native.py",
+      "sha256": "704cb6d65ff24c460f67a3d3a1e4c8f8b32b9ba6b36c335f2c523694d7365175"
+    }
+  ],
+  "adaptations": [
+    "Native builder defaults to Apple clang on macOS to avoid non-system dylibs.",
+    "Native verifier checks macOS architecture and system-only dylib dependencies.",
+    "literate/unix-filter.rbel.md and literate/build-native.py establish the maintained literate native example.",
+    "Extended self-compiler.bel with fixed-arity function values, generated dispatch, lexical capture, and multi-branch if.",
+    "Native builder accepts a generic value adapter and suppresses unused-but-set locals in wasm2c output.",
+    "Foundation native verifier and foundation-based literate filter establish higher-order compilation.",
+    "Native command with a reader written in literate rbel, sym primitive, compiled example checks, C I/O/process orchestration, and native WABT tools.",
+    "Native command relocation, native-seed rebuild, source-reading parity, failure cleanup, and interpreter-free installed build verification.",
+    "November 6: authored rbel documentation renamed to lowercase; references and generated bundle docs updated. Imported source record paths above retain their original spelling."
+  ]
+}

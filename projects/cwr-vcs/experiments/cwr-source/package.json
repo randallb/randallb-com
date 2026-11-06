@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scenario": "node scenario.mjs",
+    "test": "node --test scenario.test.mjs",
+    "web": "node web.mjs"
+  },
+  "dependencies": {
+    "corestore": "7.12.0",
+    "hyperdrive": "11.13.4"
+  }
+}

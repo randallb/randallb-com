@@ -1,0 +1,72 @@
+(set source (cor no stream (cand pair string:car)))
+
+(def read ((o s|source ins) (o (t base [<= 2 _ 16]) 10) (o eof))
+  (car (rdex s (srnum:numr base) eof)))
+
+(def saferead ((o s ins) (o alt) (o base 10))
+  (onerr alt (read s base alt)))
+
+(def rdex ((o s ins) (o base i10) (o eof) (o share))
+  (eatwhite s)
+  (let c (rdc s)
+    (aif (no c)         (list eof share)
+         (get c syntax) ((cdr it) s base share)
+                        (list (rdword s c base) share))))
+
+(def eatwhite (s)
+  (pcase (peek s)
+    whitec  (do (rdc s)
+                (eatwhite s))
+    (is \;) (do (charstil s (is \lf))
+                (eatwhite s))))
+
+(def charstil (s f)
+  (if ((cor no f) (peek s))
+      nil
+      (cons (rdc s) (charstil s f))))
+
+(set syntax nil)
+
+(mac syn (c . rest)
+  `(set syntax (put ,c (fn ,@rest) syntax)))
+
+(syn \( (s base share)
+  (rdlist s \) base share))
+
+(syn \) args
+  (err 'unexpected-terminator))
+
+(syn \[ (s base share)
+  (let (e newshare) (rdlist s \] base share)
+    (list (list 'fn '(_) e) newshare)))
+
+(syn \] args
+  (err 'unexpected-terminator))
+
+(def rdlist (s term base share (o acc))
+  (eatwhite s)
+  (pcase (peek s)
+    no        (err 'unterminated-list)
+    (is \.)   (do (rdc s) (rddot s term base share acc))
+    (is term) (do (rdc s) (list acc share))
+              (let (e newshare) (rdex s base nil share)
+                (rdlist s term base newshare (snoc acc e)))))
+
+(def rddot (s term base share acc)
+  (pcase (peek s)
+    no     (err 'unterminated-list)
+    breakc (if (no acc)
+               (err 'missing-car)
+               (let (e newshare) (hard-rdex s base share 'missing-cdr)
+                 (if (car (rdlist s term base share))
+                     (err 'duplicate-cdr)
+                     (list (apply cons (snoc acc e))
+                           newshare))))
+           (rdlist s term base share (snoc acc (rdword s \. base)))))
+
+(def hard-rdex (s base share msg)
+  (let eof (join)
+    (let v (rdex s base eof share)
+      (if (id (car v) eof) (err msg) v))))
+
+(set namecs '((bel . \bel) (tab . \tab) (lf . \lf) (cr . \cr) (sp . \sp)))

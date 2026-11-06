@@ -1,0 +1,83 @@
+; This is a compiler component, itself compiled by --lists to Wasm.
+; It accepts a runtime syntax tree and returns a tree of WAT characters.
+(def emit-program (source)
+  (if (emit-three source)
+      (if (id (car source) 'fn)
+          (if (emit-one (car (cdr source)))
+              (emit-function (car (cdr (cdr source))) (car (car (cdr source))))
+              (emit-reject))
+          (emit-reject))
+      (emit-reject)))
+
+(def emit-reject () (err 'unsupported-emitter-source))
+
+(def emit-one (xs)
+  (if (id (type xs) 'pair) (if (cdr xs) nil t) nil))
+
+(def emit-two (xs)
+  (if (id (type xs) 'pair) (emit-one (cdr xs)) nil))
+
+(def emit-three (xs)
+  (if (id (type xs) 'pair) (emit-two (cdr xs)) nil))
+
+(def emit-four (xs)
+  (if (id (type xs) 'pair) (emit-three (cdr xs)) nil))
+
+(def emit-member (x xs)
+  (if xs (if (id x (car xs)) t (emit-member x (cdr xs))) nil))
+
+(def emit-name-chars (xs)
+  (if xs
+      (if (emit-member (car xs) "abcdefghijklmnopqrstuvwxyz-")
+          (emit-name-chars (cdr xs))
+          (emit-reject))
+      t))
+
+(def emit-name (parameter)
+  (if (id (type parameter) 'symbol)
+      (if (id parameter nil) (emit-reject)
+          (if (id parameter t) (emit-reject)
+              (if (id parameter 'o) (emit-reject)
+                  (if (id parameter 'apply) (emit-reject)
+                      (emit-nonempty-name (nom parameter))))))
+      (emit-reject)))
+
+(def emit-nonempty-name (text)
+  (if text (if (emit-name-chars text) text (emit-reject)) (emit-reject)))
+
+(def emit-function (body parameter)
+  (join "(module (func (export \"choose\") (param $"
+    (join (emit-name parameter)
+      (join " i32) (result i32) "
+        (join (emit-expr body parameter) (join "))" nil))))))
+
+(def emit-expr (source parameter)
+  (if (id source nil) "(i32.const 0)"
+      (if (id source t) "(i32.const 1)"
+          (if (id source parameter)
+              (join "(local.get $" (join (nom parameter) (join ")" nil)))
+              (emit-compound source parameter)))))
+
+(def emit-compound (source parameter)
+  (if (emit-two source)
+      (if (id (car source) 'quote)
+          (emit-quote (car (cdr source)))
+          (emit-conditional source parameter))
+      (emit-conditional source parameter)))
+
+(def emit-quote (value)
+  (if (id value nil) "(i32.const 0)"
+      (if (id value t) "(i32.const 1)" (emit-reject))))
+
+(def emit-conditional (source parameter)
+  (if (emit-four source)
+      (if (id (car source) 'if)
+          (join "(if (result i32) "
+            (join (emit-expr (car (cdr source)) parameter)
+              (join " (then "
+                (join (emit-expr (car (cdr (cdr source))) parameter)
+                  (join ") (else "
+                    (join (emit-expr (car (cdr (cdr (cdr source)))) parameter)
+                      (join "))" nil)))))))
+          (emit-reject))
+      (emit-reject)))

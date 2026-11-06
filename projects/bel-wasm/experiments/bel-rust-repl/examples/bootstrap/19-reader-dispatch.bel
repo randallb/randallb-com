@@ -1,0 +1,64 @@
+
+(syn \\ (s base share)
+  (list (pcase (peek s)
+          no     (err 'escape-without-char)
+          breakc (rdc s)
+                 (let cs (charstil s breakc)
+                   (if (cdr cs)
+                       (aif (get (sym cs) namecs)
+                            (cdr it)
+                            (err 'unknown-named-char))
+                       (car cs))))
+        share))
+
+(syn \' (s base share)
+  (rdwrap s 'quote base share))
+
+(syn \` (s base share)
+  (rdwrap s 'bquote base share))
+
+(syn \, (s base share)
+  (case (peek s)
+    \@ (do (rdc s)
+           (rdwrap s 'comma-at base share))
+       (rdwrap s 'comma base share)))
+
+(def rdwrap (s token base share)
+  (let (e newshare) (hard-rdex s base share 'missing-expression)
+    (list (list token e) newshare)))
+
+(syn \" (s base share)
+  (list (rddelim s \") share))
+
+(syn \¦ (s base share)
+  (list (sym (rddelim s \¦)) share))
+
+(def rddelim (s d (o esc))
+  (let c (rdc s)
+    (if (no c)   (err 'missing-delimiter)
+        esc      (cons c (rddelim s d))
+        (= c \\) (rddelim s d t)
+        (= c d)  nil
+                 (cons c (rddelim s d)))))
+
+(syn \# (s base share)
+  (let name (charstil s ~digit)
+    (if (= (peek s) \=)
+        (do (rdc s)
+            (rdtarget s base name (join) share))
+        (aif (get name share)
+             (list (cdr it) share)
+             (err 'unknown-label)))))
+
+(def rdtarget (s base name cell oldshare)
+  (withs (share        (cons (cons name cell) oldshare)
+          (e newshare) (hard-rdex s base share 'missing-target))
+    (if (simple e)
+        (err 'bad-target)
+        (do (xar cell (car e))
+            (xdr cell (cdr e))
+            (list cell newshare)))))
+
+(def rdword (s c base)
+  (parseword (cons c (charstil s breakc)) base))
+

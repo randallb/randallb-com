@@ -1,0 +1,68 @@
+(def floor (x|real)
+  (let (s n d) (numr x)
+    (let (f m) (i/ n d)
+      (litnum (list s
+                    (i+ f (if (or (= s '+) (= m i0))
+                              i0
+                              i1))
+                    i1)))))
+
+(set ceil -:floor:-)
+
+(def mod (x y)
+  (* (- (/ x y) (floor (/ x y)))
+     y))
+
+(mac whilet (var expr . body)
+  (letu (vf vp)
+    `((rfn ,vf (,vp)
+        (whenlet ,var ,vp ,@body (,vf ,expr)))
+      ,expr)))
+
+(mac loop (var init update test . body)
+  (letu v
+    `((rfn ,v (,var)
+        (when ,test ,@body (,v ,update)))
+      ,init)))
+
+(mac while (expr . body)
+  (letu v
+    `(loop ,v ,expr ,expr ,v ,@body)))
+
+(mac til (var expr test . body)
+  `(loop ,var ,expr ,expr (no ,test)
+     ,@body))
+
+(mac for (var init max . body)
+  (letu (vi vm)
+    `(with (,vi ,init
+            ,vm ,max)
+       (loop ,var ,vi (+ ,var 1) (<= ,var ,vm)
+         ,@body))))
+
+(mac repeat (n . body)
+  `(for ,(uvar) 1 ,n ,@body))
+
+(mac poll (expr f)
+  (letu (vr ve vf)
+    `((rfn ,vr (,ve ,vf)
+        (if (,vf ,ve) ,ve (,vr ,expr ,vf)))
+      ,expr
+      ,f)))
+
+(mac accum (var . body)
+  (letu v
+    `(withs (,v   nil
+             ,var [push _ ,v])
+       ,@body
+       (rev ,v))))
+
+(mac nof (n expr)
+  (letu v
+    `(accum ,v (repeat ,n (,v ,expr)))))
+
+(mac drain (expr (o f 'no))
+  (letu v
+    `(accum ,v
+       (poll ,expr (cor ,f (compose no ,v))))))
+
