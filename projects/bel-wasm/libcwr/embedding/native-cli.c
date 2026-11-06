@@ -271,6 +271,7 @@ static int split_line(char *line, char **words, int limit) {
   }
   return count;
 }
+static int cli_command(int argc, char **argv, char *selection);
 static int repl_main(const char *directory) {
   const size_t bound = CLI_TEXT_LIMIT + 4096u;
   char *line = malloc(bound + 1);
@@ -329,17 +330,14 @@ static int repl_main(const char *directory) {
     for (int i = 1; i < count; i++) args[argc++] = words[i];
     args[argc++] = "--directory";
     args[argc++] = (char *)directory;
-    int status = cli_main(argc, args);
-    if (!status && count == 3 && !strcmp(words[0], "conversation") && !strcmp(words[1], "create")) {
-      snprintf(selected, sizeof(selected), "%s", words[2]);
-    }
+    cli_command(argc, args, selected);
     if (!strcmp(words[0], "artifact")) putchar('\n');
     if (fflush(stdout) || ferror(stdout)) { result = 1; break; }
   }
   free(line);
   return result;
 }
-int cli_main(int argc, char **argv) {
+static int cli_command(int argc, char **argv, char *selection) {
   if (argc == 1 && isatty(STDIN_FILENO)) return repl_main(".libcwr");
   jmp_buf top;
   jmp_buf *previous = v_handler;
@@ -526,7 +524,12 @@ int cli_main(int argc, char **argv) {
     v_fail("command output failed");
   }
   status = successful(code) ? 0 : 1;
+  if (selection && is_create && (!strcmp(code, "created") || !strcmp(code, "existing"))) {
+    snprintf(selection, 65, "%s", words[2]);
+  }
   host_close();
   v_handler = previous;
   return status;
 }
+
+int cli_main(int argc, char **argv) { return cli_command(argc, argv, NULL); }

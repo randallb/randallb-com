@@ -226,7 +226,13 @@ artifact first
 use missing
 submit kept-selection --text "still in notes"
 run kept-selection
+conversation create other --json
+submit json-selected --text 'selected by JSON create'
+conversation create --help
+submit help-preserved --text 'help keeps other selected'
+use notes
 conversation create other
+submit existing-selected --text 'selected by existing create'
 use notes
 submit quoted --text "literal $(touch SENTINEL); `touch SENTINEL`"
 run quoted
@@ -252,6 +258,14 @@ conversation create after-quit
                   'completed' in session.stdout and 'hello from one ongoing session' in session.stdout)
             check('repl-selected-conversation-persists-after-failed-use',
                   run('artifact', 'kept-selection', state=repl_workspace).stdout == 'still in notes')
+            for invocation, description in [
+                ('json-selected', 'json-create-selects-conversation'),
+                ('help-preserved', 'create-help-preserves-conversation'),
+                ('existing-selected', 'existing-create-selects-conversation'),
+            ]:
+                selected = machine('show', invocation, state=repl_workspace)
+                check('repl-' + description, selected['code'] == 'found' and
+                      record(selected['value'])['conversation'].endswith('/conversations/other'))
             check('repl-quotes-do-not-execute-shell', not (root / 'SENTINEL').exists() and
                   run('artifact', 'quoted', state=repl_workspace).stdout == 'literal $(touch SENTINEL); `touch SENTINEL`')
             check('repl-backslash-escaping-and-empty-quoted-text',
