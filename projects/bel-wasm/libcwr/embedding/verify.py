@@ -38,8 +38,23 @@ def main():
         print('PASS', name, flush=True)
     try:
         manifest = json.loads((package / 'manifest.json').read_text())
+        # Require the complete maintained input set, not just self-consistent artifacts.
+        input_names = {
+            'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
+            'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
+            *['libcwr/embedding/' + name for name in [
+                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'core.mjs',
+                'host.cjs', 'native-main.cjs', 'readme.md', 'native-build.md',
+                'example-context.json', 'example-events.jsonl']],
+        }
+        def inputs_current():
+            return set(manifest['inputs']) == input_names and all(
+                sha(ROOT / name) == digest for name, digest in manifest['inputs'].items())
+        check('maintained-input-correspondence', inputs_current())
         check('source-correspondence', manifest['source_sha256'] == report['source_sha256'])
         check('packaged-file-integrity', all(sha(package / name) == digest for name, digest in manifest['files'].items()))
+        subprocess.run([sys.executable, str(HERE / 'regressions.py'), '--package', str(package)], check=True, timeout=60)
+        check('packaging-regressions', True)
         native = json.loads((package / 'libcwr.json').read_text())
         check('native-core-and-executable-integrity', sha(package / 'core.wasm') == native['core_wasm_sha256'] and sha(executable) == native['executable_sha256'])
         check('native-module-correspondence', all(sha(package / name.removeprefix('./')) == digest for name, digest in native['module_sha256'].items()))
@@ -157,6 +172,7 @@ if(!closed) throw Error('closed core');
                     process.kill(); process.communicate(timeout=5)
             license_run = subprocess.run([str(standalone), '--runtime-license'], capture_output=True, env=env, timeout=30)
             check('embedded-runtime-license', license_run.returncode == 0 and license_run.stdout == (package / 'libcwr.node-license.txt').read_bytes())
+        check('maintained-inputs-remain-current', inputs_current())
         check('source-remains-current', report['source_sha256'] == sha(ROOT / 'libcwr/workflow.rbel.md'))
         report['passed'] = True
     except Exception as error:

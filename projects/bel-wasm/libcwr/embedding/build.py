@@ -34,6 +34,8 @@ def main():
     source = ROOT / 'libcwr/workflow.rbel.md'
     inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', HERE / 'native-main.cjs',
               ROOT / 'literate/wasm-values.mjs', ROOT / 'literate/test.py', Path(__file__).resolve(),
+              HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py',
+              *[ROOT / name for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']],
               *[HERE / name for name in ['readme.md', 'native-build.md', 'example-context.json', 'example-events.jsonl']]]
     snapshots = {p: p.read_bytes() for p in inputs}
     spec = importlib.util.spec_from_file_location('literate_tests', ROOT / 'literate/test.py')
@@ -70,7 +72,7 @@ def main():
             (staging / name).write_bytes(snapshots[HERE / name])
         # Source attribution and redistribution notices accompany both products.
         for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']:
-            shutil.copy2(ROOT / name, staging / name)
+            (staging / name).write_bytes(snapshots[ROOT / name])
         (staging / 'workflow.rbel.md').write_bytes(snapshots[source])
         for name in ['readme.md', 'native-build.md', 'example-context.json', 'example-events.jsonl']:
             (staging / name).write_bytes(snapshots[HERE / name])
