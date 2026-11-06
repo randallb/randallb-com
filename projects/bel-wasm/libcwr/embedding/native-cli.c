@@ -1,0 +1,532 @@
+/* Readable local commands over the same compiled protocol and owning host. */
+#include "native-host.h"
+#include "build-info.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <ctype.h>
+
+#define CLI_TEXT_LIMIT (256u * 1024u)
+static V *at(V *value, size_t index) {
+  return value && value->type == VT_ARRAY && index < value->n ? value->items[index] : NULL;
+}
+static void field(V *record, const char *key, V *value) {
+  V *entry = v_array();
+  v_push(entry, v_string(key));
+  v_push(entry, value);
+  v_push(record, entry);
+}
+static V *event(const char *operation) {
+  V *value = v_array();
+  field(value, "op", v_string(operation));
+  return value;
+}
+static void help(void) {
+  puts("libcwr - a local, inspectable conversation/action runtime\n"
+       "\n"
+       "  repl [--directory DIR]            Start an interactive session\n"
+       "  (no arguments on a terminal also starts the REPL)\n"
+       "  Inside: use NAME, submit INVOCATION --text TEXT, history, exit\n"
+       "  Quotes and backslashes group text; no shell expansion.\n"
+       "\n"
+       "Commands (workspace defaults to .libcwr):\n"
+       "  init                              Create a new local demo workspace\n"
+       "  conversation create NAME          Create a conversation\n"
+       "  submit CONVERSATION INVOCATION --text TEXT\n"
+       "                                    Admit a text action without running it\n"
+       "  run INVOCATION                    Run the admitted action\n"
+       "  show INVOCATION                   Inspect input, phase and result\n"
+       "  list conversations|invocations    List visible work\n"
+       "  status                            Show workspace progress\n"
+       "  history CONVERSATION              Read conversation messages\n"
+       "  artifact INVOCATION               Print its local output text\n"
+       "  reconcile INVOCATION              Check its bound execution receipt\n"
+       "  recover                           Recover and inspect interrupted work\n"
+       "  version, --version                Show build and protocol-core hashes\n"
+       "\n"
+       "Options after a command: --directory DIR, --json, --help\n"
+       "Names: 1-64 ASCII letters, digits, hyphens or underscores.\n"
+       "\n"
+       "Try it:\n"
+       "  libcwr init --directory ./trial\n"
+       "  libcwr conversation create notes --directory ./trial\n"
+       "  libcwr submit notes first --text 'hello, libcwr' --directory ./trial\n"
+       "  libcwr run first --directory ./trial\n"
+       "  libcwr status --directory ./trial\n"
+       "  libcwr artifact first --directory ./trial\n"
+       "\n"
+       "This version runs the deterministic local store--text action.\n"
+       "No model/provider or network service is connected. Repeated run of a\n"
+       "completed invocation returns its retained result without repeating it.\n"
+       "Recovery does not assume a missing receipt means execution never happened.\n"
+       "Keep the workspace context.json private: it is trusted host configuration.\n"
+       "\n"
+       "Developer transport remains available:\n"
+       "  libcwr --directory STATE --context TRUSTED.json < events.jsonl");
+}
+static void valid_name(const char *name) {
+  size_t n = strlen(name);
+  if (n < 1 || n > 64) {
+    v_fail("names require 1-64 ASCII letters, digits, hyphens or underscores");
+  }
+  for (size_t i = 0; i < n; i++) {
+    unsigned char c = (unsigned char)name[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '-' || c == '_')) {
+      v_fail("names require 1-64 ASCII letters, digits, hyphens or underscores");
+    }
+  }
+}
+static V *reference(const char *kind, const char *name) {
+  valid_name(name);
+  V *context = v_record_get(host_environment(), "context");
+  if (!context || context->type != VT_STRING || memchr(context->s, 0, context->n)) {
+    v_fail("workspace context must be a nonempty text reference");
+  }
+  size_t n = context->n + strlen(kind) + strlen(name) + 3;
+  char *text = v_alloc(n);
+  snprintf(text, n, "%s/%s/%s", context->s, kind, name);
+  return v_string(text);
+}
+static const char *display_name(V *reference_value) {
+  if (!reference_value || reference_value->type != VT_STRING ||
+      memchr(reference_value->s, 0, reference_value->n)) {
+    return "?";
+  }
+  const char *tail = strrchr(reference_value->s, '/');
+  return tail ? tail + 1 : reference_value->s;
+}
+static const char *phase(V *record) {
+  V *value = v_record_get(record, "phase");
+  return value && value->type == VT_STRING ? value->s : "?";
+}
+static V *read_record(const char *kind, V *ref) {
+  V *request = event("read");
+  field(request, "kind", v_string(kind));
+  field(request, "ref", ref);
+  return host_event(request);
+}
+static V *visible_records(const char *kind, const char *collection) {
+  V *records = v_record_get(host_state(), collection);
+  V *visible = v_array();
+  if (records && records->type != VT_ARRAY) {
+    v_fail("invalid local record collection");
+  }
+  for (size_t i = 0; records && i < records->n; i++) {
+    V *ref = v_record_get(records->items[i], "ref");
+    V *response = read_record(kind, ref);
+    if (v_isstr(at(response, 0), "found")) {
+      v_push(visible, at(response, 1));
+    }
+  }
+  return visible;
+}
+static V *overview(void) {
+  V *result = v_object();
+  v_put(result, "revision", v_string(LIBCWR_BUILD_REVISION));
+  v_put(result, "core_sha256", v_string(LIBCWR_CORE_SHA256));
+  v_put(result, "context", v_record_get(host_environment(), "context"));
+  v_put(result, "conversations", visible_records("conversation", "conversations"));
+  v_put(result, "invocations", visible_records("invocation", "invocations"));
+  return result;
+}
+static int successful(const char *code) {
+  const char *codes[] = {"created", "existing", "admitted", "running", "completed", "found",
+                         "ok", "initialized", "recovered", "not-uncertain", "retry-ready"};
+  for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+    if (!strcmp(code, codes[i])) {
+      return 1;
+    }
+  }
+  return 0;
+}
+static void print_invocation(V *record, int detail) {
+  printf("%s  %s", display_name(v_record_get(record, "ref")), phase(record));
+  if (v_record_get(record, "uncertain")) {
+    fputs("  (uncertain; reconcile before retry)", stdout);
+  }
+  putchar('\n');
+  if (detail) {
+    printf("  Conversation: %s\n", display_name(v_record_get(record, "conversation")));
+    printf("  Input: %s\n", v_json(v_string(v_text(v_record_get(record, "input")))));
+    V *result = v_record_get(record, "result");
+    if (result) {
+      printf("  Result: %s\n", v_json(v_string(v_text(result))));
+    }
+  }
+}
+static void print_records(V *records, int invocations) {
+  if (!records || records->type != VT_ARRAY || !records->n) {
+    puts("  (none)");
+    return;
+  }
+  for (size_t i = 0; i < records->n; i++) {
+    if (invocations) {
+      print_invocation(records->items[i], 0);
+    } else {
+      printf("%s\n", display_name(v_record_get(records->items[i], "ref")));
+    }
+  }
+}
+static void output(const char *command, const char *code, V *value, int json) {
+  if (json) {
+    V *response = v_object();
+    v_put(response, "command", v_string(command));
+    v_put(response, "code", v_string(code));
+    v_put(response, "value", value);
+    puts(v_json(response));
+    return;
+  }
+  if (!successful(code)) {
+    printf("%s: %s\n", command, code);
+    return;
+  }
+  if (!strcmp(command, "version")) {
+    printf("libcwr %s\nCore SHA256: %s\n", LIBCWR_BUILD_REVISION, LIBCWR_CORE_SHA256);
+  } else if (!strcmp(command, "init")) {
+    V *directory = v_get(value, "directory");
+    printf("Initialized local demo workspace: %s\nAction: store--text (local text file; no provider)\n",
+           directory->s);
+    puts("Next: libcwr conversation create notes --directory DIR");
+  } else if (!strcmp(command, "conversation create")) {
+    printf("Conversation %s: %s\n", display_name(v_record_get(value, "ref")), code);
+  } else if (!strcmp(command, "submit") || !strcmp(command, "run") ||
+             !strcmp(command, "show") || !strcmp(command, "reconcile")) {
+    printf("%s: %s\n", command, code);
+    print_invocation(value, 1);
+  } else if (!strcmp(command, "list conversations")) {
+    print_records(value, 0);
+  } else if (!strcmp(command, "list invocations")) {
+    print_records(value, 1);
+  } else if (!strcmp(command, "status") || !strcmp(command, "recover")) {
+    if (!strcmp(command, "recover")) {
+      puts("Recovery checked; uncertain actions are not automatically repeated.");
+    }
+    printf("Build: %s\nConversations:\n", LIBCWR_BUILD_REVISION);
+    print_records(v_get(value, "conversations"), 0);
+    puts("Invocations:");
+    print_records(v_get(value, "invocations"), 1);
+  } else if (!strcmp(command, "history")) {
+    if (!value || value->type != VT_ARRAY || !value->n) {
+      puts("No messages.");
+    } else {
+      for (size_t i = 0; i < value->n; i++) {
+        V *message = value->items[i];
+        printf("%s: %s\n", display_name(v_record_get(message, "ref")),
+               v_json(v_string(v_text(v_record_get(message, "text")))));
+      }
+    }
+  } else if (!strcmp(command, "artifact")) {
+    if (value && value->type == VT_STRING) {
+      if (fwrite(value->s, 1, value->n, stdout) != value->n) {
+        v_fail("artifact output failed");
+      }
+    }
+  }
+}
+/* REPL storage is independent of the per-command value arena. */
+static int select_conversation(const char *directory, const char *name) {
+  jmp_buf top;
+  jmp_buf *previous = v_handler;
+  v_handler = &top;
+  if (setjmp(top)) {
+    fprintf(stderr, "libcwr: %s\n", v_error);
+    host_close();
+    v_handler = previous;
+    return 1;
+  }
+  host_open(directory, NULL);
+  V *reply = read_record("conversation", reference("conversations", name));
+  int ok = v_isstr(at(reply, 0), "found");
+  if (!ok) fprintf(stderr, "use: conversation unavailable\n");
+  host_close();
+  v_handler = previous;
+  return ok ? 0 : 1;
+}
+/* Tokenize without invoking a shell or performing any expansion. */
+static int split_line(char *line, char **words, int limit) {
+  char *read = line, *write = line;
+  int count = 0;
+  while (*read) {
+    while (isspace((unsigned char)*read)) read++;
+    if (!*read) break;
+    if (count == limit) return -1;
+    words[count++] = write;
+    int quote = 0;
+    while (*read) {
+      unsigned char c = (unsigned char)*read++;
+      if (!quote && isspace(c)) break;
+      if (c == '\\' && quote != '\'') {
+        if (!*read) return -1;
+        *write++ = *read++;
+      } else if (c == '\'' || c == '"') {
+        if (!quote) quote = c;
+        else if (quote == c) quote = 0;
+        else *write++ = (char)c;
+      } else *write++ = (char)c;
+    }
+    if (quote) return -1;
+    *write++ = 0;
+  }
+  return count;
+}
+static int repl_main(const char *directory) {
+  const size_t bound = CLI_TEXT_LIMIT + 4096u;
+  char *line = malloc(bound + 1);
+  if (!line) { fputs("libcwr: allocation failed\n", stderr); return 1; }
+  char selected[65] = "";
+  int interactive = isatty(STDIN_FILENO);
+  puts("libcwr REPL. Type help for commands, exit to leave.\n"
+       "Start with init, then conversation create NAME; use NAME selects existing work.");
+  int result = 0;
+  for (;;) {
+    if (interactive) {
+      printf("libcwr[%s]> ", selected[0] ? selected : "-");
+      if (fflush(stdout)) { result = 1; break; }
+    }
+    size_t n = 0;
+    int c, oversized = 0, nul = 0;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+      if (!c) nul = 1;
+      if (n < bound) line[n++] = (char)c;
+      else oversized = 1;
+    }
+    if (ferror(stdin)) { fputs("libcwr: input read failed\n", stderr); result = 1; break; }
+    if (c == EOF && !n && !oversized) break;
+    line[n] = 0;
+    if (oversized || nul) { fputs("libcwr: command exceeds bound or contains NUL\n", stderr); continue; }
+    char *words[20];
+    int count = split_line(line, words, 20);
+    if (count < 0) { fputs("libcwr: unmatched quote, trailing escape, or too many arguments\n", stderr); continue; }
+    if (!count) continue;
+    if ((!strcmp(words[0], "exit") || !strcmp(words[0], "quit")) && count == 1) break;
+    if (!strcmp(words[0], "use") && count == 2) {
+      if (!select_conversation(directory, words[1])) {
+        snprintf(selected, sizeof(selected), "%s", words[1]);
+        printf("Selected conversation: %s\n", selected);
+      }
+      continue;
+    }
+    int forbidden = !strcmp(words[0], "repl");
+    for (int i = 0; i < count; i++) {
+      /* The value after --text is literal, even if it resembles an option. */
+      if (!strcmp(words[i], "--text") && i + 1 < count) { i++; continue; }
+      if (!strcmp(words[i], "--directory") || !strncmp(words[i], "--directory=", 12)) forbidden = 1;
+    }
+    if (forbidden) { fputs("libcwr: workspace is fixed for this session; nested repl is unavailable\n", stderr); continue; }
+    char *args[26];
+    int argc = 0;
+    args[argc++] = "libcwr";
+    args[argc++] = words[0];
+    int shorthand = !strcmp(words[0], "submit") && count >= 2 &&
+                    (count == 2 || words[2][0] == '-');
+    int history = !strcmp(words[0], "history") && (count == 1 || words[1][0] == '-');
+    if (shorthand || history) {
+      if (!selected[0]) { fputs("libcwr: select a conversation with use NAME or conversation create NAME\n", stderr); continue; }
+      args[argc++] = selected;
+    }
+    for (int i = 1; i < count; i++) args[argc++] = words[i];
+    args[argc++] = "--directory";
+    args[argc++] = (char *)directory;
+    int status = cli_main(argc, args);
+    if (!status && count == 3 && !strcmp(words[0], "conversation") && !strcmp(words[1], "create")) {
+      snprintf(selected, sizeof(selected), "%s", words[2]);
+    }
+    if (!strcmp(words[0], "artifact")) putchar('\n');
+    if (fflush(stdout) || ferror(stdout)) { result = 1; break; }
+  }
+  free(line);
+  return result;
+}
+int cli_main(int argc, char **argv) {
+  if (argc == 1 && isatty(STDIN_FILENO)) return repl_main(".libcwr");
+  jmp_buf top;
+  jmp_buf *previous = v_handler;
+  volatile int status = 1;
+  v_handler = &top;
+  if (setjmp(top)) {
+    fprintf(stderr, "libcwr: %s\n", v_error);
+    host_close();
+    v_handler = previous;
+    return status;
+  }
+  const char *directory = ".libcwr";
+  const char *text = NULL;
+  const char *words[8];
+  size_t count = 0;
+  int directory_set = 0, json = 0, show_help = 0;
+  for (int i = 1; i < argc; i++) {
+    const char *arg = argv[i];
+    if (!strcmp(arg, "--directory")) {
+      if (directory_set || i + 1 >= argc || !strncmp(argv[i + 1], "--", 2)) {
+        status = 2;
+        v_fail("--directory requires one directory value");
+      }
+      directory = argv[++i];
+      directory_set = 1;
+    } else if (!strncmp(arg, "--directory=", 12)) {
+      if (directory_set || !arg[12]) {
+        status = 2;
+        v_fail("--directory requires one directory value");
+      }
+      directory = arg + 12;
+      directory_set = 1;
+    } else if (!strcmp(arg, "--text")) {
+      if (text || i + 1 >= argc) {
+        status = 2;
+        v_fail("--text requires one text value");
+      }
+      text = argv[++i];
+    } else if (!strncmp(arg, "--text=", 7)) {
+      if (text) {
+        status = 2;
+        v_fail("duplicate --text");
+      }
+      text = arg + 7;
+    } else if (!strcmp(arg, "--json")) {
+      if (json) {
+        status = 2;
+        v_fail("duplicate --json");
+      }
+      json = 1;
+    } else if (!strcmp(arg, "--help")) {
+      if (show_help) {
+        status = 2;
+        v_fail("duplicate --help");
+      }
+      show_help = 1;
+    } else if (!strcmp(arg, "--version")) {
+      if (count == sizeof(words) / sizeof(words[0])) {
+        status = 2;
+        v_fail("too many command arguments");
+      }
+      words[count++] = "version";
+    } else if (arg[0] == '-') {
+      status = 2;
+      v_fail("unknown option %s", arg);
+    } else {
+      if (count == sizeof(words) / sizeof(words[0])) {
+        status = 2;
+        v_fail("too many command arguments");
+      }
+      words[count++] = arg;
+    }
+  }
+  if (!count || show_help || (count == 1 && !strcmp(words[0], "help"))) {
+    help();
+    host_close();
+    v_handler = previous;
+    return 0;
+  }
+  const char *command = words[0];
+  if (!strcmp(command, "repl")) {
+    if (count != 1 || text || json) {
+      status = 2;
+      v_fail("repl accepts only --directory and --help");
+    }
+    v_handler = previous;
+    return repl_main(directory);
+  }
+  int is_version = !strcmp(command, "version") && count == 1;
+  int is_init = !strcmp(command, "init") && count == 1;
+  int is_create = !strcmp(command, "conversation") && count == 3 && !strcmp(words[1], "create");
+  int is_submit = !strcmp(command, "submit") && count == 3 && text;
+  int is_list = !strcmp(command, "list") && count == 2 &&
+                (!strcmp(words[1], "conversations") || !strcmp(words[1], "invocations"));
+  int is_single = count == 2 && (!strcmp(command, "run") || !strcmp(command, "show") ||
+                  !strcmp(command, "history") || !strcmp(command, "artifact") || !strcmp(command, "reconcile"));
+  int is_overview = count == 1 && (!strcmp(command, "status") || !strcmp(command, "recover"));
+  if (!(is_version || is_init || is_create || is_submit || is_list || is_single || is_overview) ||
+      (text && !is_submit)) {
+    status = 2;
+    v_fail("invalid command; run libcwr --help for usage");
+  }
+  if (is_create) {
+    valid_name(words[2]);
+  } else if (is_submit) {
+    valid_name(words[1]);
+    valid_name(words[2]);
+    if (strlen(text) > CLI_TEXT_LIMIT) {
+      v_fail("text exceeds 256 KiB command bound");
+    }
+  } else if (is_single) {
+    valid_name(words[1]);
+  }
+  V *value = NULL;
+  const char *code = "ok";
+  V *response = NULL;
+  if (is_version) {
+    value = v_object();
+    v_put(value, "revision", v_string(LIBCWR_BUILD_REVISION));
+    v_put(value, "core_sha256", v_string(LIBCWR_CORE_SHA256));
+  } else if (is_init) {
+    value = host_init(directory);
+    code = "initialized";
+  } else {
+    host_open(directory, NULL);
+    if (is_create) {
+      V *request = event("create");
+      field(request, "conversation", reference("conversations", words[2]));
+      field(request, "owner", v_record_get(host_environment(), "context"));
+      response = host_event(request);
+      command = "conversation create";
+    } else if (is_submit) {
+      V *request = event("admit");
+      field(request, "ref", reference("invocations", words[2]));
+      field(request, "origin", reference("requests", words[2]));
+      field(request, "conversation", reference("conversations", words[1]));
+      field(request, "message", reference("messages", words[2]));
+      field(request, "target", v_record_get(v_record_get(host_environment(), "binding"), "target"));
+      field(request, "input", v_chars(text));
+      field(request, "text", v_chars(text));
+      response = host_event(request);
+    } else if (is_list) {
+      int invocations = !strcmp(words[1], "invocations");
+      value = visible_records(invocations ? "invocation" : "conversation", words[1]);
+      command = invocations ? "list invocations" : "list conversations";
+    } else if (is_overview) {
+      value = overview();
+      if (!strcmp(command, "recover")) {
+        code = "recovered";
+      }
+    } else if (!strcmp(command, "show")) {
+      response = read_record("invocation", reference("invocations", words[1]));
+    } else if (!strcmp(command, "history")) {
+      response = read_record("conversation", reference("conversations", words[1]));
+      if (v_isstr(at(response, 0), "found")) {
+        V *messages = v_record_get(at(response, 1), "messages");
+        V *ordered = v_array();
+        for (size_t i = messages ? messages->n : 0; i > 0; i--) {
+          v_push(ordered, messages->items[i - 1]);
+        }
+        value = ordered;
+        response = NULL;
+        code = "found";
+      }
+    } else if (!strcmp(command, "artifact")) {
+      value = host_artifact(reference("invocations", words[1]));
+      code = "found";
+    } else {
+      V *request = event(command);
+      field(request, "ref", reference("invocations", words[1]));
+      response = host_event(request);
+    }
+  }
+  if (response) {
+    V *response_code = at(response, 0);
+    if (!response_code || response_code->type != VT_STRING) {
+      v_fail("invalid protocol response");
+    }
+    code = response_code->s;
+    value = at(response, 1);
+  }
+  output(command, code, value, json);
+  if (fflush(stdout) || ferror(stdout)) {
+    v_fail("command output failed");
+  }
+  status = successful(code) ? 0 : 1;
+  host_close();
+  v_handler = previous;
+  return status;
+}

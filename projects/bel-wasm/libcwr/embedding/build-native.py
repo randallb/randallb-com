@@ -13,7 +13,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-SOURCES = ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c']
+SOURCES = ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c']
 
 
 def sha(data):
@@ -33,7 +33,7 @@ def build(args):
     outputs = [output, manifest_output, license_output]
     package_manifest = wasm.parent / 'manifest.json'
     package_names = {'manifest.json', 'core.wasm', 'core.mjs', 'core.cjs', 'values.mjs', 'values.cjs',
-                     'host.cjs', 'readme.md', 'native-build.md', 'example-context.json',
+                     'host.cjs', 'cli-guide.md', 'readme.md', 'native-build.md', 'example-context.json',
                      'example-events.jsonl', 'LICENSE', 'NOTICE.txt', 'ORIGIN.json', 'workflow.rbel.md'}
     metadata = json.loads(package_manifest.read_text()) if package_manifest.exists() else None
     maintained = [*HERE.iterdir(), ROOT / 'libcwr/workflow.rbel.md', ROOT / 'literate/wasm-values.mjs',
@@ -93,6 +93,7 @@ def build(args):
                 (runtime_copy / path.name).write_bytes(snapshots[path])
             binary = work / 'core.wasm'
             binary.write_bytes(snapshots[wasm])
+            (work / 'build-info.h').write_text('#define LIBCWR_BUILD_REVISION ' + json.dumps(metadata.get('source_revision', 'unversioned-source')) + '\n#define LIBCWR_CORE_SHA256 ' + json.dumps(sha(snapshots[wasm])) + '\n')
             (work / 'runtime-license.h').write_text('static const char NATIVE_RUNTIME_LICENSE[] = ' + json.dumps(license_bytes.decode()) + ';\n')
             subprocess.run([str(tools / 'wasm-validate'), str(binary)], check=True, timeout=60)
             subprocess.run([str(tools / 'wasm2c'), str(binary), '-n', 'bel', '-o', str(work / 'module.c')], check=True, timeout=120)
@@ -132,6 +133,7 @@ def build(args):
                 raise ValueError('native build inputs changed during compilation')
             evidence = {
                 'format': 'libcwr-native-wasm2c-v1',
+                'source_revision': metadata.get('source_revision', 'unversioned-source'),
                 'runtime': {'platform': sys.platform, 'arch': platform.machine(), 'backend': 'WABT wasm2c 1.0.39; system C compiler'},
                 'runtime_linkage': linkage,
                 'runtime_license_sha256': sha(license_bytes),

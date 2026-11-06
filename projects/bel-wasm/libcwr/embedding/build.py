@@ -18,6 +18,15 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def source_revision():
+    try:
+        revision = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True, stderr=subprocess.DEVNULL).strip()
+        dirty = subprocess.check_output(['git', '-C', str(ROOT), 'status', '--porcelain', '--untracked-files=normal'], text=True)
+        return revision + ('-dirty' if dirty.strip() else '')
+    except (OSError, subprocess.SubprocessError):
+        return 'unversioned-source'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rbel', type=Path, default=ROOT / 'target/rbel-command/bin/rbel')
@@ -32,11 +41,11 @@ def main():
         if not marker.is_file() or json.loads(marker.read_text()).get('format') != 'libcwr-embedding-v1':
             raise ValueError('refusing to replace an unrecognized output directory')
     source = ROOT / 'libcwr/workflow.rbel.md'
-    inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c']],
+    inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c']],
               ROOT / 'literate/wasm-values.mjs', ROOT / 'literate/test.py', Path(__file__).resolve(),
-              HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py',
+              HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py', HERE / 'cli-verify.py',
               *[ROOT / name for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']],
-              *[HERE / name for name in ['readme.md', 'native-build.md', 'example-context.json', 'example-events.jsonl']]]
+              *[HERE / name for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'example-context.json', 'example-events.jsonl']]]
     snapshots = {p: p.read_bytes() for p in inputs}
     spec = importlib.util.spec_from_file_location('literate_tests', ROOT / 'literate/test.py')
     extractor = importlib.util.module_from_spec(spec)
@@ -74,7 +83,7 @@ def main():
         for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']:
             (staging / name).write_bytes(snapshots[ROOT / name])
         (staging / 'workflow.rbel.md').write_bytes(snapshots[source])
-        for name in ['readme.md', 'native-build.md', 'example-context.json', 'example-events.jsonl']:
+        for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'example-context.json', 'example-events.jsonl']:
             (staging / name).write_bytes(snapshots[HERE / name])
         manifest = {
             'format': 'libcwr-embedding-v1', 'abi': 'libcwr-transition-v1',
@@ -83,6 +92,7 @@ def main():
             'excluded_definition_blocks': ['acceptance-fixtures'],
             'inputs': {str(p.relative_to(ROOT)): digest(data) for p, data in snapshots.items()},
             'compiler_sha256': digest(rbel.read_bytes()),
+            'source_revision': source_revision(),
             'files': {p.name: digest(p.read_bytes()) for p in sorted(staging.iterdir())},
         }
         (staging / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
