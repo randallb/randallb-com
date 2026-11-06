@@ -61,7 +61,22 @@ def build(args):
         './host.cjs': wasm.parent / 'host.cjs',
         './native-main.cjs': main,
     }
-    protected = [wasm, node, license_source, Path(__file__).resolve(), *inputs.values()]
+    # Protect the entire standalone package, including adapters, docs and notices.
+    # Fixed names also protect incomplete packages; the manifest covers additions.
+    package_names = {
+        'manifest.json', 'core.wasm', 'core.mjs', 'core.cjs', 'values.mjs', 'values.cjs',
+        'host.cjs', 'native-main.cjs', 'workflow.rbel.md', 'readme.md', 'native-build.md',
+        'example-context.json', 'example-events.jsonl', 'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
+    }
+    package_manifest = wasm.parent / 'manifest.json'
+    if package_manifest.exists():
+        metadata = json.loads(package_manifest.read_text())
+        for name in metadata['files']:
+            if Path(name).name != name or name in ('.', '..'):
+                raise ValueError('invalid package filename in manifest')
+            package_names.add(name)
+    protected = [wasm, node, license_source, Path(__file__).resolve(), *inputs.values(),
+                 *[(wasm.parent / name).resolve() for name in package_names]]
     outputs = [output, manifest, license_output]
     for index, destination in enumerate(outputs):
         if destination.is_relative_to(HERE) or destination.is_relative_to(node.parent):
