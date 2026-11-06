@@ -2,6 +2,16 @@
 
 An experimental Rust-hosted Bel bootstrap and a compiler written in Bel that emits WebAssembly. This is a standalone source distribution from randallb.com.
 
+## libcwr Wasm milestone
+
+The [libcwr source](libcwr/workflow.rbel.md) implements the first conversation and
+controlled-action slice in literate rbel. Its adjacent tests run on Wasm with a
+new deterministic host, persistence, restart, duplicate completion and uncertain
+execution checks. See [setup and verification](libcwr/readme.md) and the
+[generic test format](literate/testing.md). This is an implementation candidate;
+independent review and hosted acceptance are tracked with the build, not implied
+by this README. Existing CWR is reference-only and is not a dependency.
+
 ## Literate rbel foundation
 
 The language/toolchain direction is **rbel** (pronounced “rebel,” short for
