@@ -1,8 +1,10 @@
 # Adjacent tests executed on Wasm
 
 `test.py` adds named `rbel test=NAME` fences to the existing definition and example
-format. It extracts source; the existing rbel reader/compiler owns parsing,
-closures and evaluation. The Python and JavaScript code do not evaluate rbel.
+format. It extracts source; the existing reader/compiler tooling owns parsing,
+closures and evaluation. The default native bundle uses the reader written in
+rbel. The optional `bootstrap-wasm.py` bundle uses the existing Rust syntax reader
+and Wasm rbel compiler for CI; Rust performs no protocol evaluation. The Python and JavaScript code do not evaluate rbel.
 The native `rbel check` command continues to check the older definition/example
 format; use this test command for chapters containing test fences.
 
@@ -59,7 +61,10 @@ pointer into a new instance. Host controls are test fixtures, not public APIs.
 `--docs FILE.md` generates an exact copy of authored sources with source hashes,
 after successful acceptance. `--verbose` prints assertion names. Prior output
 files are removed before a valid run starts; input/output aliases, including
-hard links, are rejected before removal. Generated code and Wasm are private
+hard links, are rejected before removal. The complete compiler bundle is protected
+from output writes. Source is captured once for extraction, compilation, hashes
+and documentation; changed or missing input at the end of the run fails and
+removes success evidence. Generated code and Wasm are private
 temporary files and never reused after failure. Reports and docs should live in
 ignored `target/`. The tool does not publish them.
 
@@ -76,3 +81,9 @@ Use `python3 libcwr/verify.py` for positive and deliberate failure runs, includi
 changes to an actual definition and expected result, traps, malformed blocks,
 and the existing foundation/reader examples. A passing runner is not evidence
 for an application whose definitions were not exercised.
+
+The portable bootstrap bundle can be selected with
+`--rbel target/rbel-wasm-bootstrap/bin/rbel`. Build it with
+`python3 literate/bootstrap-wasm.py` after the documented Rust-reader and Wasm
+compiler bootstrap. Its manifest pins the packaged reader, compiler, transport
+and assembler bytes. It is not a substitute for testing the native command.

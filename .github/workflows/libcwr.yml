@@ -12,8 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   wasm:
-    # Apple Silicon label: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
@@ -25,15 +24,13 @@ jobs:
           node-version: '24'
       - name: Bootstrap existing rbel compiler
         run: |
-          test "$(uname -m)" = arm64
           rustup toolchain install 1.95.0 --profile minimal
           cargo build --locked -p bel-rust-repl --bins
           npm install --prefix target/bel-wasm-tools --no-save --ignore-scripts wabt@1.0.39
           python3 experiments/bel-rust-repl/wasm/verify-selfhost.py
-          python3 experiments/bel-rust-repl/wasm/command/setup-tools.py
-          python3 experiments/bel-rust-repl/wasm/command/build-command.py
+          python3 literate/bootstrap-wasm.py
       - name: Verify actual libcwr Wasm and runner failures
-        run: python3 libcwr/verify.py
+        run: python3 libcwr/verify.py --rbel target/rbel-wasm-bootstrap/bin/rbel --skip-native
       - uses: actions/upload-artifact@v4
         if: always()
         with:

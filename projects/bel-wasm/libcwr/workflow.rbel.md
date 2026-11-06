@@ -15,7 +15,7 @@ that read-only source checkout.
 | --- | --- | --- |
 | R1: exact identity, authorship and causal links | `memos/policy/cwp/coworker-protocol.md`, Requests and Conversations; `memos/policy/cwr/api-identity.md` | `cw-create`, `cw-admit-new`; `ordinary-workflow` |
 | R2: explicit creation, no implicit continuation, stable origin retries | `memos/policy/cwr/cwr-conversation-participation.md`, Conversation creation and continuation | `cw-create`, `cw-admit`; `admission-boundaries` |
-| R3: live authority; participation and discovery grant nothing | `memos/policy/cwr/actor-authority.md`; `memos/policy/cwr/cwr-subjects-actors-and-tool-activation.md` | `cw-authorized`, `cw-run`; `authority-boundaries` |
+| R3: live authority; participation and discovery grant nothing | `memos/policy/cwr/actor-authority.md`; `memos/policy/cwr/cwr-subjects-actors-and-tool-activation.md`; `memos/policy/cwr/cwr-conversation-participation.md`, Native conversation availability | `cw-authorized`, `cw-run`; `authority-boundaries` |
 | R4: accepted target and route never change | `memos/policy/cwp/coworker-protocol.md`, Requests; `packages/cwr-core/README.md`, Execution | `cw-run`; `retained-route` |
 | R5: completion differs from execution and delivery; one retained terminal result | `memos/policy/cwp/coworker-protocol.md`; observed `packages/cwr-core/src/v2026_09/invocation/state/core.rs`, finish | `cw-complete`; `ordinary-workflow`, `completion-boundaries` |
 | R6: interrupted execution remains visible and needs reconciliation | Accepted libcwr strategy and workflow Intent, linked from project superbuild | `cw-recover`, `cw-reconcile`, `cw-run`; `recovery-with-receipt`, `safe-retry`, `unsafe-retry` |
@@ -46,8 +46,11 @@ The host commits next-state atomically before consuming an effect. It must not
 execute after a failed commit. A single owning host serializes these transitions;
 this milestone does not provide concurrent or distributed storage.
 
-The trusted environment contains runtime/caller/ingress refs, current context
-availability, allowed exact targets, and one checked binding. A binding supplies
+The trusted environment contains runtime/caller/ingress refs, the context
+selected by the retained conversation owner, current availability, allowed exact
+targets, and one checked binding. Reads, admission, execution and reconciliation
+reject an environment whose context differs from that immutable owner; navigation
+or a different context must not supply the permission policy for existing work. A binding supplies
 its exact six-part target `(runtime coworker role action binding contract)`, the
 union of selected role requirements, coworker grants, adapter capabilities,
 route fingerprint, and a known repeat-safe flag. Authorization is decided below.
@@ -88,7 +91,8 @@ that execution did not happen.
 (def cw-save (kind record state) (cw-set kind (cw-put record (cw-get kind state)) state))
 (def cw-reply (state code value) (cw-three state (cw-two code value) nil))
 (def cw-allowed-reader (conversation environment)
-  (cw-member (cw-get 'caller environment) (cw-get 'participants conversation)))
+  (if (id (cw-get 'owner conversation) (cw-get 'context environment))
+    (cw-member (cw-get 'caller environment) (cw-get 'participants conversation)) nil))
 (def cw-target-worker (target) (car (cdr target)))
 (def cw-authorized (target environment)
   ((fn (binding)
@@ -596,4 +600,24 @@ used to compute the expected answers.
               (rt-assert 'effects-can-repeat (cw-get 'executions observed) '(t t) (fn (ignored)
                 (rt-assert 'same-artifact-after-repeat (cw-get 'artifact observed) "hello from rbel"
                   (fn (ignored) (rt-done)))))))))))))))))))
+```
+
+```rbel test=owner-context-boundaries
+(cw-admitted (fn (ignored)
+(rt-request 'fault 'lose-completion (fn (answer)
+(cw-expect-code 'completion-lost-for-context-test (cw-fixture-event 'run) 'running (fn (ignored)
+(rt-request 'restart nil (fn (answer)
+(rt-request 'configure (join (cw-entry 'context (cw-fixture-ref "different-owner")) nil) (fn (answer)
+(cw-expect-code 'wrong-context-cannot-execute (cw-fixture-event 'run) 'unavailable (fn (ignored)
+(cw-expect-code 'wrong-context-cannot-reconcile (cw-fixture-event 'reconcile) 'unavailable (fn (ignored)
+(cw-expect-code 'wrong-context-cannot-admit (cw-set 'origin (cw-fixture-ref "request-two") (cw-set 'message (cw-fixture-ref "message-two") (cw-set 'ref (cw-fixture-ref "invocation-two") (cw-fixture-admission)))) 'unavailable (fn (ignored)
+(cw-expect-code 'wrong-context-cannot-read (cw-set 'kind 'conversation (cw-set 'ref (cw-fixture-ref "conversation-one") (cw-fixture-event 'read))) 'unavailable (fn (ignored)
+(rt-request 'snapshot nil (fn (answer)
+(rt-assert 'owner-unchanged (cw-get 'owner (car (cw-get 'conversations answer))) (cw-fixture-ref "workspace") (fn (ignored)
+(rt-assert 'wrong-context-adds-no-work (cdr (cw-get 'invocations answer)) nil (fn (ignored)
+(rt-request 'configure (join (cw-entry 'context (cw-fixture-ref "workspace")) nil) (fn (answer)
+(cw-expect-code 'original-owner-can-reconcile (cw-fixture-event 'reconcile) 'completed (fn (ignored)
+(rt-request 'observe (cw-fixture-ref "invocation-one") (fn (answer)
+(rt-assert 'wrong-context-no-extra-effect (cw-get 'executions answer) '(t) (fn (ignored)
+(rt-done)))))))))))))))))))))))))))))))))
 ```

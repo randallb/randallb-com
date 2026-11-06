@@ -26,23 +26,41 @@ chapter. `--rbel /path/to/bundle/bin/rbel` selects a relocated compiler bundle.
 
 ## From a fresh source checkout
 
-Use macOS ARM64 and Apple's command-line tools. Rust 1.95.0, Python 3, Node/npm,
-and WABT are bootstrap dependencies of the existing compiler, not a CWR engine.
-The ordinary test run uses the native compiler bundle, Python and Node; Rust
-performs no protocol evaluation.
+The portable CI route needs Rust 1.95.0, Python 3 and Node/npm. The existing Rust
+reader produces syntax data; the existing rbel compiler executes on Wasm and
+makes every compilation decision. Neither Rust nor Python evaluates protocol
+rules. The bootstrap shim supports only `read` and `emit`; it is test-build
+tooling, not a native rbel distribution or a libcwr CLI.
 
 ```sh
 cargo build --locked -p bel-rust-repl --bins
 npm install --prefix target/bel-wasm-tools --no-save --ignore-scripts wabt@1.0.39
 python3 experiments/bel-rust-repl/wasm/verify-selfhost.py
+python3 literate/bootstrap-wasm.py
+python3 libcwr/verify.py --rbel target/rbel-wasm-bootstrap/bin/rbel --skip-native
+```
+
+The Linux libcwr CI job follows this route. `--skip-native` explicitly leaves the
+two native-command regressions unverified on that route; all 28 portable
+verification groups still run actual compiled Wasm. Default verification on the
+native bundle runs all 30 groups, including native regressions. Both compiler
+routes produce identical Wasm for the authored workflow in local verification.
+The unrelated existing site/CWR job is separate and is not libcwr acceptance.
+
+For the normal native compiler on macOS ARM64, after the first three bootstrap
+commands above, run:
+
+```sh
 python3 experiments/bel-rust-repl/wasm/command/setup-tools.py
 python3 experiments/bel-rust-repl/wasm/command/build-command.py
 python3 libcwr/verify.py
 ```
 
-The separate libcwr CI job follows this source bootstrap. Its macOS runner label
-follows [GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
-The unrelated existing site/CWR job remains separate and is not libcwr acceptance.
+This native bootstrap also needs Apple's command-line tools. Its installed
+compiler does not use Rust, Node or Python for reading and compiling. The test
+runner uses Python orchestration and Node's Wasm engine. The source-bootstrap CI
+route was added after GitHub could not acquire a macOS ARM64 runner; no cancelled
+job is counted as a passing check.
 
 ## What the host supplies
 
