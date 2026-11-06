@@ -47,10 +47,16 @@ static void grow(V *v) {
   if (v->n < v->capacity) return;
   size_t cap = v->capacity ? v->capacity * 2 : 8;
   V **items = v_alloc(cap * sizeof(*items));
-  if (v->items) memcpy(items,v->items,v->n*sizeof(*items)); v->items=items;
+  if (v->items) {
+    memcpy(items, v->items, v->n * sizeof(*items));
+  }
+  v->items = items;
   if (v->type == VT_OBJECT) {
     char **keys=v_alloc(cap*sizeof(*keys));
-    if (v->keys) memcpy(keys,v->keys,v->n*sizeof(*keys)); v->keys=keys;
+    if (v->keys) {
+      memcpy(keys, v->keys, v->n * sizeof(*keys));
+    }
+    v->keys = keys;
   }
   v->capacity=cap;
 }
@@ -65,7 +71,12 @@ void v_put(V *object, const char *key, V *value) {
 }
 V *v_get(V *object, const char *key) {
   if (!object || object->type!=VT_OBJECT) return NULL;
-  for(size_t i=0;i<object->n;i++) if(!strcmp(object->keys[i],key)) return object->items[i]; return NULL;
+  for (size_t i = 0; i < object->n; i++) {
+    if (!strcmp(object->keys[i], key)) {
+      return object->items[i];
+    }
+  }
+  return NULL;
 }
 int v_isstr(V *value, const char *text) { return value && value->type==VT_STRING && value->n==strlen(text) && !memcmp(value->s,text,value->n); }
 V *v_record_get(V *record, const char *key) {
@@ -104,7 +115,10 @@ uint32_t v_scalar(const char *text, size_t length, size_t *position) {
   else if(a>=0xf0 && a<=0xf4) {count=3;cp=a&7;min=0x10000;}
   else v_fail("invalid UTF-8");
   for(unsigned i=0;i<count;i++) {if(*position>=length) v_fail("truncated UTF-8");unsigned char b=(unsigned char)text[(*position)++];if((b&0xc0)!=0x80)v_fail("invalid UTF-8");cp=(cp<<6)|(b&63);}
-  if(cp<min || cp>0x10ffff || (cp>=0xd800&&cp<=0xdfff))v_fail("invalid Unicode scalar");return cp;
+  if (cp < min || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+    v_fail("invalid Unicode scalar");
+  }
+  return cp;
 }
 static void utf8(Buffer *buffer, uint32_t cp) {
   char out[4];size_t n;
@@ -120,12 +134,18 @@ static unsigned hex4(Parser *p) {
   unsigned result=0;for(unsigned i=0;i<4;i++){if(p->pos>=p->length)v_fail("truncated JSON escape");unsigned char c=(unsigned char)p->text[p->pos++];unsigned d;if(c>='0'&&c<='9')d=c-'0';else if(c>='a'&&c<='f')d=c-'a'+10;else if(c>='A'&&c<='F')d=c-'A'+10;else v_fail("invalid JSON escape");result=(result<<4)|d;}return result;
 }
 static V *parse_string(Parser *p) {
-  if(p->pos>=p->length||p->text[p->pos++]!='"')v_fail("expected JSON string");Buffer b={0};
+  if (p->pos >= p->length || p->text[p->pos++] != '"') {
+    v_fail("expected JSON string");
+  }
+  Buffer b = {0};
   while(p->pos<p->length){unsigned char c=(unsigned char)p->text[p->pos++];
     if(c=='"')return v_string_n(b.data?b.data:"",b.n);
     if(c<32)v_fail("control character in JSON string");
     if(c=='\\'){
-      if(p->pos>=p->length)v_fail("truncated JSON escape");c=(unsigned char)p->text[p->pos++];
+      if (p->pos >= p->length) {
+        v_fail("truncated JSON escape");
+      }
+      c = (unsigned char)p->text[p->pos++];
       switch(c){case '"':case '\\':case '/':byte(&b,(char)c);break;case 'b':byte(&b,'\b');break;case 'f':byte(&b,'\f');break;case 'n':byte(&b,'\n');break;case 'r':byte(&b,'\r');break;case 't':byte(&b,'\t');break;
         case 'u':{uint32_t cp=hex4(p);if(cp>=0xd800&&cp<=0xdbff){if(p->length-p->pos<2||p->text[p->pos]!='\\'||p->text[p->pos+1]!='u')v_fail("unpaired surrogate");p->pos+=2;uint32_t low=hex4(p);if(low<0xdc00||low>0xdfff)v_fail("unpaired surrogate");cp=0x10000+((cp-0xd800)<<10)+(low-0xdc00);}utf8(&b,cp);break;}
         default:v_fail("invalid JSON escape");}
@@ -133,7 +153,14 @@ static V *parse_string(Parser *p) {
   }v_fail("unclosed JSON string");
 }
 static V *parse_value(Parser *p,unsigned depth) {
-  if(depth>MAX_DEPTH||++p->nodes>MAX_NODES)v_fail("JSON resource bound");whitespace(p);if(p->pos>=p->length)v_fail("missing JSON value");char c=p->text[p->pos];
+  if (depth > MAX_DEPTH || ++p->nodes > MAX_NODES) {
+    v_fail("JSON resource bound");
+  }
+  whitespace(p);
+  if (p->pos >= p->length) {
+    v_fail("missing JSON value");
+  }
+  char c = p->text[p->pos];
   if(c=='"')return parse_string(p);
   if(c=='['||c=='{'){
     p->pos++;V *v=c=='['?v_array():v_object();char close=c=='['?']':'}';whitespace(p);if(p->pos<p->length&&p->text[p->pos]==close){p->pos++;return v;}

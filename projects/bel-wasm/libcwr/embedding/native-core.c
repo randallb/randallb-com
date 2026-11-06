@@ -63,5 +63,8 @@ V *core_transition(V *state,V *event,V *environment){
   size_t nodes=0;uint32_t encoded=encode(module,request,0,&nodes);uint32_t result=w2c_bel_choose(module,encoded);
   nodes=0;V *decoded=decode(module,result,0,&nodes);
   wasm2c_bel_free(module);free(module);v_handler=previous;
-  if(!decoded||decoded->type!=VT_ARRAY||decoded->n!=3)v_fail("invalid libcwr transition result");return decoded;
+  if (!decoded || decoded->type != VT_ARRAY || decoded->n != 3) {
+    v_fail("invalid libcwr transition result");
+  }
+  return decoded;
 }

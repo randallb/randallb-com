@@ -62,8 +62,10 @@ def build(args):
     output.parent.mkdir(parents=True, exist_ok=True)
     for destination in outputs:
         destination.unlink(missing_ok=True)
+    compiler_bytes = cc.read_bytes()
     snapshots = {HERE / name: (HERE / name).read_bytes() for name in SOURCES}
     snapshots.update({path: path.read_bytes() for path in runtime_files + tool_files + [wasm, license_source]})
+    snapshots[cc] = compiler_bytes
     if snapshots[wasm][:8] != b'\0asm\x01\0\0\0':
         raise ValueError('expected a version-1 Wasm module')
     if not metadata or metadata.get('format') != 'libcwr-embedding-v1':
@@ -105,7 +107,21 @@ def build(args):
                        *[str(work / n) for n in SOURCES if n.endswith('.c')], str(work / 'module.c'),
                        *[str(runtime_copy / n) for n in ['wasm-rt-impl.c', 'wasm-rt-mem-impl.c', 'wasm-rt-exceptions-impl.c']],
                        '-lm', '-pthread', '-o', str(candidate)]
-            subprocess.run(command, check=True, timeout=180)
+            # Keep strict warnings for authored C; wasm2c's TRAP macro emits a
+            # known unused comma-result warning under GCC, confined to generated C.
+            source_start = command.index(str(work / 'native-values.c'))
+            flags = command[:source_start]
+            source_files = [work / n for n in SOURCES if n.endswith('.c')] + [work / 'module.c'] + [
+                runtime_copy / n for n in ['wasm-rt-impl.c', 'wasm-rt-mem-impl.c', 'wasm-rt-exceptions-impl.c']]
+            objects = []
+            for index, source in enumerate(source_files):
+                obj = work / f'part-{index}.o'
+                warning_flags = ['-Wno-unused-value'] if source.name == 'module.c' else []
+                subprocess.run([*flags, *warning_flags, '-c', str(source), '-o', str(obj)], check=True, timeout=180)
+                objects.append(str(obj))
+            subprocess.run([str(cc), *objects, '-lm', '-pthread', '-o', str(candidate)], check=True, timeout=60)
+            if cc.read_bytes() != compiler_bytes:
+                raise ValueError('C compiler changed during native compilation')
             linkage = None
             if sys.platform == 'darwin':
                 linkage = subprocess.check_output(['/usr/bin/otool', '-L', str(candidate)], text=True, timeout=30)
@@ -123,7 +139,8 @@ def build(args):
                 'native_source_sha256': {p.name: sha(snapshots[p]) for p in [HERE / n for n in SOURCES]},
                 'runtime_source_sha256': {p.name: sha(snapshots[p]) for p in runtime_files},
                 'tool_sha256': {p.name: sha(snapshots[p]) for p in tool_files},
-                'compiler_sha256': sha(cc.read_bytes()),
+                'compiler_sha256': sha(compiler_bytes),
+                'build_inputs': {'tools': str(tools), 'runtime': str(runtime), 'runtime_license': str(license_source), 'cc': str(cc)},
                 'generated_c_sha256': sha((work / 'module.c').read_bytes()),
                 'executable_sha256': sha(candidate.read_bytes()),
                 'executable_bytes': candidate.stat().st_size,

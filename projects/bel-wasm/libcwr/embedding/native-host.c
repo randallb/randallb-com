@@ -66,7 +66,10 @@ static void hash_bytes(const char *data,size_t n,char out[65]) {
   size_t blocks=n<56?64:128;uint64_t bits=(uint64_t)length*8;
   for(unsigned i=0;i<8;i++)tail[blocks-1-i]=(unsigned char)(bits>>(8*i));
   sha256_block(h,tail);if(blocks==128)sha256_block(h,tail+64);
-  for(unsigned i=0;i<8;i++)snprintf(out+i*8,9,"%08x",h[i]);out[64]=0;
+  for(unsigned i=0;i<8;i++) {
+    snprintf(out+i*8,9,"%08x",h[i]);
+  }
+  out[64]=0;
 }
 static V *at(V *v,size_t n) { return v&&v->type==VT_ARRAY&&n<v->n?v->items[n]:NULL; }
 static V *pair(const char *key,V *value) { V *v=v_array();v_push(v,v_string(key));v_push(v,value);return v; }
@@ -167,14 +170,26 @@ static V *execute(V *invocation) {
   if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);else v_fail("unsupported fixture action");
   V *entry=v_object();v_put(entry,"reference",reference);v_put(entry,"action",action);v_put(entry,"sha256",v_string(digest));char *json=v_json(entry);append_bytes("executions.jsonl",json,strlen(json));append_bytes("executions.jsonl","\n",1);
   V *evidence=v_array();field(evidence,"ref",reference);field(evidence,"claim",v_record_get(invocation,"claim"));field(evidence,"target",exact);field(evidence,"input",input);field(evidence,"result",v_chars(digest));
-  if(consume_fault("lose-receipt"))return NULL;hashed_name(reference,"receipt-",".json",name);atomic_value(name,evidence);return evidence;
+  if(consume_fault("lose-receipt")) {
+    return NULL;
+  }
+  hashed_name(reference,"receipt-",".json",name);
+  atomic_value(name,evidence);
+  return evidence;
 }
 static V *dispatch(V *event) {
   V *trusted=v_record_set(environment,"claim",claim());
   if(v_isstr(v_record_get(event,"op"),"reconcile")) {V *evidence=receipt(v_record_get(event,"ref"));if(evidence&&consume_fault("tamper-receipt"))evidence=v_record_set(evidence,"input",v_chars("different"));trusted=v_record_set(trusted,"evidence",evidence);}
   V *effect=NULL,*response=transition(event,trusted,&effect);if(!effect)return response;
   if(!v_isstr(at(effect,0),"execute")||effect->type!=VT_ARRAY||effect->n!=2)v_fail("unknown mechanism effect");
-  if(consume_fault("skip-execution"))return response;V *evidence=execute(at(effect,1));if(!evidence||consume_fault("lose-completion"))return response;return complete(evidence,NULL);
+  if(consume_fault("skip-execution")) {
+    return response;
+  }
+  V *evidence=execute(at(effect,1));
+  if(!evidence||consume_fault("lose-completion")) {
+    return response;
+  }
+  return complete(evidence,NULL);
 }
 static V *restart(void) { state=read_value("state.json");restarts++;V *event=v_array();field(event,"op",v_string("recover"));V *effect=NULL;return transition(event,v_record_set(environment,"system",v_string("t")),&effect); }
 static V *observe(V *reference) {
@@ -200,7 +215,9 @@ static void request(const char *data,size_t length) {
   char *output=v_json(response);size_t n=strlen(output);if(n>MAX_FILE)v_fail("response exceeds line bound");if(fwrite(output,1,n,stdout)!=n||fputc('\n',stdout)==EOF||fflush(stdout)!=0)v_fail("response write failed");
 }
 int main(int argc,char **argv) {
-  jmp_buf top;v_handler=&top;int status=0;
+  jmp_buf top;
+  v_handler=&top;
+  volatile int status=0;
   if(setjmp(top)){fprintf(stderr,"libcwr: %s\n",v_error);status=1;goto done;}
   const char *directory=NULL,*context=NULL;int help=0,license=0;
   for(int i=1;i<argc;i++) {
@@ -212,7 +229,15 @@ int main(int argc,char **argv) {
   }
   if(license){if(fputs(NATIVE_RUNTIME_LICENSE,stdout)==EOF||fflush(stdout))v_fail("license write failed");goto done;}
   if(help){puts("Usage: libcwr --directory STATE --context TRUSTED.json\nReads one event as JSON per line; writes one protocol response per line.\n--test-host enables isolated acceptance fixture controls.\nCompiled rbel core via WABT wasm2c; no Node or separate Wasm engine required.");goto done;}
-  if(!directory)v_fail("--directory is required");if(fixtures&&context)v_fail("--test-host cannot be combined with --context");if(!fixtures&&!context)v_fail("--context is required");
+  if(!directory) {
+    v_fail("--directory is required");
+  }
+  if(fixtures&&context) {
+    v_fail("--test-host cannot be combined with --context");
+  }
+  if(!fixtures&&!context) {
+    v_fail("--context is required");
+  }
   if(fixtures)environment=v_parse(fixture_json,strlen(fixture_json));else{int fd=open(context,O_RDONLY|O_NOFOLLOW);if(fd<0)v_fail("cannot read trusted context: %s",strerror(errno));size_t n;char *data=read_descriptor(fd,&n);environment=v_parse(data,n);}
   validate_environment(environment);V *filtered=v_array();for(size_t i=0;i<environment->n;i++){V *entry=environment->items[i],*key=at(entry,0);if(!v_isstr(key,"claim")&&!v_isstr(key,"executor")&&!v_isstr(key,"evidence")&&!v_isstr(key,"system"))v_push(filtered,entry);}environment=filtered;replace_json(&environment_json,environment);
   lock_directory(directory);atexit(unlock);signal(SIGINT,signal_stop);signal(SIGTERM,signal_stop);signal(SIGPIPE,SIG_IGN);wasm_rt_init();
