@@ -56,8 +56,8 @@ rbel lint SOURCE [--file-limit N] [--block-limit N]
 or resource failures return 1. `--quiet` suppresses successful build/check messages.
 
 `.md` inputs use the existing `rbel definition=NAME` and `rbel example=NAME`
-fences. Every literate input requires both kinds. Names must be unique across
-all inputs. Example bodies contain one expression, an entire line `=>`, and one
+fences. Literate inputs require both kinds, except a definition module containing imports may omit examples. Names must be unique across
+all loaded inputs. Example bodies contain one expression, an entire line `=>`, and one
 expected value. Backtick and tilde fences, up to three leading spaces, CRLF,
 and explanatory fences follow the extractor's supported rules. Unknown rbel
 attributes, duplicate names, unclosed fences, and malformed examples fail.
@@ -76,11 +76,59 @@ bootstrapping. `read` reports parsed definitions as a JSON value tree, using
 symbols, and null for nil. It does not evaluate source. Rendering completes in
 memory before stdout is written; a bounded-render failure prints no partial JSON.
 
-Output/source aliases, hard links to inputs, and bundle-resource output paths
-are rejected before cleanup. After that validation, a previous output is removed
-before reading/compiling, so failures do not leave a stale runnable product.
+## Relative source imports
+
+A raw `.rbel`/`.bel` file or a literate definition block can load another source:
+
+```lisp
+(import "foundation.rbel.md")
+(import "../shared/helpers.rbel")
+(def main (xs) (helper xs))
+```
+
+Paths resolve relative to the containing file's canonical location, including
+nested imports. They must be nonempty relative paths: absolute paths, home
+expansion, and refs/URI schemes are rejected. `.` and `..` work normally;
+imports are dependency loading, not a directory access boundary. Strings follow
+the reader's escape rule: a backslash quotes the next character literally.
+Whitespace and semicolon comments are allowed within the import form.
+
+Only unquoted top-level `(import "path")` forms in definition source are
+directives. Quoted data, function bodies, examples, prose, and other-language
+fences do not load files. `import` is reserved in this top-level position;
+there are no namespaces, aliases, exports, package lookup, or CWP resolution.
+The installed command handles imports for `build`, `check`, `emit`, and `read`;
+the older development-script/interpreter routes do not gain import support.
+`lint` continues to inspect only its explicitly supplied file.
+
+Each file contributes its own definitions first, then its dependencies in
+first-encounter depth-first order. The main file's first definition remains the
+entry function even when import forms precede it. A wrapper containing only
+imports uses its first dependency's entry. Canonical path and filesystem identity
+prevent duplicate loading, including repeated `--include` inputs, symlinks, and
+hard links. Cycles and missing dependencies fail. All imported examples are
+checked once; existing global block-name uniqueness still applies. The 32-file
+bound includes the entire dependency graph; each file has at most 32 import forms.
+Combined definition/example byte bounds remain unchanged.
+
+Try [the import example](../../../literate/import-filter.rbel.md):
+
+```sh
+bin/rbel build examples/import-filter.rbel.md -o ../import-uppercase
+```
+
+The command snapshots the complete dependency graph before touching the output.
+Output/source aliases, hard links to any loaded input, protected source extensions,
+and bundle-resource output paths are rejected before cleanup. Discovery failures
+such as missing files, cycles, or malformed imports preserve any existing output.
+After graph and output validation, a previous output is removed before ordinary
+fence/example validation and compilation, so those failures leave no stale product.
 Successful products are renamed from a private directory beside the output.
 Filenames are passed as process arguments, never interpolated into shell commands.
+
+Run `python3 experiments/bel-rust-repl/wasm/command/verify-imports.py` for isolated
+native import checks, including nested and diamond dependencies, cycles, missing
+files, quoted forms, main-entry behavior, imported examples, and transitive aliases.
 
 ## Lint file and block lengths
 

@@ -82,7 +82,7 @@ def main():
     shutil.copy2(ROOT / 'LICENSE', licenses / 'PROJECT-LICENSE')
     samples = bundle / 'examples'
     samples.mkdir(exist_ok=True)
-    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'lint.rbel.md']:
+    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'lint.rbel.md', 'import-filter.rbel.md']:
         shutil.copy2(ROOT / 'literate' / name, samples / name)
     for name in ['NOTICE.txt', 'ORIGIN.json', 'NATIVE-ORIGIN.json']:
         shutil.copy2(ROOT / name, bundle / name)
@@ -99,6 +99,7 @@ printf 'hello, rbel!\\n' | ../hello
 bin/rbel check examples/foundation.rbel.md
 bin/rbel check examples/reader.rbel.md
 bin/rbel lint examples/lint.rbel.md
+bin/rbel build examples/import-filter.rbel.md -o ../import-uppercase
 ```
 
 For the foundation-based program:
@@ -128,7 +129,7 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
     shutil.copy2(HERE.parent / 'native/readme.md', docs / 'native-filter.md')
     source_snapshot = bundle / 'source'
     source_snapshot.mkdir(exist_ok=True)
-    for source_file in [HERE / 'rbel.c', HERE / 'lint-command.h', HERE / 'check-main.c', HERE / 'frontend.bel',
+    for source_file in [HERE / 'rbel.c', HERE / 'lint-command.h', HERE / 'imports-command.h', HERE / 'check-main.c', HERE / 'frontend.bel',
                         ROOT / 'literate/lint.rbel.md',
                         HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md']:
         shutil.copy2(source_file, source_snapshot / source_file.name)
