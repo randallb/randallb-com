@@ -75,11 +75,19 @@ def build(args):
             if Path(name).name != name or name in ('.', '..'):
                 raise ValueError('invalid package filename in manifest')
             package_names.add(name)
-    protected = [wasm, node, license_source, Path(__file__).resolve(), *inputs.values(),
+    maintained = [ROOT / name for name in [
+        'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
+        'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
+        *['libcwr/embedding/' + name for name in [
+            'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'core.mjs',
+            'host.cjs', 'native-main.cjs', 'readme.md', 'native-build.md',
+            'example-context.json', 'example-events.jsonl']],
+    ]]
+    protected = [wasm, node, license_source, Path(__file__).resolve(), *inputs.values(), *maintained,
                  *[(wasm.parent / name).resolve() for name in package_names]]
     outputs = [output, manifest, license_output]
     for index, destination in enumerate(outputs):
-        if destination.is_relative_to(HERE) or destination.is_relative_to(node.parent):
+        if (destination.is_relative_to(ROOT) and not destination.is_relative_to(ROOT / 'target')) or destination.is_relative_to(node.parent):
             raise ValueError('native outputs must be outside source and Node executable directories')
         for source in protected + outputs[:index]:
             if destination == source or (destination.exists() and source.exists() and destination.samefile(source)):
