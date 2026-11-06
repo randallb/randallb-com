@@ -319,10 +319,10 @@ conversation create after-quit
                 return marker in terminal_output
 
             try:
-                check('terminal-no-arguments-enters-repl', until(b'libcwr['))
-                os.write(master, b'conversation create terminal\n')
-                check('repl-prompt-shows-selected-conversation', until(b'libcwr[terminal]>'))
-                os.write(master, b'exit\n')
+                check('terminal-no-arguments-enters-repl', until(b'you['))
+                os.write(master, b'/new terminal\n')
+                check('repl-prompt-shows-selected-conversation', until(b'you[terminal]>'))
+                os.write(master, b'/exit\n')
                 terminal.wait(timeout=10)
                 check('terminal-exit-is-clean', terminal.returncode == 0)
             finally:

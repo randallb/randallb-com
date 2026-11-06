@@ -33,7 +33,7 @@ def build(args):
     outputs = [output, manifest_output, license_output]
     package_manifest = wasm.parent / 'manifest.json'
     package_names = {'manifest.json', 'core.wasm', 'core.mjs', 'core.cjs', 'values.mjs', 'values.cjs',
-                     'host.cjs', 'cli-guide.md', 'readme.md', 'native-build.md', 'example-context.json',
+                     'host.cjs', 'cli-guide.md', 'chat-guide.md', 'readme.md', 'native-build.md', 'example-context.json',
                      'example-events.jsonl', 'LICENSE', 'NOTICE.txt', 'ORIGIN.json', 'workflow.rbel.md'}
     metadata = json.loads(package_manifest.read_text()) if package_manifest.exists() else None
     maintained = [*HERE.iterdir(), ROOT / 'libcwr/workflow.rbel.md', ROOT / 'literate/wasm-values.mjs',

@@ -169,9 +169,23 @@ static V *complete(V *evidence,V *replacement) {
 }
 static V *execute(V *invocation) {
   V *reference=v_record_get(invocation,"ref"),*exact=v_record_get(invocation,"target"),*input=v_record_get(invocation,"input");size_t n;char *body=v_text_n(input,&n),name[96],digest[65];hash_bytes(body,n,digest);hashed_name(reference,"artifact-",".txt",name);V *action=at(exact,3);
-  if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);else v_fail("unsupported fixture action");
+  V *result = v_chars(digest);
+  if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);
+  else if(v_isstr(action,"uppercase--text")) {
+    result=v_array();
+    for(size_t offset=0;input&&offset<input->n;offset+=256) {
+      V *chunk=v_array();size_t end=offset+256<input->n?offset+256:input->n;
+      for(size_t i=offset;i<end;i++)v_push(chunk,input->items[i]);
+      V *operation=v_array();field(operation,"op",v_string("uppercase-value"));field(operation,"input",chunk);
+      V *answer=core_transition(NULL,operation,NULL),*response=at(answer,1);
+      if(!v_isstr(at(response,0),"transformed"))v_fail("compiled uppercase action failed");
+      V *converted=at(response,1);
+      for(size_t i=0;converted&&i<converted->n;i++)v_push(result,converted->items[i]);
+    }
+    char *converted=v_text_n(result,&n);atomic_bytes(name,converted,n);
+  } else v_fail("unsupported fixture action");
   V *entry=v_object();v_put(entry,"reference",reference);v_put(entry,"action",action);v_put(entry,"sha256",v_string(digest));char *json=v_json(entry);append_bytes("executions.jsonl",json,strlen(json));append_bytes("executions.jsonl","\n",1);
-  V *evidence=v_array();field(evidence,"ref",reference);field(evidence,"claim",v_record_get(invocation,"claim"));field(evidence,"target",exact);field(evidence,"input",input);field(evidence,"result",v_chars(digest));
+  V *evidence=v_array();field(evidence,"ref",reference);field(evidence,"claim",v_record_get(invocation,"claim"));field(evidence,"target",exact);field(evidence,"input",input);field(evidence,"result",result);
   if(consume_fault("lose-receipt")) {
     return NULL;
   }
@@ -272,6 +286,55 @@ void host_open(const char *directory, const char *context) {
 V *host_event(V *event) { return dispatch(event); }
 V *host_state(void) { return state; }
 V *host_environment(void) { return environment; }
+static V *chat_reference(const char *kind, const char *name) {
+  V *context=v_record_get(environment,"context");
+  if(!context||context->type!=VT_STRING||memchr(context->s,0,context->n))v_fail("invalid chat context");
+  size_t n=context->n+strlen(kind)+strlen(name)+3;char *text=v_alloc(n);
+  snprintf(text,n,"%s/%s/%s",context->s,kind,name);return v_string(text);
+}
+void host_chat_binding(void) {
+  V *binding=v_record_get(environment,"binding"),*old=v_record_get(binding,"target");
+  V *target=v_array();
+  v_push(target,at(old,0));v_push(target,chat_reference("coworkers","uppercase"));
+  v_push(target,at(old,2));v_push(target,v_string("uppercase--text"));
+  v_push(target,chat_reference("bindings","uppercase"));v_push(target,chat_reference("contracts","uppercase"));
+  V *allow=v_record_get(environment,"allow"),*next_allow=v_array();int permitted=0;
+  for(size_t i=0;allow&&i<allow->n;i++) {
+    v_push(next_allow,allow->items[i]);
+    if(!strcmp(v_json(allow->items[i]),v_json(old)))permitted=1;
+  }
+  if(permitted)v_push(next_allow,target);
+  V *available=v_record_get(environment,"available"),*next_available=v_array();int online=0;
+  for(size_t i=0;available&&i<available->n;i++) {
+    v_push(next_available,available->items[i]);
+    if(v_isstr(available->items[i],at(old,1)->s))online=1;
+  }
+  if(online)v_push(next_available,at(target,1));
+  V *old_route=v_record_get(binding,"route");size_t route_size=old_route->n+sizeof("/uppercase");
+  char *route=v_alloc(route_size);snprintf(route,route_size,"%s/uppercase",old_route->s);
+  binding=v_record_set(binding,"target",target);
+  binding=v_record_set(binding,"route",v_string(route));
+  environment=v_record_set(environment,"binding",binding);
+  environment=v_record_set(environment,"allow",next_allow);
+  environment=v_record_set(environment,"available",next_available);
+  replace_json(&environment_json,environment);
+}
+V *host_chat_send(V *conversation, const char *name, const char *text) {
+  size_t n=strlen(name);
+  if(!n||n>64)v_fail("invalid chat request name");
+  for(size_t i=0;i<n;i++)if(!((name[i]>='a'&&name[i]<='z')||(name[i]>='A'&&name[i]<='Z')||
+    (name[i]>='0'&&name[i]<='9')||name[i]=='-'||name[i]=='_'))v_fail("invalid chat request name");
+  V *request=v_array(),*reference=chat_reference("invocations",name);
+  field(request,"op",v_string("admit"));field(request,"ref",reference);
+  field(request,"origin",chat_reference("requests",name));field(request,"conversation",conversation);
+  field(request,"message",chat_reference("messages",name));field(request,"response-message",chat_reference("replies",name));
+  field(request,"target",v_record_get(v_record_get(environment,"binding"),"target"));
+  field(request,"input",v_chars(text));field(request,"text",v_chars(text));
+  V *response=dispatch(request);
+  if(!v_isstr(at(response,0),"admitted")&&!v_isstr(at(response,0),"existing"))return response;
+  request=v_array();field(request,"op",v_string("run"));field(request,"ref",reference);return dispatch(request);
+}
+
 V *host_artifact(V *reference) {
   V *event = v_array();
   field(event, "op", v_string("read"));

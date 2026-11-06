@@ -94,6 +94,7 @@ that execution did not happen.
   (if (id (cw-get 'owner conversation) (cw-get 'context environment))
     (cw-member (cw-get 'caller environment) (cw-get 'participants conversation)) nil))
 (def cw-target-worker (target) (car (cdr target)))
+(def cw-target-action (target) (car (cdr (cdr (cdr target)))))
 (def cw-authorized (target environment)
   ((fn (binding)
     (if (cw-equal target (cw-get 'target binding))
@@ -147,6 +148,14 @@ These fixtures name fictional identities and inputs, not expected protocol state
             (cw-set 'input "hello from rbel" (cw-set 'text "Store this text." nil)))))))))
 (def cw-fixture-event (operation)
   (cw-set 'op operation (cw-set 'ref (cw-fixture-ref "invocation-one") nil)))
+(def cw-chat-fixture-target ()
+  (join (cw-fixture-ref "runtime") (join (cw-fixture-ref "worker")
+    (join (cw-fixture-ref "role") (join 'uppercase--text (join (cw-fixture-ref "binding")
+      (join (cw-fixture-ref "contract") nil)))))))
+(def cw-chat-fixture-admission ()
+  (cw-set 'target (cw-chat-fixture-target)
+    (cw-set 'response-message (cw-fixture-ref "reply-one")
+      (cw-set 'input "hello, rbel! abc" (cw-set 'text "hello, rbel! abc" (cw-fixture-admission))))))
 (def cw-expect-code (label event expected continuation)
   (rt-request 'dispatch event (fn (response) (rt-assert label (car response) expected continuation))))
 (def cw-open (continuation)
@@ -190,15 +199,26 @@ participant, invocation, or action effect.
   (if conversations
     (if (cw-find reference (cw-get 'messages (car conversations))) t
       (cw-message-ref-used reference (cdr conversations))) nil))
+(def cw-response-ref-used (reference invocations)
+  (if invocations
+    (if (id reference (cw-get 'response-message (cw-get 'request (car invocations)))) t
+      (cw-response-ref-used reference (cdr invocations))) nil))
 (def cw-used-ref (state reference)
   (if reference (if (cw-conversation state reference) t
     (if (cw-invocation state reference) t
-      (cw-message-ref-used reference (cw-get 'conversations state)))) t))
+      (if (cw-response-ref-used reference (cw-get 'invocations state)) t
+        (cw-message-ref-used reference (cw-get 'conversations state))))) t))
 (def cw-origin (event environment)
   (cw-three (cw-get 'ingress environment) (cw-get 'caller environment) (cw-get 'origin event)))
 (def cw-find-origin (origin records)
   (if records (if (cw-equal origin (cw-get 'origin (car records))) (car records)
     (cw-find-origin origin (cdr records))) nil))
+(def cw-chat-request-valid (state event)
+  (if (cw-get 'response-message event)
+    (if (id (cw-target-action (cw-get 'target event)) 'uppercase--text)
+      (if (cw-used-ref state (cw-get 'response-message event)) nil
+        (if (id (cw-get 'response-message event) (cw-get 'ref event)) nil
+          (if (id (cw-get 'response-message event) (cw-get 'message event)) nil t))) nil) t))
 (def cw-admit (state event environment)
   (if (cw-textp (cw-get 'input event))
     (if (cw-textp (cw-get 'text event)) (cw-admit-checked state event environment)
@@ -224,7 +244,12 @@ participant, invocation, or action effect.
         (cw-find-origin (cw-origin event environment) (cw-get 'invocations state)))
       (cw-reply state 'unavailable nil)))
     (cw-conversation state (cw-get 'conversation event))))
+(def cw-source-link (event message)
+  (if (cw-get 'response-message event) (cw-set 'invocation (cw-get 'ref event) message) message))
 (def cw-admit-new (state event environment conversation)
+  (if (cw-chat-request-valid state event)
+    (cw-admit-new-valid state event environment conversation) (cw-reply state 'conflict nil)))
+(def cw-admit-new-valid (state event environment conversation)
   ((fn (invocation)
     (cw-reply
       (cw-save 'invocations invocation
@@ -234,11 +259,11 @@ participant, invocation, or action effect.
               (cw-get 'participants conversation)
               (join (cw-target-worker (cw-get 'target event)) (cw-get 'participants conversation)))
             (cw-set 'messages
-              (join (cw-set 'ref (cw-get 'message event)
+              (join (cw-source-link event (cw-set 'ref (cw-get 'message event)
                 (cw-set 'author (cw-get 'caller environment)
                   (cw-set 'ingress (cw-get 'ingress environment)
                     (cw-set 'addressed (cw-target-worker (cw-get 'target event))
-                      (cw-set 'reply (cw-get 'reply event) (cw-set 'text (cw-get 'text event) nil))))))
+                      (cw-set 'reply (cw-get 'reply event) (cw-set 'text (cw-get 'text event) nil)))))))
                 (cw-get 'messages conversation)) conversation)) state))
       'admitted invocation))
     (cw-set 'ref (cw-get 'ref event)
@@ -386,6 +411,67 @@ external effects.
 (rt-done)))))))))))))))))))))))
 ```
 
+## Local rbel uppercase coworker
+
+The chat demonstration uses the same ASCII-only transformation as the maintained
+[Unix filter example](../literate/unix-filter.rbel.md). The rbel definitions below
+are adapted from that example; non-ASCII characters remain unchanged. The host
+processes bounded chunks through this pure compiled value operation only after the retained
+uppercase action passes normal authorization. The operation itself has no state
+or filesystem effects. Its direct result is not a coworker publication.
+
+An admission may reserve `response-message` for the uppercase action. It must be
+fresh and distinct from its invocation and source-message refs; all future
+admissions respect that reservation. First authenticated completion atomically
+adds the coworker's message and terminal invocation. The reply author is the
+retained target coworker, the reply link is the original source, and both sides
+retain the invocation ref. A matching receipt can publish the same reply after
+interruption; duplicate completion or reconciliation cannot publish twice.
+Legacy actions without `response-message` retain their prior message behavior.
+Authorized list reads filter the whole requested record collection in one pure
+transition, retaining its order and applying the same visibility checks as
+individual reads. This bounds host copying to one state/result per collection,
+rather than a separate full-state transition for every candidate record.
+
+```rbel definition=uppercase-coworker
+; Byte-list stdin/stdout filter. Only ASCII lowercase bytes are changed.
+(def uppercase (xs)
+  (if xs (join (upper-byte (car xs)) (uppercase (cdr xs))) nil))
+
+(def upper-byte (c)
+
+    (if (id c \a) \A
+    (if (id c \b) \B
+    (if (id c \c) \C
+    (if (id c \d) \D
+    (if (id c \e) \E
+    (if (id c \f) \F
+    (if (id c \g) \G
+    (if (id c \h) \H
+    (if (id c \i) \I
+    (if (id c \j) \J
+    (if (id c \k) \K
+    (if (id c \l) \L
+    (if (id c \m) \M
+    (if (id c \n) \N
+    (if (id c \o) \O
+    (if (id c \p) \P
+    (if (id c \q) \Q
+    (if (id c \r) \R
+    (if (id c \s) \S
+    (if (id c \t) \T
+    (if (id c \u) \U
+    (if (id c \v) \V
+    (if (id c \w) \W
+    (if (id c \x) \X
+    (if (id c \y) \Y
+    (if (id c \z) \Z c)))))))))))))))))))))))))))
+(def cw-uppercase-value (state event)
+  (if (cw-textp (cw-get 'input event))
+    (cw-reply state 'transformed (uppercase (cw-get 'input event)))
+    (cw-reply state 'invalid nil)))
+```
+
 ## R5: authenticate completion; retain the original outcome
 
 Only the execution boundary holding the retained claim can complete. A successful
@@ -396,10 +482,29 @@ execution is rejected. The successful deterministic action is the slice's only
 terminal response variant; other status classes remain unmigrated.
 
 ```rbel definition=completion
-(def cw-finish (state invocation result)
+(def cw-chat-publish (state invocation result)
+  ((fn (request conversation)
+    (cw-save 'conversations
+      (cw-set 'messages
+        (join (cw-set 'ref (cw-get 'response-message request)
+          (cw-set 'author (cw-target-worker (cw-get 'target invocation))
+            (cw-set 'ingress (cw-get 'ingress invocation)
+              (cw-set 'addressed (cw-get 'author invocation)
+                (cw-set 'reply (cw-get 'message request)
+                  (cw-set 'invocation (cw-get 'ref invocation)
+                    (cw-set 'text result nil)))))))
+          (cw-get 'messages conversation)) conversation) state))
+    (cw-get 'request invocation) (cw-conversation state (cw-get 'conversation invocation))))
+(def cw-finish-record (state invocation result)
   ((fn (completed) (cw-reply (cw-save 'invocations completed state) 'completed completed))
     (cw-set 'phase 'completed (cw-set 'attempt nil (cw-set 'uncertain nil
       (cw-set 'checked nil (cw-set 'result result invocation)))))))
+(def cw-finish (state invocation result)
+  (if (cw-get 'response-message (cw-get 'request invocation))
+    (if (cw-textp result)
+      (cw-finish-record (cw-chat-publish state invocation result) invocation result)
+      (cw-reply state 'invalid invocation))
+    (cw-finish-record state invocation result)))
 (def cw-complete (state event environment)
   ((fn (invocation)
     (if invocation
@@ -497,14 +602,28 @@ are rejected and do not unlock retry.
     ((fn (invocation) (if (cw-visible state invocation environment)
       (cw-reply state 'found invocation) (cw-reply state 'unavailable nil)))
       (cw-invocation state (cw-get 'ref event)))))
+(def cw-visible-records (state records environment conversations)
+  (if records
+    (if (if conversations (cw-allowed-reader (car records) environment)
+          (cw-visible state (car records) environment))
+      (join (car records) (cw-visible-records state (cdr records) environment conversations))
+      (cw-visible-records state (cdr records) environment conversations)) nil))
+(def cw-list (state event environment)
+  (if (id (cw-get 'kind event) 'conversation)
+    (cw-reply state 'found (cw-visible-records state (cw-get 'conversations state) environment t))
+    (if (id (cw-get 'kind event) 'invocation)
+      (cw-reply state 'found (cw-visible-records state (cw-get 'invocations state) environment nil))
+      (cw-reply state 'invalid nil))))
 (def cw-step (state event environment)
-  (if (id (cw-get 'op event) 'create) (cw-create state event environment)
+  (if (id (cw-get 'op event) 'uppercase-value) (cw-uppercase-value state event)
+    (id (cw-get 'op event) 'create) (cw-create state event environment)
     (id (cw-get 'op event) 'admit) (cw-admit state event environment)
     (id (cw-get 'op event) 'run) (cw-run state event environment)
     (id (cw-get 'op event) 'complete) (cw-complete state event environment)
     (id (cw-get 'op event) 'recover) (cw-recover state environment)
     (id (cw-get 'op event) 'reconcile) (cw-reconcile state event environment)
     (id (cw-get 'op event) 'read) (cw-read state event environment)
+    (id (cw-get 'op event) 'list) (cw-list state event environment)
     (cw-reply state 'unsupported nil)))
 ```
 
@@ -620,4 +739,34 @@ used to compute the expected answers.
 (rt-request 'observe (cw-fixture-ref "invocation-one") (fn (answer)
 (rt-assert 'wrong-context-no-extra-effect (cw-get 'executions answer) '(t) (fn (ignored)
 (rt-done)))))))))))))))))))))))))))))))))
+```
+
+## Chat workflow acceptance
+
+This adjacent case uses the actual compiled rbel uppercase action, loses its
+completion, reconciles its receipt, and verifies exactly one attributed reply.
+
+```rbel test=chat-workflow
+(cw-open (fn (ignored)
+(rt-request 'configure (cw-two (cw-entry 'allow (join (cw-chat-fixture-target) nil)) (cw-entry 'binding (cw-set 'target (cw-chat-fixture-target) (cw-fixture-binding)))) (fn (ignored)
+(cw-expect-code 'chat-admitted (cw-chat-fixture-admission) 'admitted (fn (ignored)
+(rt-request 'fault 'lose-completion (fn (ignored)
+(cw-expect-code 'chat-lost-completion (cw-fixture-event 'run) 'running (fn (ignored)
+(rt-request 'restart nil (fn (ignored)
+(rt-request 'dispatch (cw-fixture-event 'reconcile) (fn (answer)
+(rt-assert 'chat-reconciled (car answer) 'completed (fn (ignored)
+(rt-assert 'chat-transformed-result (cw-get 'result (car (cdr answer))) "HELLO, RBEL! ABC" (fn (ignored)
+(cw-expect-code 'chat-repeated-run (cw-fixture-event 'run) 'completed (fn (ignored)
+(rt-request 'snapshot nil (fn (answer)
+((fn (messages)
+(rt-assert 'chat-reply-text (cw-get 'text (car messages)) "HELLO, RBEL! ABC" (fn (ignored)
+(rt-assert 'chat-reply-author (cw-get 'author (car messages)) (cw-fixture-ref "worker") (fn (ignored)
+(rt-assert 'chat-reply-link (cw-get 'reply (car messages)) (cw-fixture-ref "message-one") (fn (ignored)
+(rt-assert 'chat-reply-invocation (cw-get 'invocation (car messages)) (cw-fixture-ref "invocation-one") (fn (ignored)
+(rt-assert 'chat-source-author (cw-get 'author (car (cdr messages))) (cw-fixture-ref "alice") (fn (ignored)
+(rt-assert 'chat-source-invocation (cw-get 'invocation (car (cdr messages))) (cw-fixture-ref "invocation-one") (fn (ignored)
+(rt-assert 'chat-two-messages-only (cdr (cdr messages)) nil (fn (ignored)
+(rt-request 'observe (cw-fixture-ref "invocation-one") (fn (observed)
+(rt-assert 'chat-executes-once (cw-get 'executions observed) '(t) (fn (ignored)
+(rt-done)))))))))))))))))))) (cw-get 'messages (car (cw-get 'conversations answer))))))))))))))))))))))))))
 ```
