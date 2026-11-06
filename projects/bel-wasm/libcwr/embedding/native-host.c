@@ -3,6 +3,7 @@
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #include "native-host.h"
+#include "native-reload.h"
 #include "runtime-license.h"
 #include <dirent.h>
 #include <errno.h>
@@ -107,7 +108,7 @@ static void validate_environment(V *env) {
 static char *retain(const char *s) { char *p=strdup(s);if(!p)v_fail("allocation failed");return p; }
 static void replace_json(char **saved,V *v) { char *next=retain(v_json(v));free(*saved);*saved=next; }
 static void unlock(void) { if(lock_owned){lock_owned=0;unlinkat(directory_fd,".libcwr-lock",0);} }
-static void signal_stop(int number) { unlock();_exit(number==SIGINT?130:143); }
+static void signal_stop(int number) { coworker_interrupt();unlock();_exit(number==SIGINT?130:143); }
 static void write_all(int fd,const char *data,size_t n) {
   while(n) {ssize_t written=write(fd,data,n);if(written<0&&errno==EINTR)continue;if(written<=0){int error=errno;close(fd);v_fail("write failed: %s",strerror(error));}data+=written;n-=(size_t)written;}
 }
@@ -173,7 +174,10 @@ static V *execute(V *invocation) {
   if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);
   else if(v_isstr(action,"uppercase--text")) {
     result=v_array();
-    for(size_t offset=0;input&&offset<input->n;offset+=256) {
+    if(coworker_active()) {
+      size_t converted_size;char *converted=coworker_transform(body,n,&converted_size);
+      result=v_chars_n(converted,converted_size);
+    } else for(size_t offset=0;input&&offset<input->n;offset+=256) {
       V *chunk=v_array();size_t end=offset+256<input->n?offset+256:input->n;
       for(size_t i=offset;i<end;i++)v_push(chunk,input->items[i]);
       V *operation=v_array();field(operation,"op",v_string("uppercase-value"));field(operation,"input",chunk);
@@ -238,7 +242,7 @@ static void prepare_environment(V *value) {
   environment = filtered;
   replace_json(&environment_json, environment);
 }
-static void install_session_signals(void) {
+void host_prepare_signals(void) {
   static int installed;
   if (installed) return;
   installed = 1;
@@ -270,7 +274,7 @@ void host_open(const char *directory, const char *context) {
     prepare_environment(v_parse(data, n));
   }
   lock_directory(directory);
-  install_session_signals();
+  host_prepare_signals();
   if (!fixtures && !context) {
     size_t n;
     char *data = read_file("context.json", &n, 0);
@@ -374,7 +378,7 @@ static V *localize(V *value, const char *base) {
 }
 V *host_init(const char *directory) {
   lock_directory(directory);
-  install_session_signals();
+  host_prepare_signals();
   int duplicate = dup(directory_fd);
   if (duplicate < 0) {
     v_fail("cannot inspect workspace directory");

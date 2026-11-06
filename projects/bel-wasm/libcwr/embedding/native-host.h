@@ -3,6 +3,7 @@
 #include "native-values.h"
 
 /* A single local owning session; values live until host_close/v_reset. */
+void host_prepare_signals(void);
 void host_open(const char *directory, const char *context);
 V *host_init(const char *directory);
 V *host_event(V *event);

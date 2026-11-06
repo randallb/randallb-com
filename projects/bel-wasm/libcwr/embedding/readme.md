@@ -119,3 +119,11 @@ interfaces; an actual browser run must be recorded separately before claiming it
 ## Chat with a software coworker
 
 `libcwr chat --directory ./workspace` opens a conversation with the local rbel uppercase coworker. Ordinary text submits and runs an action, retaining both authors and the reply link. See the [chat guide](chat-guide.md). No arguments on a terminal starts chat; `repl` keeps the explicit command interface.
+
+
+Source-backed chat supports an explicit `/reload` edit loop with
+`chat --source SOURCE --rbel COMPILER`. The maintained sample is
+`libcwr/coworkers/uppercase.rbel.md`; it uses relative imports. The chat guide
+explains native worker replacement, retained history, and failed-build recovery.
+Run `python3 libcwr/embedding/reload-verify.py` after building the native host
+for isolated same-process source reload checks.

@@ -86,3 +86,44 @@ The old command interface remains available through `./libcwr repl` and the
 one-shot commands in [the CLI guide](cli-guide.md). The raw JSONL developer
 transport remains available with an explicit trusted context. Existing stored
 text artifacts can still be inspected through those interfaces.
+
+## Edit and reload a source coworker
+
+Start chat with explicit paths to a source file and the native compiler:
+
+```sh
+target/libcwr-embedding/libcwr chat --directory ./trial \
+  --source libcwr/coworkers/uppercase.rbel.md \
+  --rbel target/rbel-command/bin/rbel
+```
+
+The initial build checks the source's examples and imported examples before
+opening chat. The sample imports the existing uppercase module with a relative
+path. After editing its definitions or dependencies, type `/reload`. A successful
+build prints `Reloaded coworker source.`; the next message runs the new compiled
+worker. Editing a file alone does not change the loaded worker. A failed build
+reports diagnostics and keeps the last working version. Selection and saved
+messages stay in place; `/history` still shows the attributed conversation.
+
+The chat shell and protocol core stay running. Each message launches the selected
+native worker and supplies its UTF-8 bytes on stdin, collecting stdout only after
+a successful exit. This is executable replacement rather than mutable interpreter
+definitions. The source entry accepts and returns a proper byte list, operating
+on independent chunks of at most 256 bytes. Source workers have a 10-second
+execution deadline and 256 KiB input/output bounds. Builds have a 120-second
+deadline. Nonzero exits, traps, invalid output text, and bounds failures report an
+action error; `/status` and the existing recovery controls remain available.
+
+This explicit local development mode requires the native rbel bundle (including
+WABT) and Apple's C compiler to rebuild. The chat/worker execution uses no Rust,
+Node, Python, or external Wasm engine. `--source` and `--rbel` must be supplied
+together; ordinary chat without them keeps its built-in uppercase coworker.
+`/reload` without a configured source explains how to launch source mode.
+
+To reopen source mode, launch with the same source/compiler options and workspace.
+History persists in the workspace; loaded build selection is process-local.
+The existing `uppercase` coworker identity remains stable across edits; per-message
+source revision provenance is not recorded by this preview feature. Completed
+receipts and replies are retained and are not re-executed by reload. Private build
+files are removed on normal exit; forced termination may leave a temporary build
+directory. No source file or stored conversation is rewritten by `/reload`.

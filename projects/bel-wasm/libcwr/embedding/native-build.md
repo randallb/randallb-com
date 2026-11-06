@@ -61,3 +61,10 @@ The executable includes the user-facing commands described in the [CLI guide](cl
 successive builds can be identified. Uncommitted builds carry a `-dirty` suffix;
 source archives without Git metadata are labeled `unversioned-source`. Native
 and standalone manifests retain the revision alongside exact source hashes.
+
+
+Source-backed chat and `/reload` use `native-reload.c/.h` to compile a private
+native byte-list worker and replace it after successful checks. The compiler
+bundle and system C compiler are development dependencies of this mode. See
+[the chat guide](chat-guide.md#edit-and-reload-a-source-coworker) for invocation,
+bounds, last-working-version behavior, and retained conversation semantics.

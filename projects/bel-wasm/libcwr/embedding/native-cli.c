@@ -1,5 +1,6 @@
 /* Readable local commands over the same compiled protocol and owning host. */
 #include "native-host.h"
+#include "native-reload.h"
 #include "build-info.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +30,7 @@ static void help(void) {
   puts("libcwr - a local, inspectable conversation/action runtime\n"
        "\n"
        "  chat [--directory DIR]            Chat with the local rbel coworker\n"
+       "       [--source SOURCE --rbel COMPILER]  Enable source reload\n"
        "  repl [--directory DIR]            Start an interactive session\n"
        "  (no arguments on a terminal starts chat)\n"
        "  Inside: use NAME, submit INVOCATION --text TEXT, history, exit\n"
@@ -324,7 +326,7 @@ static int chat_action(const char *directory, const char *verb, const char *argu
     reply = host_event(request);
     if (v_isstr(at(reply, 0), "created") || v_isstr(at(reply, 0), "existing")) {
       snprintf(selection, 65, "%s", name);
-      printf("Conversation: %s | coworker: uppercase (local rbel)\n", selection);
+      printf("Conversation: %s | coworker: uppercase (%s)\n", selection, coworker_active() ? "reloadable rbel source" : "local rbel");
     }
   } else if (!strcmp(verb, "use")) {
     reply = read_record("conversation", reference("conversations", argument));
@@ -383,10 +385,12 @@ static int chat_action(const char *directory, const char *verb, const char *argu
   return ok ? 0 : 1;
 }
 static void chat_help(void) {
-  puts("Type a message and the local rbel coworker replies in uppercase.\n"
-       "ASCII a-z change; other characters stay unchanged. No model is connected.\n"
+  puts(coworker_active() ? "Type a message to run the configured rbel source coworker. No model is connected." :
+       "Type a message and the local rbel coworker replies in uppercase.\nASCII a-z change; other characters stay unchanged. No model is connected.");
+  puts(
        "/new [NAME]       Create/select a conversation\n"
        "/use NAME         Reopen a saved conversation\n"
+       "/reload           Rebuild configured source; keep last good on failure\n"
        "/history          Read saved user and coworker messages\n"
        "/coworker [uppercase]  Show/select the local coworker\n"
        "/status, /recover, /reconcile INVOCATION  Inspect/recover work\n"
@@ -428,8 +432,13 @@ static int chat_main(const char *directory) {
     const char *verb = words[0];
     if (count == 1 && (!strcmp(verb, "exit") || !strcmp(verb, "quit"))) break;
     if (count == 1 && !strcmp(verb, "help")) { chat_help(); continue; }
+    if (count == 1 && !strcmp(verb, "reload")) {
+      if (!coworker_reload()) puts("Reloaded coworker source.");
+      else fputs("libcwr: reload failed; last working coworker retained.\n", stderr);
+      fflush(stdout); fflush(stderr); continue;
+    }
     if (!strcmp(verb, "coworker") && (count == 1 || (count == 2 && !strcmp(words[1], "uppercase")))) {
-      puts("uppercase: local rbel ASCII uppercase coworker"); continue;
+      puts(coworker_active() ? "uppercase: reloadable rbel source coworker" : "uppercase: local rbel ASCII uppercase coworker"); continue;
     }
     int single = count == 1 && (!strcmp(verb, "history") || !strcmp(verb, "status") || !strcmp(verb, "recover"));
     int named = count == 2 && (!strcmp(verb, "use") || !strcmp(verb, "reconcile") || !strcmp(verb, "run"));
@@ -519,7 +528,7 @@ static int cli_command(int argc, char **argv, char *selection) {
     return status;
   }
   const char *directory = ".libcwr";
-  const char *text = NULL;
+  const char *text = NULL, *source = NULL, *compiler = NULL;
   const char *words[8];
   size_t count = 0;
   int directory_set = 0, json = 0, show_help = 0;
@@ -539,6 +548,12 @@ static int cli_command(int argc, char **argv, char *selection) {
       }
       directory = arg + 12;
       directory_set = 1;
+    } else if (!strcmp(arg, "--source") || !strcmp(arg, "--rbel")) {
+      const char **value = !strcmp(arg, "--source") ? &source : &compiler;
+      if (*value || i + 1 >= argc || !strncmp(argv[i + 1], "--", 2)) {
+        status = 2; v_fail("%s requires one path", arg);
+      }
+      *value = argv[++i];
     } else if (!strcmp(arg, "--text")) {
       if (text || i + 1 >= argc) {
         status = 2;
@@ -588,10 +603,17 @@ static int cli_command(int argc, char **argv, char *selection) {
   }
   const char *command = words[0];
   if (!strcmp(command, "chat")) {
-    if (count != 1 || text || json) { status = 2; v_fail("chat accepts only --directory and --help"); }
+    if (count != 1 || text || json || (!!source != !!compiler)) {
+      status = 2; v_fail("chat accepts --directory and paired --source SOURCE --rbel COMPILER");
+    }
     v_handler = previous;
-    return chat_main(directory);
+    host_prepare_signals();
+    if (source && coworker_configure(source, compiler)) { coworker_close(); return 1; }
+    int result = chat_main(directory);
+    coworker_close();
+    return result;
   }
+  if (source || compiler) { status = 2; v_fail("--source and --rbel are chat options only"); }
   if (!strcmp(command, "repl")) {
     if (count != 1 || text || json) {
       status = 2;

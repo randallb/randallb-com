@@ -41,7 +41,7 @@ def main():
         if not marker.is_file() or json.loads(marker.read_text()).get('format') != 'libcwr-embedding-v1':
             raise ValueError('refusing to replace an unrecognized output directory')
     source = ROOT / 'libcwr/workflow.rbel.md'
-    inputs = [source, HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c']],
+    inputs = [source, ROOT / 'libcwr/coworkers/uppercase.rbel.md', ROOT / 'literate/unix-filter.rbel.md', HERE / 'reload-verify.py', HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h']],
               ROOT / 'literate/wasm-values.mjs', ROOT / 'literate/test.py', Path(__file__).resolve(),
               HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py', HERE / 'cli-verify.py', HERE / 'chat-verify.py',
               *[ROOT / name for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']],
