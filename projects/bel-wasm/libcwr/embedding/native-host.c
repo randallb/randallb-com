@@ -2,8 +2,9 @@
  * the generated rbel core; this host supplies trusted context and effects. */
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
-#include "native-values.h"
+#include "native-host.h"
 #include "runtime-license.h"
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -23,6 +24,7 @@
 static int directory_fd = -1;
 static volatile sig_atomic_t lock_owned;
 static int fixtures;
+static int runtime_ready;
 static unsigned restarts;
 static char *environment_json;
 static V *environment, *state;
@@ -208,6 +210,169 @@ static V *fixture_request(V *operation,V *arguments) {
 }
 static V *fixture_evidence(void) {V *rows=v_array();for(size_t i=0;i<trace_count;i++)v_push(rows,v_parse(trace[i],strlen(trace[i])));V *evidence=v_object();v_put(evidence,"trace",rows);v_put(evidence,"restarts",v_number(restarts));return evidence;}
 static const char fixture_json[]="[[\"runtime\",\"cwp://org.example.libcwr/runtime\"],[\"caller\",\"cwp://org.example.libcwr/alice\"],[\"ingress\",\"cwp://org.example.libcwr/ingress\"],[\"context\",\"cwp://org.example.libcwr/workspace\"],[\"available\",[\"cwp://org.example.libcwr/alice\",\"cwp://org.example.libcwr/worker\"]],[\"allow\",[[\"cwp://org.example.libcwr/runtime\",\"cwp://org.example.libcwr/worker\",\"cwp://org.example.libcwr/role\",\"store--text\",\"cwp://org.example.libcwr/binding\",\"cwp://org.example.libcwr/contract\"]]],[\"binding\",[[\"target\",[\"cwp://org.example.libcwr/runtime\",\"cwp://org.example.libcwr/worker\",\"cwp://org.example.libcwr/role\",\"store--text\",\"cwp://org.example.libcwr/binding\",\"cwp://org.example.libcwr/contract\"]],[\"required\",[\"workspace.write\"]],[\"grants\",[\"workspace.write\"]],[\"capabilities\",[\"workspace.write\"]],[\"route\",\"cwp://org.example.libcwr/route-one\"],[\"repeat-safe\",\"t\"]]]]";
+static void prepare_environment(V *value) {
+  validate_environment(value);
+  V *filtered = v_array();
+  for (size_t i = 0; i < value->n; i++) {
+    V *entry = value->items[i];
+    V *key = at(entry, 0);
+    if (!v_isstr(key, "claim") && !v_isstr(key, "executor") &&
+        !v_isstr(key, "evidence") && !v_isstr(key, "system")) {
+      v_push(filtered, entry);
+    }
+  }
+  environment = filtered;
+  replace_json(&environment_json, environment);
+}
+static void install_session_signals(void) {
+  static int installed;
+  if (installed) return;
+  installed = 1;
+  atexit(unlock);
+  signal(SIGINT, signal_stop);
+  signal(SIGTERM, signal_stop);
+  signal(SIGPIPE, SIG_IGN);
+}
+void host_open(const char *directory, const char *context) {
+  if (directory_fd >= 0) {
+    v_fail("a local session is already open");
+  }
+  if (!fixtures && !context) {
+    int existing = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (existing < 0) {
+      v_fail("workspace is not initialized; run libcwr init --directory DIR");
+    }
+    close(existing);
+  }
+  if (fixtures) {
+    prepare_environment(v_parse(fixture_json, strlen(fixture_json)));
+  } else if (context) {
+    int fd = open(context, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0) {
+      v_fail("cannot read trusted context: %s", strerror(errno));
+    }
+    size_t n;
+    char *data = read_descriptor(fd, &n);
+    prepare_environment(v_parse(data, n));
+  }
+  lock_directory(directory);
+  install_session_signals();
+  if (!fixtures && !context) {
+    size_t n;
+    char *data = read_file("context.json", &n, 0);
+    prepare_environment(v_parse(data, n));
+  }
+  wasm_rt_init();
+  runtime_ready = 1;
+  state = read_value("state.json");
+  if (!fixtures) {
+    restart();
+  }
+}
+V *host_event(V *event) { return dispatch(event); }
+V *host_state(void) { return state; }
+V *host_environment(void) { return environment; }
+V *host_artifact(V *reference) {
+  V *event = v_array();
+  field(event, "op", v_string("read"));
+  field(event, "kind", v_string("invocation"));
+  field(event, "ref", reference);
+  V *response = dispatch(event);
+  if (!v_isstr(at(response, 0), "found")) {
+    v_fail("invocation is unavailable");
+  }
+  char name[96];
+  hashed_name(reference, "artifact-", ".txt", name);
+  size_t n;
+  char *data = read_file(name, &n, 1);
+  if (!data) {
+    v_fail("invocation has no local artifact yet; use run or inspect its status");
+  }
+  return v_string_n(data, n);
+}
+static V *localize(V *value, const char *base) {
+  const char prefix[] = "cwp://org.example.libcwr/";
+  if (value && value->type == VT_STRING && value->n >= sizeof(prefix) - 1 &&
+      !memcmp(value->s, prefix, sizeof(prefix) - 1)) {
+    const char *tail = value->s + sizeof(prefix) - 1;
+    size_t n = strlen(base) + strlen(tail) + 2;
+    char *text = v_alloc(n);
+    snprintf(text, n, "%s/%s", base, tail);
+    return v_string(text);
+  }
+  if (value && value->type == VT_ARRAY) {
+    V *result = v_array();
+    for (size_t i = 0; i < value->n; i++) {
+      v_push(result, localize(value->items[i], base));
+    }
+    return result;
+  }
+  return value;
+}
+V *host_init(const char *directory) {
+  lock_directory(directory);
+  install_session_signals();
+  int duplicate = dup(directory_fd);
+  if (duplicate < 0) {
+    v_fail("cannot inspect workspace directory");
+  }
+  DIR *entries = fdopendir(duplicate);
+  if (!entries) {
+    close(duplicate);
+    v_fail("cannot inspect workspace directory");
+  }
+  struct dirent *entry;
+  int nonempty = 0;
+  errno = 0;
+  while ((entry = readdir(entries))) {
+    if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..") &&
+        strcmp(entry->d_name, ".libcwr-lock")) {
+      nonempty = 1;
+      break;
+    }
+  }
+  int scan_error = errno;
+  closedir(entries);
+  if (scan_error) {
+    v_fail("cannot inspect workspace directory: %s", strerror(scan_error));
+  }
+  if (nonempty) {
+    v_fail("init requires a new or empty directory; existing files were preserved");
+  }
+  V *fresh = claim();
+  const char *uuid = strrchr(fresh->s, '/');
+  char base[128];
+  snprintf(base, sizeof(base), "cwp://org.example.libcwr/local/%s", uuid + 1);
+  prepare_environment(localize(v_parse(fixture_json, strlen(fixture_json)), base));
+  atomic_value("context.json", environment);
+  V *info = v_object();
+  v_put(info, "directory", v_string(directory));
+  v_put(info, "context", v_record_get(environment, "context"));
+  v_put(info, "caller", v_record_get(environment, "caller"));
+  v_put(info, "action", v_string("store--text"));
+  return info;
+}
+void host_close(void) {
+  unlock();
+  if (directory_fd >= 0) {
+    close(directory_fd);
+    directory_fd = -1;
+  }
+  free(environment_json);
+  environment_json = NULL;
+  for (size_t i = 0; i < trace_count; i++) {
+    free(trace[i]);
+  }
+  free(trace);
+  trace = NULL;
+  trace_count = trace_bytes = 0;
+  state = environment = NULL;
+  v_reset();
+  if (runtime_ready) {
+    wasm_rt_free();
+    runtime_ready = 0;
+  }
+}
 static void request(const char *data,size_t length) {
   environment=v_parse(environment_json,strlen(environment_json));state=read_value("state.json");V *value=v_parse(data,length),*response;
   if(fixtures) {if(!value||value->type!=VT_OBJECT||!v_get(value,"operation")||v_get(value,"operation")->type!=VT_STRING)v_fail("fixture request must contain operation and optional arguments");for(size_t i=0;i<value->n;i++)if(strcmp(value->keys[i],"operation")&&strcmp(value->keys[i],"arguments"))v_fail("fixture request must contain operation and optional arguments");V *answer=fixture_request(v_get(value,"operation"),v_get(value,"arguments"));response=v_object();v_put(response,"value",answer);v_put(response,"evidence",fixture_evidence());}
@@ -215,6 +380,10 @@ static void request(const char *data,size_t length) {
   char *output=v_json(response);size_t n=strlen(output);if(n>MAX_FILE)v_fail("response exceeds line bound");if(fwrite(output,1,n,stdout)!=n||fputc('\n',stdout)==EOF||fflush(stdout)!=0)v_fail("response write failed");
 }
 int main(int argc,char **argv) {
+  if (argc == 1 || argv[1][0] != '-' || !strcmp(argv[1], "--version") ||
+      (argc == 2 && !strcmp(argv[1], "--help"))) {
+    return cli_main(argc, argv);
+  }
   jmp_buf top;
   v_handler=&top;
   volatile int status=0;
@@ -238,13 +407,12 @@ int main(int argc,char **argv) {
   if(!fixtures&&!context) {
     v_fail("--context is required");
   }
-  if(fixtures)environment=v_parse(fixture_json,strlen(fixture_json));else{int fd=open(context,O_RDONLY|O_NOFOLLOW);if(fd<0)v_fail("cannot read trusted context: %s",strerror(errno));size_t n;char *data=read_descriptor(fd,&n);environment=v_parse(data,n);}
-  validate_environment(environment);V *filtered=v_array();for(size_t i=0;i<environment->n;i++){V *entry=environment->items[i],*key=at(entry,0);if(!v_isstr(key,"claim")&&!v_isstr(key,"executor")&&!v_isstr(key,"evidence")&&!v_isstr(key,"system"))v_push(filtered,entry);}environment=filtered;replace_json(&environment_json,environment);
-  lock_directory(directory);atexit(unlock);signal(SIGINT,signal_stop);signal(SIGTERM,signal_stop);signal(SIGPIPE,SIG_IGN);wasm_rt_init();
-  if(!fixtures){state=read_value("state.json");restart();}v_reset();
+  host_open(directory, context);
+  v_reset();
   char *line=malloc(MAX_LINE+1);if(!line)v_fail("allocation failed");size_t n=0;int c;
   while((c=fgetc(stdin))!=EOF){if(c=='\n'){request(line,n);v_reset();n=0;}else{if(n==MAX_LINE){free(line);v_fail("request exceeds line bound");}line[n++]=(char)c;}}
   if(ferror(stdin)){free(line);v_fail("request read failed");}if(n)request(line,n);free(line);
  done:
-  unlock();if(directory_fd>=0)close(directory_fd);free(environment_json);for(size_t i=0;i<trace_count;i++)free(trace[i]);free(trace);v_reset();wasm_rt_free();return status;
+  host_close();
+  return status;
 }

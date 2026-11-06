@@ -21,6 +21,28 @@ is `target/libcwr-embedding`. Native compilation uses WABT 1.0.39 `wasm2c` and a
 The resulting executable needs only system libraries. See [native build details](native-build.md) for tools and license notices. Native packages
 are specific to their build operating system and architecture.
 
+## Use the native CLI
+
+The native executable also provides readable commands over a persistent local
+workspace. Start with the [CLI guide](cli-guide.md); no JSON authoring is required.
+
+```sh
+./libcwr init --directory ./trial
+./libcwr conversation create notes --directory ./trial
+./libcwr submit notes first --text "Hello from libcwr" --directory ./trial
+./libcwr status --directory ./trial
+./libcwr run first --directory ./trial
+./libcwr artifact first --directory ./trial
+./libcwr history notes --directory ./trial
+./libcwr --version
+```
+
+Submitting admits work; `run` performs the current deterministic local text
+storage action. Commands retain state between processes. The current CLI does
+not call a model/provider. `--json` selects machine output, and the original
+JSONL interface remains available to embedders. Default local data directory is
+`.libcwr`; explicit directories make separate experiments easy to keep apart.
+
 ## Embed the core
 
 In a browser or another JavaScript host supporting WebAssembly, copy `core.mjs`,
@@ -82,7 +104,8 @@ packaged-file integrity, and exercises process restart and receipt recovery.
 Native execution must work with no Node/compiler/build tools on PATH. Reports
 record actual source/artifact hashes; building alone does not establish acceptance.
 
-The host is single-writer local storage. It holds `.libcwr-lock` for the session.
+The host is single-writer local storage. The JSONL transport holds `.libcwr-lock`
+for the session; REPL commands acquire and release it for each operation.
 After an ungraceful process termination, confirm that the recorded owner has
 stopped, then remove that lock before reopening the directory. Automatic stale
 lock takeover is avoided because competing recovery processes can race.

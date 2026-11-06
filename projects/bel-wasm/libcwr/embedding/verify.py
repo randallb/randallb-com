@@ -43,8 +43,8 @@ def main():
             'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
             'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
             *['libcwr/embedding/' + name for name in [
-                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'core.mjs',
-                'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'readme.md', 'native-build.md',
+                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'cli-verify.py', 'cli-guide.md', 'core.mjs',
+                'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'readme.md', 'native-build.md',
                 'example-context.json', 'example-events.jsonl']],
         }
         def inputs_current():
@@ -57,7 +57,9 @@ def main():
         check('packaging-regressions', True)
         native = json.loads((package / 'libcwr.json').read_text())
         check('native-core-and-executable-integrity', sha(package / 'core.wasm') == native['core_wasm_sha256'] and sha(executable) == native['executable_sha256'])
-        check('native-source-correspondence', native['format'] == 'libcwr-native-wasm2c-v1' and set(native['native_source_sha256']) == {'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c'} and all(sha(HERE / name) == digest for name, digest in native['native_source_sha256'].items()))
+        check('native-source-correspondence', native['format'] == 'libcwr-native-wasm2c-v1' and set(native['native_source_sha256']) == {'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c'} and all(sha(HERE / name) == digest for name, digest in native['native_source_sha256'].items()))
+        version = subprocess.check_output([str(executable), '--version'], text=True, timeout=30)
+        check('native-build-identification', manifest['source_revision'] in version and sha(package / 'core.wasm') in version)
         report['core_wasm_sha256'] = sha(package / 'core.wasm')
         report['native_sha256'] = sha(executable)
         reports = []
@@ -192,6 +194,8 @@ if(!closed) throw Error('closed core');
                     process.kill(); process.communicate(timeout=5)
             license_run = subprocess.run([str(standalone), '--runtime-license'], capture_output=True, env=env, timeout=30)
             check('embedded-wabt-runtime-license', license_run.returncode == 0 and license_run.stdout == (package / 'libcwr.runtime-license.txt').read_bytes())
+        subprocess.run([sys.executable, str(HERE / 'cli-verify.py'), '--executable', str(executable), '--report', str(evidence / 'cli.json')], check=True, timeout=120)
+        check('native-user-cli', True)
         check('maintained-inputs-remain-current', inputs_current())
         check('source-remains-current', report['source_sha256'] == sha(ROOT / 'libcwr/workflow.rbel.md'))
         report['passed'] = True

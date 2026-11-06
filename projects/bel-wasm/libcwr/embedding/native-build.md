@@ -54,3 +54,10 @@ The host retains the existing explicit trusted-context boundary and dedicated
 local directory. Its process recovery and atomic replacement are not power-loss
 or distributed-storage guarantees. It does not implement provider/network or
 general-purpose filesystem actions, and fixture controls require `--test-host`.
+
+
+The executable includes the user-facing commands described in the [CLI guide](cli-guide.md).
+`--version` reports the packaged source revision and protocol-core SHA256 so
+successive builds can be identified. Uncommitted builds carry a `-dirty` suffix;
+source archives without Git metadata are labeled `unversioned-source`. Native
+and standalone manifests retain the revision alongside exact source hashes.
