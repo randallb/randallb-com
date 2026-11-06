@@ -98,3 +98,12 @@ standards and the exact reference mapping. The consulted source is read-only and
 its revision and hashes are in `reference-baseline.json`; it is not needed to run
 the tests. Protocol changes require an explicit decision, rather than changing
 an assertion to follow an implementation bug.
+
+## Embedding and native host
+
+The [embedding package](embedding/readme.md) builds a standalone import-free Wasm
+core and a native executable containing that same module plus its Wasm runtime.
+The native host supplies local snapshots, receipts and deterministic actions.
+Use the [native build guide](embedding/native-build.md) for runtime bootstrap and
+licensing. Acceptance runs this chapter through the original driver, standalone
+Wasm package and native process, comparing all assertions and host traces.

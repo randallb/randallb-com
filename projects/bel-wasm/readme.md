@@ -132,3 +132,7 @@ pipeline and local adaptations. This package includes a minimal Cargo workspace,
 its lockfile, documentation, and attribution files. Commands in upstream documentation that start with `direnv exec .` can be run without that prefix when the tools are installed.
 
 The original project explores [Paul Graham's Bel](https://paulgraham.com/bel.html), including its published source as bootstrap fixtures. The host does not implement every Bel feature. See the original README for detailed limits and source references.
+
+The first libcwr slice also has an [embedding/native-host package](libcwr/embedding/readme.md):
+one maintained rbel source, a standalone Wasm module, and a native executable
+embedding that module with local persistence and action mechanisms.
