@@ -308,11 +308,14 @@ static void make_temp(const char *output) {
   else if (!getcwd(parent, sizeof(parent))) fail("cannot locate current directory");
   if (snprintf(tempdir, sizeof(tempdir), "%s/.rbel-build-XXXXXX", parent) >= (int)sizeof(tempdir) || !mkdtemp(tempdir)) fail("cannot create build directory: %s", strerror(errno));
 }
+#include "lint-command.h"
+
 static void help(void) {
   puts("Usage: rbel build SOURCE [--include SOURCE ...] -o OUTPUT\n"
        "       rbel check SOURCE [--include SOURCE ...]\n"
        "       rbel emit SOURCE [--include SOURCE ...] -o OUTPUT.wat\n"
        "       rbel read SOURCE\n"
+       "       rbel lint SOURCE [--file-limit N] [--block-limit N]\n"
        "Literate .md input uses rbel definition=NAME and example=NAME fences.\n"
        "build produces a native byte-list stdin/stdout filter; emit writes Wasm text.");
 }
@@ -320,6 +323,7 @@ int main(int argc, char **argv) {
   if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "--version"))) {
     if (!strcmp(argv[1], "--version")) puts("rbel 0.1 native-command"); else help(); return 0;
   }
+  if (argc >= 2 && !strcmp(argv[1], "lint")) return lint_command(argc, argv);
   if (argc < 3 || (strcmp(argv[1], "build") && strcmp(argv[1], "check") && strcmp(argv[1], "emit") && strcmp(argv[1], "read"))) { help(); return 2; }
   const char *mode = argv[1], *sources[MAX_FILES]; size_t count = 1; sources[0] = argv[2];
   const char *output_arg = NULL;

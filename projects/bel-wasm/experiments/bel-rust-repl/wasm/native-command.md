@@ -49,6 +49,7 @@ rbel build SOURCE [--include SOURCE ...] -o OUTPUT
 rbel check SOURCE [--include SOURCE ...]
 rbel emit SOURCE [--include SOURCE ...] -o OUTPUT.wat
 rbel read SOURCE
+rbel lint SOURCE [--file-limit N] [--block-limit N]
 ```
 
 `--help` and `--version` return 0. Usage errors return 2; source, example, tool,
@@ -80,6 +81,45 @@ are rejected before cleanup. After that validation, a previous output is removed
 before reading/compiling, so failures do not leave a stale runnable product.
 Successful products are renamed from a private directory beside the output.
 Filenames are passed as process arguments, never interpolated into shell commands.
+
+## Lint file and block lengths
+
+```sh
+bin/rbel lint path/to/workflow.rbel.md
+bin/rbel lint path/to/workflow.rbel.md --file-limit 600 --block-limit 100
+```
+
+The command warns when a file exceeds 500 physical lines or a rbel fenced
+block exceeds 80 content lines. Both limits accept integers from 0 through
+131072 (the maximum line count in a supported 128 KiB file). Exactly the limit
+is allowed. Blank lines and comments count; a trailing newline adds no extra
+line, and an unterminated final line counts once. LF and CRLF are supported.
+Block counts exclude the opening/closing fences. Whole-file counts include
+prose and fences. Only `.md` inputs receive block checks; other files receive
+the whole-file check.
+
+Warnings include the path, opening-fence location (line 1 for a file warning),
+actual count, limit, and rbel fence label where present. All rbel fence kinds,
+including definition, example, and test, are eligible. Bare rbel fences and
+empty blocks are supported for linting. Other-language fences are skipped,
+including any apparent rbel fences within them. Fence markers, indentation,
+and closing widths use the command's existing Markdown fence helper.
+Linting counts source without parsing or evaluating its rbel expressions.
+Malformed/unclosed Markdown fences, unreadable files, invalid UTF-8/control
+bytes, source bounds, and execution bounds are errors. Linting does not require
+definition/example pairs or validate block attributes as a build does.
+
+Findings are warnings and return 0; file/format/execution failures return 1;
+invalid options return 2. A clean file prints nothing. The command reads one
+explicit file and makes no edits. Rules, explanation, and 17 compiled examples
+live in [the separate lint module](../../../literate/lint.rbel.md). C supplies
+file input, fence extraction, physical-line counts, and diagnostic formatting;
+the compiled rbel module compares counts with limits and selects findings.
+No model, external interpreter, or build tools are required to run `lint`.
+
+Run `python3 experiments/bel-rust-repl/wasm/command/verify-lint.py` after building
+the command to exercise boundary cases, errors, relocation, and the real
+libcwr workflow source. It records results under `target/lint-verification`.
 
 ## Reader and compiler boundaries
 
