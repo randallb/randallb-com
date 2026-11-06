@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "native-host.h"
 #include "native-reload.h"
+#include "native-workspace.h"
 #include "runtime-license.h"
 #include <dirent.h>
 #include <errno.h>
@@ -108,7 +109,7 @@ static void validate_environment(V *env) {
 static char *retain(const char *s) { char *p=strdup(s);if(!p)v_fail("allocation failed");return p; }
 static void replace_json(char **saved,V *v) { char *next=retain(v_json(v));free(*saved);*saved=next; }
 static void unlock(void) { if(lock_owned){lock_owned=0;unlinkat(directory_fd,".libcwr-lock",0);} }
-static void signal_stop(int number) { coworker_interrupt();unlock();_exit(number==SIGINT?130:143); }
+static void signal_stop(int number) { workspace_interrupt();coworker_interrupt();unlock();_exit(number==SIGINT?130:143); }
 static void write_all(int fd,const char *data,size_t n) {
   while(n) {ssize_t written=write(fd,data,n);if(written<0&&errno==EINTR)continue;if(written<=0){int error=errno;close(fd);v_fail("write failed: %s",strerror(error));}data+=written;n-=(size_t)written;}
 }
@@ -201,6 +202,13 @@ static V *dispatch(V *event) {
   V *trusted=v_record_set(environment,"claim",claim());
   if(v_isstr(v_record_get(event,"op"),"reconcile")) {V *evidence=receipt(v_record_get(event,"ref"));if(evidence&&consume_fault("tamper-receipt"))evidence=v_record_set(evidence,"input",v_chars("different"));trusted=v_record_set(trusted,"evidence",evidence);}
   V *effect=NULL,*response=transition(event,trusted,&effect);if(!effect)return response;
+  if(v_isstr(at(effect,0),"reload")&&effect->type==VT_ARRAY&&effect->n==2) {
+    V *invocation=at(effect,1);int failed=coworker_reload();V *done=v_array();
+    field(done,"op",v_string("workspace-complete"));field(done,"ref",v_record_get(invocation,"ref"));
+    field(done,"claim",v_record_get(invocation,"claim"));field(done,"result",v_chars(failed?"reload failed; last working coworker retained":"Reloaded coworker source."));
+    if(failed)field(done,"failed",v_string("t"));
+    V *ignored=NULL;return transition(done,v_record_set(environment,"executor",v_record_get(invocation,"target")),&ignored);
+  }
   if(!v_isstr(at(effect,0),"execute")||effect->type!=VT_ARRAY||effect->n!=2)v_fail("unknown mechanism effect");
   if(consume_fault("skip-execution")) {
     return response;
@@ -322,6 +330,76 @@ void host_chat_binding(void) {
   environment=v_record_set(environment,"allow",next_allow);
   environment=v_record_set(environment,"available",next_available);
   replace_json(&environment_json,environment);
+}
+/* Workspace controls use the same trusted context, persistence and compiled
+ * transitions. These helpers only configure routes and perform host effects. */
+V *host_workspace_ref(const char *kind,const char *name) { return chat_reference(kind,name); }
+static V *workspace_route(const char *name,const char *worker,const char *action,V *base) {
+  V *row=v_array(),*old=v_record_get(base,"target"),*target=v_array();
+  v_push(target,at(old,0));v_push(target,chat_reference("coworkers",worker));
+  v_push(target,at(old,2));v_push(target,v_string(action));
+  v_push(target,chat_reference("bindings",action));v_push(target,chat_reference("contracts",action));
+  field(row,"name",v_string(name));field(row,"target",target);
+  field(row,"description",v_chars(!strcmp(worker,"language")?"Rebuild configured source; retain last working worker on failure":!strcmp(worker,"uppercase")?"Transform text with the configured source worker or builtin uppercase":"Workspace and conversation operation"));
+  V *schema=v_array(),*fields=v_array(),*required=v_array();
+  field(schema,"representation",v_string("association-list"));
+  field(fields,"conversation",v_string("symbol"));field(fields,"coworker",v_string("symbol"));
+  field(fields,"message",v_string("symbol"));field(fields,"text",v_string("character-list"));
+  if(!strcmp(name,"new")||!strcmp(name,"open")||!strcmp(name,"publish")||!strcmp(name,"invite")||!strcmp(name,"remove")||!strcmp(name,"history"))v_push(required,v_string("conversation"));
+  if(!strcmp(name,"invite")||!strcmp(name,"remove"))v_push(required,v_string("coworker"));
+  if(!strcmp(name,"publish")){v_push(required,v_string("message"));v_push(required,v_string("text"));}
+  field(schema,"required",required);field(schema,"fields",fields);field(schema,"additional-fields",v_string("t"));
+  if(!strcmp(worker,"uppercase")) {
+    schema=v_array();field(schema,"representation",v_string("character-list"));
+    field(schema,"items",v_string("character"));
+  }
+  field(row,"input-schema",schema);
+  field(row,"route",chat_reference("routes",action));
+  const char *keys[]={"required","grants","capabilities","repeat-safe"};
+  for(size_t i=0;i<4;i++)field(row,keys[i],v_record_get(base,keys[i]));
+  return row;
+}
+void host_workspace_environment(void) {
+  if(v_record_get(environment,"workspace-actions"))return;
+  V *base=v_record_get(environment,"binding"),*old=v_record_get(base,"target");
+  V *catalog=v_array(),*allow=v_array(),*available=v_array();int permitted=0,online=0;
+  V *prior=v_record_get(environment,"allow");
+  for(size_t i=0;prior&&i<prior->n;i++){v_push(allow,prior->items[i]);if(!strcmp(v_json(prior->items[i]),v_json(old)))permitted=1;}
+  prior=v_record_get(environment,"available");
+  for(size_t i=0;prior&&i<prior->n;i++){v_push(available,prior->items[i]);if(v_isstr(prior->items[i],at(old,1)->s))online=1;}
+  const char *names[]={"new","home","list","open","publish","invite","remove","history","status","actions","reload","uppercase","help","exit","coworkers"};
+  const char *actions[]={"repl--do--new","repl--do--home","repl--do--list","repl--do--open","repl--do--publish","repl--do--invite","repl--do--remove","repl--do--history","repl--do--status","repl--do--actions","language--do--reload","uppercase--text","repl--do--help","repl--do--exit","repl--do--coworkers"};
+  for(size_t i=0;i<15;i++) {
+    const char *worker=i==10?"language":i==11?"uppercase":"repl";
+    V *row=workspace_route(names[i],worker,actions[i],base);v_push(catalog,row);
+    if(permitted)v_push(allow,v_record_get(row,"target"));
+  }
+  if(online){v_push(available,chat_reference("coworkers","repl"));v_push(available,chat_reference("coworkers","language"));v_push(available,chat_reference("coworkers","uppercase"));}
+  environment=v_record_set(environment,"workspace-actions",catalog);
+  environment=v_record_set(environment,"allow",allow);environment=v_record_set(environment,"available",available);
+  replace_json(&environment_json,environment);
+  atomic_value("context.json",environment);
+}
+V *host_workspace_binding(const char *action) {
+  V *catalog=v_record_get(environment,"workspace-actions");
+  for(size_t i=0;catalog&&i<catalog->n;i++) {
+    V *row=catalog->items[i],*target=v_record_get(row,"target");
+    if(v_isstr(v_record_get(row,"name"),action)||v_isstr(at(target,3),action)) {
+      environment=v_record_set(environment,"binding",row);replace_json(&environment_json,environment);return target;
+    }
+  }
+  v_fail("unknown workspace action %s",action);
+}
+V *host_workspace_step(V *event) {
+  V *effect=NULL,*trusted=v_record_set(environment,"claim",claim());
+  V *response=transition(event,trusted,&effect),*answer=v_array();v_push(answer,response);v_push(answer,effect);return answer;
+}
+V *host_workspace_finish(V *event,V *executor) {
+  V *effect=NULL,*trusted=v_record_set(environment,"executor",executor);
+  V *response=transition(event,trusted,&effect),*answer=v_array();v_push(answer,response);v_push(answer,effect);return answer;
+}
+void host_workspace_refresh(void) {
+  v_reset();environment=v_parse(environment_json,strlen(environment_json));state=read_value("state.json");
 }
 V *host_chat_send(V *conversation, const char *name, const char *text) {
   size_t n=strlen(name);

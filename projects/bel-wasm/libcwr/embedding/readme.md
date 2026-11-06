@@ -127,3 +127,10 @@ Source-backed chat supports an explicit `/reload` edit loop with
 explains native worker replacement, retained history, and failed-build recovery.
 Run `python3 libcwr/embedding/reload-verify.py` after building the native host
 for isolated same-process source reload checks.
+
+
+The workspace-first interface is documented in [workspace conversations](workspace-guide.md).
+Its domain slash commands invoke discoverable REPL/language coworker actions;
+plain messages publish without activation, and mentions request work from available
+coworkers. The explicit `chat` command retains the earlier demonstration interface.
+Run `python3 libcwr/embedding/workspace-verify.py` for the new native workflow.

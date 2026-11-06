@@ -296,10 +296,10 @@ conversation create after-quit
             check('repl-rejects-nul-and-oversized-lines-without-exiting',
                   malformed.returncode == 0 and 'Invocations:' in malformed.stdout and bool(malformed.stderr))
 
-            # A terminal invocation without a command enters the REPL and shows
+            # The explicit legacy chat command shows
             # its current selection in the prompt. PTY output is retained below.
             master, slave = pty.openpty()
-            terminal = subprocess.Popen([str(binary)], stdin=slave, stdout=slave,
+            terminal = subprocess.Popen([str(binary), 'chat'], stdin=slave, stdout=slave,
                                         stderr=slave, cwd=default, env=env)
             os.close(slave)
             terminal_output = bytearray()
@@ -319,7 +319,7 @@ conversation create after-quit
                 return marker in terminal_output
 
             try:
-                check('terminal-no-arguments-enters-repl', until(b'you['))
+                check('terminal-explicit-chat-enters-legacy-chat', until(b'you['))
                 os.write(master, b'/new terminal\n')
                 check('repl-prompt-shows-selected-conversation', until(b'you[terminal]>'))
                 os.write(master, b'/exit\n')

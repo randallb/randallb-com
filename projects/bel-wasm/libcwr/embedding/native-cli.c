@@ -1,6 +1,7 @@
 /* Readable local commands over the same compiled protocol and owning host. */
 #include "native-host.h"
 #include "native-reload.h"
+#include "native-workspace.h"
 #include "build-info.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,10 +30,11 @@ static V *event(const char *operation) {
 static void help(void) {
   puts("libcwr - a local, inspectable conversation/action runtime\n"
        "\n"
+       "  workspace [--directory DIR]       Open the workspace home\n"
        "  chat [--directory DIR]            Chat with the local rbel coworker\n"
        "       [--source SOURCE --rbel COMPILER]  Enable source reload\n"
        "  repl [--directory DIR]            Start an interactive session\n"
-       "  (no arguments on a terminal starts chat)\n"
+       "  (no arguments on a terminal starts workspace)\n"
        "  Inside: use NAME, submit INVOCATION --text TEXT, history, exit\n"
        "  Quotes and backslashes group text; no shell expansion.\n"
        "\n"
@@ -516,7 +518,7 @@ static int repl_main(const char *directory) {
   return result;
 }
 static int cli_command(int argc, char **argv, char *selection) {
-  if (argc == 1 && isatty(STDIN_FILENO)) return chat_main(".libcwr");
+  if (argc == 1 && isatty(STDIN_FILENO)) return workspace_main(".libcwr", NULL, NULL);
   jmp_buf top;
   jmp_buf *previous = v_handler;
   volatile int status = 1;
@@ -602,6 +604,13 @@ static int cli_command(int argc, char **argv, char *selection) {
     return 0;
   }
   const char *command = words[0];
+  if (!strcmp(command, "workspace")) {
+    if (count != 1 || text || json || (!!source != !!compiler)) {
+      status = 2; v_fail("workspace accepts --directory and paired --source SOURCE --rbel COMPILER");
+    }
+    v_handler = previous;
+    return workspace_main(directory, source, compiler);
+  }
   if (!strcmp(command, "chat")) {
     if (count != 1 || text || json || (!!source != !!compiler)) {
       status = 2; v_fail("chat accepts --directory and paired --source SOURCE --rbel COMPILER");
@@ -613,7 +622,7 @@ static int cli_command(int argc, char **argv, char *selection) {
     coworker_close();
     return result;
   }
-  if (source || compiler) { status = 2; v_fail("--source and --rbel are chat options only"); }
+  if (source || compiler) { status = 2; v_fail("--source and --rbel are workspace/chat options only"); }
   if (!strcmp(command, "repl")) {
     if (count != 1 || text || json) {
       status = 2;

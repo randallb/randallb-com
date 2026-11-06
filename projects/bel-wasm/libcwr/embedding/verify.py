@@ -40,12 +40,12 @@ def main():
         manifest = json.loads((package / 'manifest.json').read_text())
         # Require the complete maintained input set, not just self-consistent artifacts.
         input_names = {
-            'libcwr/workflow.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
+            'libcwr/workflow.rbel.md', 'libcwr/workspace.rbel.md', 'libcwr/embedding/workspace-verify.py', 'literate/wasm-values.mjs', 'literate/test.py',
             'libcwr/coworkers/uppercase.rbel.md', 'literate/unix-filter.rbel.md', 'libcwr/embedding/reload-verify.py',
             'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
             *['libcwr/embedding/' + name for name in [
-                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'cli-verify.py', 'cli-guide.md', 'chat-verify.py', 'chat-guide.md', 'core.mjs',
-                'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h', 'readme.md', 'native-build.md',
+                'build.py', 'build-native.py', 'verify.py', 'regressions.py', 'cli-verify.py', 'cli-guide.md', 'chat-verify.py', 'chat-guide.md', 'workspace-guide.md', 'core.mjs',
+                'host.cjs', 'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h', 'native-workspace.c', 'native-workspace.h', 'readme.md', 'native-build.md',
                 'example-context.json', 'example-events.jsonl']],
         }
         def inputs_current():
@@ -58,7 +58,7 @@ def main():
         check('packaging-regressions', True)
         native = json.loads((package / 'libcwr.json').read_text())
         check('native-core-and-executable-integrity', sha(package / 'core.wasm') == native['core_wasm_sha256'] and sha(executable) == native['executable_sha256'])
-        check('native-source-correspondence', native['format'] == 'libcwr-native-wasm2c-v1' and set(native['native_source_sha256']) == {'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h'} and all(sha(HERE / name) == digest for name, digest in native['native_source_sha256'].items()))
+        check('native-source-correspondence', native['format'] == 'libcwr-native-wasm2c-v1' and set(native['native_source_sha256']) == {'native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h', 'native-workspace.c', 'native-workspace.h'} and all(sha(HERE / name) == digest for name, digest in native['native_source_sha256'].items()))
         version = subprocess.check_output([str(executable), '--version'], text=True, timeout=30)
         check('native-build-identification', manifest['source_revision'] in version and sha(package / 'core.wasm') in version)
         report['core_wasm_sha256'] = sha(package / 'core.wasm')

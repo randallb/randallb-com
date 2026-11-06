@@ -163,3 +163,8 @@ mechanisms. Failure injection and context-changing fixture operations remain
 behind the explicit `--test-host` developer interface; normal commands do not
 expose them. Failure/cancellation lifecycle expansion and provider integrations
 are separate future work.
+
+
+The default terminal entry now opens the [workspace interface](workspace-guide.md).
+Use explicit `chat` for the earlier automatic-uppercase conversation or `repl` for
+the original low-level command session. One-shot commands remain available.

@@ -274,7 +274,7 @@ def main():
             terminal_dir = root / 'terminal'
             terminal_dir.mkdir()
             master, slave = pty.openpty()
-            terminal = subprocess.Popen([str(binary)], stdin=slave, stdout=slave, stderr=slave,
+            terminal = subprocess.Popen([str(binary), 'chat'], stdin=slave, stdout=slave, stderr=slave,
                                         cwd=terminal_dir, env=env)
             os.close(slave)
             captured = bytearray()
@@ -294,7 +294,7 @@ def main():
                 return marker in captured
 
             try:
-                check('terminal-no-arguments-opens-chat-prompt', until(b'you[chat]>'))
+                check('terminal-explicit-chat-opens-chat-prompt', until(b'you[chat]>'))
                 os.write(master, b'hello terminal\n')
                 check('terminal-plain-text-shows-coworker-reply', until(b'HELLO TERMINAL'))
                 os.write(master, b'/exit\n')

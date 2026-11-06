@@ -41,21 +41,24 @@ def main():
         if not marker.is_file() or json.loads(marker.read_text()).get('format') != 'libcwr-embedding-v1':
             raise ValueError('refusing to replace an unrecognized output directory')
     source = ROOT / 'libcwr/workflow.rbel.md'
-    inputs = [source, ROOT / 'libcwr/coworkers/uppercase.rbel.md', ROOT / 'literate/unix-filter.rbel.md', HERE / 'reload-verify.py', HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h']],
+    workspace_source = ROOT / 'libcwr/workspace.rbel.md'
+    inputs = [source, workspace_source, HERE / 'workspace-verify.py', ROOT / 'libcwr/coworkers/uppercase.rbel.md', ROOT / 'literate/unix-filter.rbel.md', HERE / 'reload-verify.py', HERE / 'core.mjs', HERE / 'host.cjs', *[HERE / n for n in ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h', 'native-workspace.c', 'native-workspace.h']],
               ROOT / 'literate/wasm-values.mjs', ROOT / 'literate/test.py', Path(__file__).resolve(),
               HERE / 'build-native.py', HERE / 'verify.py', HERE / 'regressions.py', HERE / 'cli-verify.py', HERE / 'chat-verify.py',
               *[ROOT / name for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']],
-              *[HERE / name for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'chat-guide.md', 'example-context.json', 'example-events.jsonl']]]
+              *[HERE / name for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'chat-guide.md', 'workspace-guide.md', 'example-context.json', 'example-events.jsonl']]]
     snapshots = {p: p.read_bytes() for p in inputs}
     spec = importlib.util.spec_from_file_location('literate_tests', ROOT / 'literate/test.py')
     extractor = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(extractor)
     definitions = [b['body'] for b in extractor.blocks(source, snapshots[source]) if b['kind'] == 'definition' and b['name'] != 'acceptance-fixtures']
+    definitions += [b['body'] for b in extractor.blocks(workspace_source, snapshots[workspace_source])
+                    if b['kind'] == 'definition' and b['name'] != 'workspace-fixtures']
     if not definitions:
         raise ValueError('no protocol definitions')
     # The compiler exports the first definition as choose. The transport uses
     # the same (call request) envelope as the adjacent-test entry adapter.
-    authored = '(def cwr-module (request) (cw-engine (car (cdr request))))\n' + '\n'.join(definitions)
+    authored = '(def cwr-module (request) (ws-engine (car (cdr request))))\n' + '\n'.join(definitions)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='libcwr-package-', dir=output.parent) as temporary:
         staging = Path(temporary) / 'package'
@@ -83,13 +86,14 @@ def main():
         for name in ['LICENSE', 'NOTICE.txt', 'ORIGIN.json']:
             (staging / name).write_bytes(snapshots[ROOT / name])
         (staging / 'workflow.rbel.md').write_bytes(snapshots[source])
-        for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'chat-guide.md', 'example-context.json', 'example-events.jsonl']:
+        (staging / 'workspace.rbel.md').write_bytes(snapshots[workspace_source])
+        for name in ['readme.md', 'native-build.md', 'cli-guide.md', 'chat-guide.md', 'workspace-guide.md', 'example-context.json', 'example-events.jsonl']:
             (staging / name).write_bytes(snapshots[HERE / name])
         manifest = {
             'format': 'libcwr-embedding-v1', 'abi': 'libcwr-transition-v1',
             'entry': 'Core.transition(state,event,trustedEnvironment) -> [nextState,response,effect]',
             'source_sha256': digest(snapshots[source]),
-            'excluded_definition_blocks': ['acceptance-fixtures'],
+            'excluded_definition_blocks': ['acceptance-fixtures', 'workspace-fixtures'],
             'inputs': {str(p.relative_to(ROOT)): digest(data) for p, data in snapshots.items()},
             'compiler_sha256': digest(rbel.read_bytes()),
             'source_revision': source_revision(),

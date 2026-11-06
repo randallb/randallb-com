@@ -13,7 +13,7 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-SOURCES = ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h']
+SOURCES = ['native-values.h', 'native-values.c', 'native-core.c', 'native-host.c', 'native-host.h', 'native-cli.c', 'native-reload.c', 'native-reload.h', 'native-workspace.c', 'native-workspace.h']
 
 
 def sha(data):

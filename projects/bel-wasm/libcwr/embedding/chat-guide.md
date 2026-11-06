@@ -8,8 +8,9 @@ Launch the native executable from your terminal:
 
 A new dedicated workspace initializes automatically. Existing workspaces keep
 their configuration and stored work. The default conversation is `chat`; return
-to the same directory to reopen it. Running `./libcwr` without arguments in a
-terminal also opens chat, using `.libcwr` in the current directory.
+to the same directory to reopen it. Use the explicit `chat` command for this legacy demonstration. Running `./libcwr`
+without arguments in a terminal opens [workspace home](workspace-guide.md), using
+`.libcwr` in the current directory.
 
 Type ordinary text at the `you[chat]>` prompt:
 
