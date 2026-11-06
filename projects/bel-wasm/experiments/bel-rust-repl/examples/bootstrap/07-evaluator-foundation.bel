@@ -1,0 +1,105 @@
+
+(def bel (e (o g globe))
+  (ev (list (list e nil))
+      nil
+      (list nil g)))
+
+(def mev (s r (p g))
+  (if (no s)
+      (if p
+          (sched p g)
+          (car r))
+      (sched (if (cdr (binding 'lock s))
+                 (cons (list s r) p)
+                 (snoc p (list s r)))
+             g)))
+
+(def sched (((s r) . p) g)
+  (ev s r (list p g)))
+
+(def ev (((e a) . s) r m)
+  (aif (literal e)            (mev s (cons e r) m)
+       (variable e)           (vref e a s r m)
+       (no (proper e))        (sigerr 'malformed s r m)
+       (get (car e) forms id) ((cdr it) (cdr e) a s r m)
+                              (evcall e a s r m)))
+
+(def vref (v a s r m)
+  (let g (cadr m)
+    (if (inwhere s)
+        (aif (or (lookup v a s g)
+                 (and (car (inwhere s))
+                      (let cell (cons v nil)
+                        (xdr g (cons cell (cdr g)))
+                        cell)))
+             (mev (cdr s) (cons (list it 'd) r) m)
+             (sigerr 'unbound s r m))
+        (aif (lookup v a s g)
+             (mev s (cons (cdr it) r) m)
+             (sigerr (list 'unboundb v) s r m)))))
+
+(set smark (join))
+
+(def inwhere (s)
+  (let e (car (car s))
+    (and (begins e (list smark 'loc))
+         (cddr e))))
+
+(def lookup (e a s g)
+  (or (binding e s)
+      (get e a id)
+      (get e g id)
+      (case e
+        scope (cons e a)
+        globe (cons e g))))
+
+(def binding (v s)
+  (get v
+       (map caddr (keep [begins _ (list smark 'bind) id]
+                        (map car s)))
+       id))
+
+(def sigerr (msg s r m)
+  (aif (binding 'err s)
+       (applyf (cdr it) (list msg) nil s r m)
+       (err 'no-err)))
+
+(mac fu args
+  `(list (list smark 'fut (fn ,@args)) nil))
+
+(def evmark (e a s r m)
+  (case (car e)
+    fut  ((cadr e) s r m)
+    bind (mev s r m)
+    loc  (sigerr 'unfindable s r m)
+    prot (mev (cons (list (cadr e) a)
+                    (fu (s r m) (mev s (cdr r) m))
+                    s)
+              r
+              m)
+         (sigerr 'unknown-mark s r m)))
+
+(set forms (list (cons smark evmark)))
+
+(mac form (name parms . body)
+  `(set forms (put ',name ,(formfn parms body) forms)))
+
+(def formfn (parms body)
+  (with (v  (uvar)
+         w  (uvar)
+         ps (parameters (car parms)))
+    `(fn ,v
+       (eif ,w (apply (fn ,(car parms) (list ,@ps))
+                      (car ,v))
+               (apply sigerr 'bad-form (cddr ,v))
+               (let ,ps ,w
+                 (let ,(cdr parms) (cdr ,v) ,@body))))))
+
+(def parameters (p)
+  (if (no p)           nil
+      (variable p)     (list p)
+      (atom p)         (err 'bad-parm)
+      (in (car p) t o) (parameters (cadr p))
+                       (append (parameters (car p))
+                               (parameters (cdr p)))))
+

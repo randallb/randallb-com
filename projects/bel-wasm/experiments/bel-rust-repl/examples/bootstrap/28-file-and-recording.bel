@@ -1,0 +1,33 @@
+(mac withfile (var name dir . body)
+  `(let ,var (open ,name ,dir)
+     (after (do ,@body) (close ,var))))
+
+(mac from (name . body)
+  (letu v
+    `(withfile ,v ,name 'in
+       (bind ins ,v ,@body))))
+
+(mac to (name . body)
+  (letu v
+    `(withfile ,v ,name 'out
+       (bind outs ,v ,@body))))
+
+(def readall ((o s ins) (o base 10))
+  (let eof (join)
+    (drain (read s base eof) [id _ eof])))
+
+(def load (name)
+  (let eof (join)
+    (withfile s name 'in
+      (til e (read s 10 eof) (id e eof)
+        (bel e)))))
+
+(mac record body
+  (letu v
+    `(let ,v (newq)
+       (bind outs ,v ,@body)
+       (car ,v))))
+
+(def prs args
+  (record (apply pr args)))
+

@@ -1,0 +1,5 @@
+; Reconstruct pairs recursively, preserving every atom unchanged.
+(def copy-tree (x)
+  (if (id (type x) 'pair)
+      (join (copy-tree (car x)) (copy-tree (cdr x)))
+      x))

@@ -1,0 +1,14 @@
+; Invoke the published macro's closure as an ordinary function, then evaluate
+; its returned expansion. This bypasses the host's canonical backquote path.
+(`(a ,(car '(b c)))
+ (expand ((caddr bquote) '(a (comma (car '(b c)))))) (a b))
+(`(head . ,@'(tail))
+ (expand ((caddr bquote) '(head comma-at '(tail)))) (head . tail))
+(`(,@'(a b) . ,@'(tail))
+ (expand ((caddr bquote) '((comma-at '(a b)) comma-at '(tail)))) (a b . tail))
+(`(,(do (set marker 'head) 'a) . ,@(do (set marker 'tail) '(z)))
+ (expand ((caddr bquote) '((comma (do (set marker 'head) 'a)) comma-at (do (set marker 'tail) '(z))))) (a . z))
+(marker (source marker) tail)
+(`(,@xs ,(do (xar xs 'changed) 'last))
+ (expand ((caddr bquote) '((comma-at xs) (comma (do (xar xs 'changed) 'last))))) (changed b last))
+(xs (source xs) (changed b))

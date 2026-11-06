@@ -1,0 +1,12 @@
+{
+  "repository": "getworkloop/wlp-mono",
+  "revision": "2aabe143b8a1ed65f4adc1b452ad7074581b5091",
+  "upstream_path": "experiments/bel-rust-repl",
+  "published_name": "bel-wasm",
+  "source_files_unchanged": false,
+  "local_changes": {
+    "date": "2026-11-05",
+    "description": "Literate foundation, native examples, self-hosted compiler with fixed-arity lexical closures and sym, literate reader, and relocatable native rbel build/check/emit/read command. Native WABT and Apple clang provide retained build tooling.",
+    "native_provenance": "NATIVE-ORIGIN.json"
+  }
+}

@@ -1,0 +1,23 @@
+(def cons args
+  (reduce join args))
+
+(def append args
+  (if (no (cdr args)) (car args)
+      (no (car args)) (apply append (cdr args))
+                      (cons (car (car args))
+                            (apply append (cdr (car args))
+                                          (cdr args)))))
+
+(def snoc args
+  (append (car args) (cdr args)))
+
+(def list args
+  (append args nil))
+
+(def map (f . ls)
+  (if (no ls)       nil
+      (some no ls)  nil
+      (no (cdr ls)) (cons (f (car (car ls)))
+                          (map f (cdr (car ls))))
+                    (cons (apply f (map car ls))
+                          (apply map f (map cdr ls)))))

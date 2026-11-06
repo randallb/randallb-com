@@ -1,0 +1,40 @@
+(def array (dims (o default))
+  (if (no dims)
+      default
+      `(lit arr ,@(nof (car dims)
+                       (array (cdr dims) default)))))
+
+(vir arr (f args)
+  `(aref ,f ,@args))
+
+(def aref (a|isa!arr n . ns)
+  (if (no ns)
+      (n (cddr a))
+      (apply aref (n (cddr a)) ns)))
+
+(def table ((o kvs))
+  `(lit tab ,@kvs))
+
+(vir tab (f args)
+  `(tabref ,f ,@args))
+
+(def tabref (tab key (o default))
+  (aif (get key (cddr tab))
+       (cdr it)
+       default))
+
+(loc isa!tab (f args a s r m)
+  (let e `(list (tabloc ,f ,@(map [list 'quote _] args)) 'd)
+    (mev (cons (list e a) (cdr s)) r m)))
+
+(def tabloc (tab key)
+  (or (get key (cddr tab))
+      (let kv (cons key nil)
+        (push kv (cddr tab))
+        kv)))
+
+(def tabrem (tab key (o f =))
+  (clean [caris _ key f] (cddr tab)))
+
+(set templates (table))
+

@@ -1,0 +1,12 @@
+; (expression expected-result): expected results are data.
+('hello hello)
+('(a (b) . c) (a (b) . c))
+((if nil 'wrong 'right) right)
+((join 'a 'b) (a . b))
+((apply join '(a b)) (a . b))
+((car saved) left)
+; Observe identity inside Bel; printing alone cannot distinguish pair sharing.
+((id saved saved) t)
+((id saved (join 'left '(right))) nil)
+((xar saved 'changed) changed)
+(saved (changed right))

@@ -1,0 +1,7 @@
+(((lit clo nil (scope-value) scope-value) 'lexical) lexical)
+((dyn scope-value 'dynamic ((lit clo nil (scope-value) scope-value) 'lexical)) dynamic)
+(scope-value global)
+((dyn err (lit clo nil (e) scope-value) (dyn scope-value 'inner (car 'atom))) inner)
+(scope-value global)
+; Captured lexical environment remains visible when no dynamic binding exists.
+(((lit clo ((x . captured)) nil x)) captured)

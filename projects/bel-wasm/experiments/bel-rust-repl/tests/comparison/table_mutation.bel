@@ -1,0 +1,15 @@
+; Three fields select a direct published-source reference, rather than bel.
+((tab 'key) (source (tabref tab 'key)) before)
+; Both evaluate the key expression before reading the live entry list.
+((tab (do (xdr (cdr tab) '((key . after))) 'key))
+ (source (tabref tab (do (xdr (cdr tab) '((key . after))) 'key))) after)
+((tab 'key) (source (tabref tab 'key)) after)
+; The source helper closes over its own lexical scope, not the caller's =.
+((let = (fn (a b) nil) (tab 'key))
+ (source (let = (fn (a b) nil) (tabref tab 'key))) after)
+; Existing-entry locations use dynamically bound equality during key search.
+((dyn = (fn (a b) t) (car (where (tab 'other))))
+ (source (dyn = (fn (a b) t) (get 'other (cddr tab)))) (key . after))
+; Location lookup must also read entries after evaluating a mutating key.
+((car (where (tab (do (xdr (cdr tab) '((key . newest))) 'key))))
+ (source (get (do (xdr (cdr tab) '((key . newest))) 'key) (cddr tab))) (key . newest))

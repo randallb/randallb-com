@@ -1,0 +1,7 @@
+{
+  "repository": "getworkloop/wlp-mono",
+  "revision": "2aabe143b8a1ed65f4adc1b452ad7074581b5091",
+  "upstream_path": "experiments/ink-deno",
+  "published_name": "ink-on-deno",
+  "source_files_unchanged": true
+}

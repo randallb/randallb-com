@@ -1,0 +1,8 @@
+; Core closure literals avoid the macro bootstrap cycle in the reference.
+(((lit clo nil (x) x) 'fixed) fixed)
+(((lit clo nil args args) 'a 'b) (a b))
+(((lit clo nil (x . rest) rest) 'a 'b 'c) (b c))
+(((lit clo nil (x (o y x)) y) 'default) default)
+(((lit clo nil ((x y)) y) '(a b)) b)
+(((lit clo nil (()) 'empty) nil) empty)
+(((lit clo nil (t args (lit clo nil (xs) (id (type xs) 'pair))) args) 'a 'b) (a b))

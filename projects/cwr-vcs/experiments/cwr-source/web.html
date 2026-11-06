@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Source experiment</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, sans-serif; color: #172234; background: #f5f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1060px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.03em; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    p { line-height: 1.5; }
+    .intro { color: #536176; margin: 0 0 24px; max-width: 680px; }
+    .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 24px; }
+    .flow span { background: #e4eaf5; padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+    .flow b { color: #75849a; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: white; border: 1px solid #dce3ee; border-radius: 16px; padding: 20px; box-shadow: 0 3px 14px #18294308; }
+    .wide { grid-column: 1 / -1; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: #66768d; font-weight: 800; margin: 0 0 8px; }
+    .muted { color: #64738a; font-size: 14px; }
+    .notice { background: #eaf2ff; color: #19416f; border: 1px solid #bdd4f6; border-radius: 12px; padding: 12px 16px; margin-bottom: 18px; min-height: 48px; }
+    button { border: 0; background: #2456b8; color: white; border-radius: 9px; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #174698; }
+    button:disabled { background: #b8c3d3; cursor: default; }
+    button.secondary { background: #e9eef7; color: #23446b; }
+    button.secondary:hover:not(:disabled) { background: #d9e4f4; }
+    label { display: block; color: #4c5f78; font-size: 13px; font-weight: 700; margin: 14px 0 5px; }
+    input, textarea { width: 100%; border: 1px solid #bdc9db; border-radius: 8px; padding: 9px 10px; font: inherit; font-size: 14px; background: #fff; }
+    textarea { min-height: 76px; resize: vertical; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .status { display: inline-block; background: #eff3f8; color: #52647c; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 700; }
+    .status.accepted { background: #e1f5e9; color: #17683c; }
+    .status.conflict { background: #fff0df; color: #925515; }
+    .file { border: 1px solid #e0e6ef; border-radius: 9px; margin-top: 9px; overflow: hidden; }
+    .file strong { display: block; background: #f2f5fa; padding: 7px 10px; font-size: 12px; }
+    pre { margin: 0; padding: 10px; white-space: pre-wrap; font-size: 13px; }
+    ul { padding-left: 20px; line-height: 1.7; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Source experiment</h1>
+    <p class="intro">Walk through two contributors proposing changes to one accepted source tree. Every button runs the local Hyperdrive experiment. Try different filenames to see an acceptance, then use the same filename to see a conflict.</p>
+    <div class="flow"><span>Owner creates</span><b>→</b><span>Contributors propose</span><b>→</b><span>Reviewer responds</span><b>→</b><span>CI checks</span><b>→</b><span>Integrator decides</span></div>
+    <div id="notice" class="notice" role="status"></div>
+    <div class="grid">
+      <section class="card wide">
+        <p class="eyebrow">1 · Owner</p><h2>Accepted repository</h2>
+        <p class="muted">The parent Hyperdrive is the shared source. Only integration changes it.</p>
+        <button id="init">Create repository</button>
+        <span id="version" class="status"></span>
+        <div id="files"></div>
+      </section>
+      <section class="card" id="alice-card"></section>
+      <section class="card" id="bob-card"></section>
+      <section class="card wide">
+        <p class="eyebrow">3 · Code reviewer</p><h2>Review exact proposals</h2>
+        <p class="muted">The reviewer can approve or request changes. Their signed review names the proposal checkpoint. Reviewing never changes the parent.</p>
+        <div id="reviews"></div>
+      </section>
+      <section class="card wide">
+        <p class="eyebrow">4 · CI</p><h2>Check exact proposals</h2>
+        <p class="muted">CI checks changed files for empty contents and unresolved conflict markers, then signs a pass or fail for the proposal checkpoint.</p>
+        <div id="ci"></div>
+      </section>
+      <section class="card wide">
+        <p class="eyebrow">5 · Integrator</p><h2>Accept approved changes</h2>
+        <p class="muted">Only the integrator action writes the parent. It requires signed reviewer approval and passing CI, then checks whether the changed paths still fit.</p>
+        <div id="integrations"></div>
+        <h2 style="margin-top: 20px">Integration history</h2>
+        <ul id="history"></ul>
+      </section>
+    </div>
+  </main>
+  <script type="module">
+    let state;
+    const $ = (id) => document.getElementById(id);
+    const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
+    async function request(action, extra = {}) {
+      const response = await fetch("/api/action", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error);
+      return value;
+    }
+    async function perform(action, extra = {}) {
+      document.querySelectorAll("button").forEach((button) => button.disabled = true);
+      try { state = await request(action, extra); render(); }
+      catch (error) { state.notice = error.message; render(); }
+    }
+    function actorCard(name) {
+      const actor = state.actors[name];
+      const label = name[0].toUpperCase() + name.slice(1);
+      const status = actor.proposal?.review?.status === "changes_requested" ? "changes requested" : (actor.proposal?.status || (actor.cloned ? "editing" : "waiting to clone"));
+      const returned = actor.proposal?.review?.status === "changes_requested" || actor.proposal?.ci?.status === "failed" || actor.proposal?.status === "conflict";
+      const suggestion = actor.suggestion || { filename: `${name}.txt`, content: `A change from ${label}` };
+      const card = $(`${name}-card`);
+      card.innerHTML = `<p class="eyebrow">2 · Contributor · Lap ${actor.lap}</p><h2>${label} <span class="status ${escape(status)}">${escape(status)}</span></h2>
+        <p class="muted">${actor.cloned ? "This workspace started from a fixed parent version." : "Clone the current parent into a separate workspace and keypair."}</p>
+        <button data-action="clone" data-name="${name}" ${!state.initialized || actor.cloned ? "disabled" : ""}>Clone parent</button>
+        ${returned ? `<p class="notice">${actor.proposal.review?.status === "changes_requested" ? `Reviewer feedback: ${escape(actor.proposal.review.feedback)}` : actor.proposal.ci?.status === "failed" ? `CI failed: ${actor.proposal.ci.failures.map(escape).join(", ")}. Fix the file and submit a new proposal.` : `Conflict on ${actor.proposal.paths.map(escape).join(", ")}. The parent changed since this clone.`}</p><button class="secondary" data-action="revise" data-name="${name}">Revise proposal</button>` : ""}
+        ${actor.proposal?.status === "accepted" ? `<p class="notice">This change is in the accepted parent. You can start another lap from that version.</p><button class="secondary" data-action="next_lap" data-name="${name}">Start next lap</button>` : ""}
+        <label for="${name}-filename">File to change</label><input id="${name}-filename" value="${escape(suggestion.filename)}" ${!actor.cloned || actor.proposal ? "disabled" : ""}>
+        <label for="${name}-content">Contents</label><textarea id="${name}-content" ${!actor.cloned || actor.proposal ? "disabled" : ""}>${escape(suggestion.content)}</textarea>
+        <div class="actions"><button class="secondary" data-action="stage" data-name="${name}" ${!actor.cloned || actor.proposal ? "disabled" : ""}>Save edit</button>
+        <button data-action="submit" data-name="${name}" ${!actor.staged.length || actor.proposal ? "disabled" : ""}>Submit proposal</button></div>
+        <p class="muted">${actor.staged.length ? `Edited: ${actor.staged.map(escape).join(", ")}. ` : ""}${actor.proposal ? `Proposal from parent version ${actor.proposal.parentVersion}; changed: ${actor.proposal.changedPaths.map(escape).join(", ")}.` : ""}</p>
+        ${actor.history.length ? `<p class="muted">Earlier proposals: ${actor.history.map((item) => `${escape(item.changedPaths.join(", "))} (${escape(["accepted", "conflict"].includes(item.status) ? item.status : (item.review?.status || item.status))})${item.review?.feedback ? ` — ${escape(item.review.feedback)}` : ""}`).join("; ")}</p>` : ""}`;
+    }
+    function render() {
+      $("notice").textContent = state.notice;
+      $("init").disabled = state.initialized;
+      $("version").textContent = state.initialized ? `Parent version ${state.source.version}` : "No repository yet";
+      $("files").innerHTML = Object.entries(state.source.files).map(([path, content]) => `<div class="file"><strong>${escape(path)}</strong><pre>${escape(content)}</pre></div>`).join("");
+      actorCard("alice"); actorCard("bob");
+      $("reviews").innerHTML = ["alice", "bob"].map((name) => {
+        const proposal = state.actors[name].proposal;
+        return `<div class="file" style="padding: 12px"><strong>${escape(name)} · ${proposal ? escape(proposal.changedPaths.join(", ")) : "No proposal yet"}</strong>
+          ${proposal ? `<p class="muted">Review: ${escape(proposal.review?.status || "waiting")}${proposal.review?.feedback ? ` · ${escape(proposal.review.feedback)}` : ""}</p>` : ""}
+          <label for="${name}-feedback">Feedback</label><input id="${name}-feedback" placeholder="What should change?" ${!proposal || proposal.status !== "waiting" || proposal.review ? "disabled" : ""}>
+          <div class="actions"><button data-action="review" data-decision="approve" data-name="${name}" ${!proposal || proposal.status !== "waiting" || proposal.review ? "disabled" : ""}>Approve</button>
+          <button class="secondary" data-action="review" data-decision="changes_requested" data-name="${name}" ${!proposal || proposal.status !== "waiting" || proposal.review ? "disabled" : ""}>Request changes</button></div></div>`;
+      }).join("");
+      $("ci").innerHTML = ["alice", "bob"].map((name) => {
+        const proposal = state.actors[name].proposal;
+        return `<div class="file" style="padding: 12px"><strong>${escape(name)} · ${proposal ? escape(proposal.changedPaths.join(", ")) : "No proposal yet"}</strong>
+          <p class="muted">Result: ${escape(proposal?.ci?.status || "waiting")}${proposal?.ci?.failures?.length ? ` · ${proposal.ci.failures.map(escape).join(", ")}` : ""}</p>
+          <button data-action="ci" data-name="${name}" ${!proposal || proposal.status !== "waiting" || proposal.ci ? "disabled" : ""}>Run CI check</button></div>`;
+      }).join("");
+      $("integrations").innerHTML = ["alice", "bob"].map((name) => {
+        const proposal = state.actors[name].proposal;
+        return `<button data-action="integrate" data-name="${name}" style="margin: 0 8px 8px 0" ${proposal?.status !== "waiting" || proposal?.review?.status !== "approve" || proposal?.ci?.status !== "passed" ? "disabled" : ""}>Integrate ${escape(name)}</button>`;
+      }).join("");
+      $("history").innerHTML = state.accepted.length
+        ? state.accepted.map((item) => `<li>${escape(item.actor)}: ${item.paths.map(escape).join(", ")} accepted at parent version ${item.version}</li>`).join("")
+        : "<li>No proposals accepted yet.</li>";
+    }
+    document.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const { action, name, decision } = button.dataset;
+      const extra = { name };
+      if (action === "stage") { extra.filename = $(`${name}-filename`).value; extra.content = $(`${name}-content`).value; }
+      if (action === "review") { extra.decision = decision; extra.feedback = $(`${name}-feedback`).value; }
+      perform(action, extra);
+    });
+    $("init").addEventListener("click", () => perform("init"));
+    state = await (await fetch("/api/state")).json(); render();
+  </script>
+</body>
+</html>

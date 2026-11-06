@@ -1,0 +1,22 @@
+{
+  "workspace": [],
+  "nodeModulesDir": "auto",
+  "imports": {
+    "ink": "npm:ink@6.3.1",
+    "react": "npm:react@19.1.0",
+    "@types/react": "npm:@types/react@19.1.5"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "types": [
+      "@types/react"
+    ]
+  },
+  "tasks": {
+    "demo": "deno run --frozen --allow-env --allow-read main.tsx",
+    "check": "deno fmt --check main.tsx main_test.ts deno.json README.md && deno lint main.tsx main_test.ts && deno check --frozen main.tsx main_test.ts && deno task test",
+    "compile": "deno compile --frozen --allow-env --allow-read --target aarch64-apple-darwin --output artifacts/ink-deno main.tsx",
+    "test": "deno test --frozen --allow-env --allow-read --allow-write --allow-run main_test.ts"
+  }
+}
