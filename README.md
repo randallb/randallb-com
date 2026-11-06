@@ -67,6 +67,39 @@ for SQLite. The pinned real runtime/shell adapter invokes `deno task check`;
 `cwr-verify.py` verifies pass, intentional failure and restoration. See
 `vendor/CWR-PROVENANCE.md`. No model account or Workloop source checkout required.
 
+## Local rbel pre-push lint
+
+After building the native rbel command, install the local check from this checkout:
+
+```sh
+python3 scripts/install-rbel-pre-push.py --rbel projects/bel-wasm/target/rbel-command/bin/rbel
+```
+
+The installer copies the hook and a standalone native lint executable into Git's
+common hooks directory, activating it for this repository and linked worktrees.
+It preserves an existing unrelated pre-push hook and refuses to override an
+existing `core.hooksPath`. Those setups need manual integration instead.
+The installed copy works when pushing branches whose checked-out source does
+not contain the hook scripts. Reinstall after changing the hook or lint binary.
+Python 3 and the supplied native executable's platform are required locally.
+
+The check reads ref updates from Git and lints committed regular `.rbel.md`
+files changed between each remote ref and the proposed local tip. It reads Git
+blobs, so dirty worktree contents are not substituted for the proposed source.
+For a new ref or unavailable remote object, it scans all regular `.rbel.md`
+files at that tip without fetching. Deleted refs and non-commit targets are
+skipped; multiple pushed refs are checked. Renamed source uses its new path.
+
+File/block length findings remain advisory and allow the push. Missing tooling,
+malformed input, source-size bounds, and lint execution errors stop the push
+with a diagnostic. No GitHub workflow or branch protection is changed. To remove
+the installed check, delete the owned `pre-push` file and `.rbel-lint` directory
+from the common Git hooks directory shown by `git rev-parse --git-common-dir`.
+Do not remove other hooks.
+
+Run `python3 scripts/verify-rbel-pre-push.py` for disposable local-repository
+integration checks; it requires the built native command and contacts no network.
+
 ## Rollback
 
 Previous placeholder Worker version: `481339ba-209b-453c-bbe7-edac8e0197bd`.
