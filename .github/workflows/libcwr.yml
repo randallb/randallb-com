@@ -38,6 +38,8 @@ jobs:
           python3 experiments/bel-rust-repl/wasm/command/verify-modules.py --portable-only
           python3 literate/test.py literate/language-core.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/language-examples.json
           python3 literate/test.py literate/utf8.rbel.md --include literate/integers.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/utf8-examples.json
+      - name: Benchmark smoke and metrics (no timing threshold)
+        run: python3 benchmarks/run.py --rbel target/rbel-wasm-bootstrap/bin/rbel --warmup 1 --samples 2 --iterations 1 --output target/benchmarks/ci
       - name: Verify exact numbers, explicit floats and reader examples
         run: |
           python3 literate/test.py literate/integers.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/integer-examples.json
@@ -69,6 +71,8 @@ jobs:
             projects/bel-wasm/target/reader-examples.json
             projects/bel-wasm/target/float-examples.json
             projects/bel-wasm/target/numeric-verification/
+            projects/bel-wasm/target/benchmarks/ci/report.json
+            projects/bel-wasm/target/benchmarks/ci/report.md
             projects/bel-wasm/target/libcwr/results.json
             projects/bel-wasm/target/libcwr/verification.json
             projects/bel-wasm/target/libcwr-embedding-checks/
