@@ -85,3 +85,12 @@ Collection is stop-the-world; latency tuning and generational collection are
 future work. Native distribution acceptance is macOS ARM64; portable Linux CI
 covers Wasm. No OS APIs, finalizers, application-preview deployment or release
 artifacts are added to the commissioned scope.
+
+## First Linux hosted run
+
+Run `42344260009` passed clean source bootstrap, self-hosting and portable command
+publication. It then exposed a verifier default pointing at the macOS-only
+assembler directory. The runtime verifier now defaults to the existing portable
+WABT installation; all 14 groups passed again with that exact default. This
+changes test-tool selection, not emitted runtime behavior. Hosted acceptance of
+the complete corrected candidate remains pending.
