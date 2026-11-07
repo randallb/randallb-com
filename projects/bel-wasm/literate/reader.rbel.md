@@ -107,16 +107,24 @@ a missing tail, or extra values after a dotted tail is an error.
   (if (id (car xs) \)) (join (join head tail) (cdr xs)) (rn-fail)))
 ```
 
-## Symbols and unsupported notation
+## Symbols and integer notation
 
-A token collects characters until a boundary. The current compiled
-language accepts symbol tokens made of ASCII letters, hyphens, and digits, with
-numeric-looking starts rejected. The sym operation turns a character list into
-a symbol; it gives the same symbol for the same name, including nil and t.
+A token collects characters until a boundary. Symbol names use ASCII letters,
+hyphens, and digits. The arithmetic and comparison names `+`, `-`, `=`, `<`,
+`<=`, `>`, and `>=` are also symbols. The `sym` operation turns a character
+list into a symbol, giving the same symbol for the same name.
 
-This reader deliberately rejects number notation, bracket functions, backquote,
-unquote, and other abbreviations that this compiled language does not yet
-support. It does not silently reinterpret them as ordinary symbols.
+A decimal integer can have a leading `+` or `-`. Leading zeroes are allowed;
+`0`, `-0`, and `+000` all produce the same positive zero. A number is read as
+Bel's ordinary `(lit num real imaginary)` data, with a signed unary numerator,
+a denominator of one, and a zero imaginary part. Reading a number does not
+calculate with it, and quotation still quotes the number itself.
+
+This first integer implementation accepts magnitudes through 256. The reader
+checks the decimal spelling before allocating the unary value. Larger integers,
+fractions, decimal points, exponent notation, and numeric tokens with trailing
+letters fail rather than becoming symbols. Bracket functions, backquote,
+unquote, and other unsupported abbreviations remain errors.
 
 ```rbel definition=rn-token
 (def rn-token (xs)
@@ -128,15 +136,91 @@ support. It does not silently reinterpret them as ordinary symbols.
   (if xs
     (if (rn-member (car xs) "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789")
       (rn-legal-token (cdr xs)) nil) t))
+(def rn-operator (xs)
+  (if (rn-text-equal xs "+") t
+    (if (rn-text-equal xs "=") t
+      (if (rn-text-equal xs "<") t
+        (if (rn-text-equal xs "<=") t
+          (if (rn-text-equal xs ">") t (rn-text-equal xs ">=")))))))
 (def rn-numeric-start (xs)
   (if (rn-member (car xs) "0123456789") t
     (if (rn-member (car xs) '(\+ \-))
       (rn-member (car (cdr xs)) "0123456789") nil)))
 (def rn-symbol (parsed)
   (if (car parsed)
-    (if (rn-numeric-start (car parsed)) (rn-fail)
-      (if (rn-legal-token (car parsed))
-        (join (sym (car parsed)) (cdr parsed)) (rn-fail))) (rn-fail)))
+    (if (rn-numeric-start (car parsed))
+      (join (rn-integer (car parsed)) (cdr parsed))
+      (if (rn-operator (car parsed))
+        (join (sym (car parsed)) (cdr parsed))
+        (if (rn-legal-token (car parsed))
+          (join (sym (car parsed)) (cdr parsed)) (rn-fail)))) (rn-fail)))
+```
+
+The parser validates the digits, removes leading zeroes, and compares the
+remaining decimal text with the limit. Only then does it build the number.
+The magnitude is a list of `t` values: for example, two is `(t t)`. A decimal
+step makes ten copies of the previous magnitude and adds the next digit.
+
+```rbel definition=rn-integer
+(def rn-integer (token)
+  (if (id (car token) \-)
+    (rn-integer-digits (sym "-") (cdr token))
+    (if (id (car token) \+)
+      (rn-integer-digits (sym "+") (cdr token))
+      (rn-integer-digits (sym "+") token))))
+(def rn-integer-digits (sign digits)
+  (if digits
+    (if (rn-digits digits)
+      (rn-integer-bounded sign (rn-trim-zeroes digits)) (rn-fail)) (rn-fail)))
+(def rn-digits (xs)
+  (if xs (if (rn-member (car xs) "0123456789")
+    (rn-digits (cdr xs)) nil) t))
+(def rn-trim-zeroes (xs)
+  (if xs (if (id (car xs) \0) (rn-trim-zeroes (cdr xs)) xs) nil))
+(def rn-integer-bounded (sign digits)
+  (if (rn-decimal-within digits "256")
+    (rn-integer-value sign (rn-decimal-unary digits nil)) (rn-fail)))
+(def rn-decimal-within (a b)
+  (rn-decimal-width a b a b))
+(def rn-decimal-width (a b original-a original-b)
+  (if a
+    (if b (rn-decimal-width (cdr a) (cdr b) original-a original-b) nil)
+    (if b t (rn-decimal-order original-a original-b))))
+(def rn-decimal-order (a b)
+  (if a
+    (if (id (car a) (car b)) (rn-decimal-order (cdr a) (cdr b))
+      (rn-digit-before (car a) (car b) "0123456789")) t))
+(def rn-digit-before (a b digits)
+  (if digits
+    (if (id a (car digits)) t
+      (if (id b (car digits)) nil (rn-digit-before a b (cdr digits)))) nil))
+(def rn-decimal-unary (digits value)
+  (if digits
+    (rn-decimal-unary (cdr digits)
+      (rn-unary-copies '(t t t t t t t t t t) value
+        (rn-digit-unary (car digits) "0123456789"))) value))
+(def rn-unary-copies (copies value tail)
+  (if copies
+    (rn-unary-append value (rn-unary-copies (cdr copies) value tail)) tail))
+(def rn-unary-append (a b)
+  (if a
+    (if (cdr a)
+      (if (cdr (cdr a))
+        (if (cdr (cdr (cdr a)))
+          (join t (join t (join t (join t
+            (rn-unary-append (cdr (cdr (cdr (cdr a)))) b)))))
+          (join t (join t (join t b))))
+        (join t (join t b)))
+      (join t b)) b))
+(def rn-digit-unary (digit remaining)
+  (if (id digit (car remaining)) nil
+    (join t (rn-digit-unary digit (cdr remaining)))))
+(def rn-integer-value (sign magnitude)
+  (join 'lit (join 'num
+    (join
+      (join (if magnitude sign (sym "+"))
+        (join magnitude (join '(t) nil)))
+      (join (join (sym "+") '(nil (t))) nil)))))
 ```
 
 ## Strings
@@ -257,6 +341,48 @@ nil
 (rn-read-all "(err 'not-executed)")
 =>
 ((err (quote not-executed)))
+```
+
+```rbel example=reader-integer-magnitude
+(car (cdr (car (cdr (cdr (car (rn-read-all "+002")))))))
+=>
+(t t)
+```
+
+```rbel example=reader-integer-negative
+(id (car (car (cdr (cdr (car (rn-read-all "-3")))))) (sym "-"))
+=>
+t
+```
+
+```rbel example=reader-integer-zero-normalized
+(id (car (car (cdr (cdr (car (rn-read-all "-000")))))) (sym "+"))
+=>
+t
+```
+
+```rbel example=reader-integer-quoted
+(car (car (rn-read-all "'14")))
+=>
+quote
+```
+
+```rbel example=reader-arithmetic-operators
+(rn-text-equal (nom (car (rn-read-all ">="))) ">=")
+=>
+t
+```
+
+```rbel example=reader-decimal-limit
+(rn-decimal-within "256" "256")
+=>
+t
+```
+
+```rbel example=reader-decimal-over-limit
+(rn-decimal-within "257" "256")
+=>
+nil
 ```
 
 ## Scope and verification

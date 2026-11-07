@@ -29,6 +29,10 @@ jobs:
           npm install --prefix target/bel-wasm-tools --no-save --ignore-scripts wabt@1.0.39
           python3 experiments/bel-rust-repl/wasm/verify-selfhost.py
           python3 literate/bootstrap-wasm.py
+      - name: Verify signed integers and reader examples
+        run: |
+          python3 literate/test.py literate/integers.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/integer-examples.json
+          python3 literate/test.py literate/reader.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/reader-examples.json
       - name: Verify actual libcwr Wasm and runner failures
         run: python3 libcwr/verify.py --rbel target/rbel-wasm-bootstrap/bin/rbel --skip-native
       - name: Package and verify embedded core and native host
@@ -41,6 +45,8 @@ jobs:
         with:
           name: libcwr-evidence
           path: |
+            projects/bel-wasm/target/integer-examples.json
+            projects/bel-wasm/target/reader-examples.json
             projects/bel-wasm/target/libcwr/results.json
             projects/bel-wasm/target/libcwr/verification.json
             projects/bel-wasm/target/libcwr-embedding-checks/
