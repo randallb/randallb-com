@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Package the existing Rust syntax reader and Wasm rbel compiler for test CI.
+"""Bootstrap the rbel syntax reader and compiler on Wasm for portable test CI.
 
 This is bootstrap tooling, not a native rbel distribution or a protocol engine.
 Run the source-bootstrap steps in libcwr/readme.md first.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / 'target/rbel-wasm-bootstrap'
 
 SHIM = r'''#!/usr/bin/env python3
-"""Bootstrap-only syntax transport; compilation decisions execute in Wasm."""
-import json
+"""Bootstrap-only transport; reading and compilation execute in Wasm."""
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -23,16 +26,6 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / 'libexec/rbel'
 
-
-def pairs(value):
-    if isinstance(value, list):
-        tail = None
-        for head in reversed(value):
-            tail = {'pair': [pairs(head), tail]}
-        return tail
-    if isinstance(value, dict) and set(value) == {'pair'}:
-        return {'pair': [pairs(v) for v in value['pair']]}
-    return value
 
 
 def main():
@@ -55,21 +48,25 @@ def main():
         raise ValueError('read takes exactly one source')
     if source.stat().st_size > 131072:
         raise ValueError('source exceeds 128 KiB')
-    syntax = subprocess.check_output([str(TOOLS / 'bel-read-json'), str(source)], timeout=60)
+    result = subprocess.run(['node', str(TOOLS / 'transport.mjs'), str(TOOLS / 'core.wasm'),
+                             'read' if operation == 'read' else 'compile', str(source)],
+                            capture_output=True, timeout=120)
+    if result.returncode:
+        raise ValueError(result.stderr.decode(errors='replace').strip())
     if operation == 'read':
-        # Match the native command's debug JSON representation. This is data
-        # conversion only; no expression is interpreted by this Python shim.
-        print(json.dumps(pairs(json.loads(syntax))))
-        return
-    with tempfile.TemporaryDirectory(prefix='rbel-bootstrap-emit-') as directory:
-        data = Path(directory) / 'syntax.json'
-        data.write_bytes(syntax)
-        result = subprocess.run(['node', str(TOOLS / 'transport.mjs'), str(TOOLS / 'compiler.wasm'), str(data)],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
-        if result.returncode:
-            raise ValueError(result.stderr.decode(errors='replace').strip())
+        sys.stdout.buffer.write(result.stdout)
+    else:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(result.stdout)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=output.parent, delete=False) as file:
+                temporary = Path(file.name)
+                file.write(result.stdout)
+            os.replace(temporary, output)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
 
 
 try:
@@ -81,10 +78,25 @@ except (OSError, ValueError, subprocess.SubprocessError) as error:
 
 
 def main():
+    sys.path.insert(0, str(ROOT / 'literate'))
+    from check import extract
+    work = ROOT / 'target/rbel-core-bootstrap'
+    work.mkdir(parents=True, exist_ok=True)
+    source = work / 'core.rbel'
+    command = ROOT / 'experiments/bel-rust-repl/wasm/command'
+    source.write_bytes((command / 'frontend.bel').read_bytes() + b'\n' + b'\n'.join(
+        extract((ROOT / 'literate' / name).read_text())[0]
+        for name in ['reader.rbel.md', 'integers.rbel.md', 'floats.rbel.md']) + b'\n' +
+        (command.parent / 'self-compiler.bel').read_bytes())
+    syntax = work / 'core.json'
+    syntax.write_bytes(subprocess.check_output([str(ROOT / 'target/debug/bel-read-json'), str(source)]))
+    binary = work / 'core.wasm'
+    subprocess.run([sys.executable, str(command.parent / 'self-compile.py'),
+                    str(ROOT / 'target/bel-selfhost/stage1.wasm'), str(syntax), str(binary)], check=True)
     inputs = {
-        'bel-read-json': ROOT / 'target/debug/bel-read-json',
-        'compiler.wasm': ROOT / 'target/bel-selfhost/stage1.wasm',
-        'transport.mjs': ROOT / 'experiments/bel-rust-repl/wasm/self-wat.mjs',
+        'core.wasm': binary,
+        'transport.mjs': ROOT / 'literate/core-transport.mjs',
+        'wasm-values.mjs': ROOT / 'literate/wasm-values.mjs',
         'wat2wasm': ROOT / 'target/bel-wasm-tools/node_modules/.bin/wat2wasm',
     }
     for source in inputs.values():
@@ -100,7 +112,7 @@ def main():
     command.chmod(0o755)
     (tools / 'wat2wasm').chmod(0o755)
     manifest = {
-        'backend': 'Rust syntax reader; rbel compiler on Wasm; no Rust protocol evaluation',
+        'backend': 'rbel reader and compiler on Wasm; Rust used only to bootstrap the core',
         'files': {str(p.relative_to(BUNDLE)): hashlib.sha256(p.read_bytes()).hexdigest()
                   for p in [command, *[tools / name for name in inputs]]},
     }

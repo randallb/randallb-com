@@ -21,6 +21,24 @@ def run(*args):
     subprocess.run(list(map(str, args)), check=True, cwd=ROOT)
 
 
+def native_core(wat, work, output, tools):
+    wasm = work / 'core.wasm'
+    run(tools / 'wat2wasm', wat, '-o', wasm)
+    run(tools / 'wasm2c', wasm, '-n', 'bel', '-o', work / 'module.c')
+    runtime = ROOT / 'target/wabt-native-1.0.39/wasm2c'
+    if not runtime.exists():
+        run(sys.executable, HERE.parent / 'native/setup-runtime.py')
+    run('/usr/bin/clang', '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
+        '-Wno-unused-function', '-Wno-unused-parameter', '-Wno-unused-but-set-variable',
+        '-fno-optimize-sibling-calls', '-frounding-math', '-DWASM_RT_USE_MMAP=0',
+        '-DWASM_RT_MEMCHECK_BOUNDS_CHECK=1', '-DWASM_RT_MEMCHECK_GUARD_PAGES=0',
+        '-DWASM_RT_STACK_DEPTH_COUNT=1', '-DWASM_RT_STACK_EXHAUSTION_HANDLER=0',
+        '-DWASM_RT_MAX_CALL_STACK_DEPTH=4096', '-I', runtime, '-I', work,
+        HERE / 'rbel.c', work / 'module.c', runtime / 'wasm-rt-impl.c',
+        runtime / 'wasm-rt-mem-impl.c', runtime / 'wasm-rt-exceptions-impl.c',
+        '-lm', '-pthread', '-o', output)
+
+
 def main():
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise ValueError('this command bundle currently targets macOS ARM64')
@@ -40,32 +58,47 @@ def main():
     if not all((tools / name).exists() for name in ['wat2wasm', 'wasm2c', 'wasm-validate']):
         run(sys.executable, HERE / 'setup-tools.py')
     reader, examples, _ = extract((ROOT / 'literate/reader.rbel.md').read_bytes().decode())
+    numeric = b'\n'.join(extract((ROOT / 'literate' / name).read_text())[0]
+                         for name in ['integers.rbel.md', 'floats.rbel.md'])
     source = work / 'core.bel'
-    source.write_bytes((HERE / 'frontend.bel').read_bytes() + b'\n' + reader + b'\n' +
+    source.write_bytes((HERE / 'frontend.bel').read_bytes() + b'\n' + reader + b'\n' + numeric + b'\n' +
                        (HERE.parent / 'self-compiler.bel').read_bytes())
     wat, wasm = work / 'core.wat', work / 'core.wasm'
     if args.seed:
-        run(args.seed.resolve(), 'emit', source, '-o', wat)
+        # First teach the old reader's compiler about the new primitive ABI.
+        # This intermediate core uses the seed's reader and needs no new numeric
+        # syntax. It then compiles the new reader and arithmetic from source.
+        seed = args.seed.resolve()
+        old_source = seed.parent.parent / 'source'
+        seed_reader = extract((old_source / 'reader.rbel.md').read_text())[0]
+        if b'(def rn-seed-operator ' not in seed_reader:
+            seed_reader = seed_reader.replace(b'(def rn-operator ', b'(def rn-seed-operator ')
+            seed_reader += b'\n(def rn-operator (xs) (if (rn-text-equal xs "*") t (if (rn-text-equal xs "/") t (rn-seed-operator xs))))\n'
+        transition = work / 'transition'
+        (transition / 'bin').mkdir(parents=True, exist_ok=True)
+        for name in ['share', 'libexec']:
+            link = transition / name
+            if not link.exists():
+                link.symlink_to(seed.parent.parent / name, target_is_directory=True)
+        seed_numeric = b''
+        if (old_source / 'floats.rbel.md').exists():
+            seed_numeric = b'\n'.join(extract((old_source / name).read_text())[0]
+                                     for name in ['integers.rbel.md', 'floats.rbel.md'])
+        bridge = transition / 'bridge.rbel'
+        bridge.write_bytes((old_source / 'frontend.bel').read_bytes() + b'\n' + seed_reader + b'\n' + seed_numeric + b'\n' +
+                           (HERE.parent / 'self-compiler.bel').read_bytes())
+        bridge_wat = transition / 'core.wat'
+        run(seed, 'emit', bridge, '-o', bridge_wat)
+        native_core(bridge_wat, transition, transition / 'bin/rbel', tools)
+        run(transition / 'bin/rbel', 'emit', source, '-o', wat)
     else:
         data = work / 'core.json'
         data.write_bytes(subprocess.check_output([str(ROOT / 'target/debug/bel-read-json'), str(source)]))
         run(sys.executable, HERE.parent / 'self-compile.py', ROOT / 'target/bel-selfhost/stage1.wasm',
             data, wasm, '--wat2wasm', tools / 'wat2wasm')
         wat = wasm.with_suffix('.wat')
-    run(tools / 'wat2wasm', wat, '-o', wasm)
-    run(tools / 'wasm2c', wasm, '-n', 'bel', '-o', work / 'module.c')
+    native_core(wat, work, work / 'rbel', tools)
     runtime = ROOT / 'target/wabt-native-1.0.39/wasm2c'
-    if not runtime.exists():
-        run(sys.executable, HERE.parent / 'native/setup-runtime.py')
-    run('/usr/bin/clang', '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
-        '-Wno-unused-function', '-Wno-unused-parameter', '-Wno-unused-but-set-variable',
-        '-fno-optimize-sibling-calls', '-frounding-math', '-DWASM_RT_USE_MMAP=0',
-        '-DWASM_RT_MEMCHECK_BOUNDS_CHECK=1', '-DWASM_RT_MEMCHECK_GUARD_PAGES=0',
-        '-DWASM_RT_STACK_DEPTH_COUNT=1', '-DWASM_RT_STACK_EXHAUSTION_HANDLER=0',
-        '-DWASM_RT_MAX_CALL_STACK_DEPTH=4096', '-I', runtime, '-I', work,
-        HERE / 'rbel.c', work / 'module.c', runtime / 'wasm-rt-impl.c',
-        runtime / 'wasm-rt-mem-impl.c', runtime / 'wasm-rt-exceptions-impl.c',
-        '-lm', '-pthread', '-o', work / 'rbel')
     libexec, share = bundle / 'libexec/rbel', bundle / 'share/rbel'
     libexec.mkdir(parents=True, exist_ok=True)
     share.mkdir(parents=True, exist_ok=True)
@@ -81,7 +114,7 @@ def main():
     shutil.copy2(ROOT / 'LICENSE', licenses / 'PROJECT-LICENSE')
     samples = bundle / 'examples'
     samples.mkdir(exist_ok=True)
-    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'integers.rbel.md']:
+    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'integers.rbel.md', 'floats.rbel.md']:
         shutil.copy2(ROOT / 'literate' / name, samples / name)
     for name in ['NOTICE.txt', 'ORIGIN.json', 'NATIVE-ORIGIN.json']:
         shutil.copy2(ROOT / name, bundle / name)
@@ -96,7 +129,7 @@ From this directory:
 bin/rbel build examples/unix-filter.rbel.md -o ../hello
 printf 'hello, rbel!\\n' | ../hello
 bin/rbel check examples/foundation.rbel.md
-bin/rbel check examples/reader.rbel.md
+bin/rbel check examples/reader.rbel.md --include examples/integers.rbel.md --include examples/floats.rbel.md
 ```
 
 For the foundation-based program:
@@ -124,11 +157,12 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
     for name in ['native-command.md', 'higher-order.md', 'selfhost.md']:
         shutil.copy2(HERE.parent / name, docs / name)
     shutil.copy2(HERE.parent / 'native/readme.md', docs / 'native-filter.md')
+    shutil.copy2(ROOT / 'literate/numbers.md', docs / 'numbers.md')
     source_snapshot = bundle / 'source'
     source_snapshot.mkdir(exist_ok=True)
     for source_file in [HERE / 'rbel.c', HERE / 'check-main.c', HERE / 'frontend.bel',
                         HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md',
-                        ROOT / 'literate/integers.rbel.md']:
+                        ROOT / 'literate/integers.rbel.md', ROOT / 'literate/floats.rbel.md']:
         shutil.copy2(source_file, source_snapshot / source_file.name)
     shutil.copy2(source, source_snapshot / 'core.rbel')
     # Preserve executable blocks while making exported documentation links portable.
