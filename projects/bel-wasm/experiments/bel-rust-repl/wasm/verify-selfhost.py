@@ -34,6 +34,7 @@ def isolated(compiler, ast, name):
         work = Path(directory)
         shutil.copyfile(compiler, work / 'compiler.wasm')
         shutil.copyfile(HERE / 'self-wat.mjs', work / 'transport.mjs')
+        shutil.copyfile(ROOT / 'literate/wasm-values.mjs', work / 'wasm-values.mjs')
         (work / 'input.json').write_text(json.dumps(ast))
         result = run('node', 'transport.mjs', 'compiler.wasm', 'input.json', cwd=work)
         wat, binary = OUT / f'{name}.wat', OUT / f'{name}.wasm'
@@ -48,6 +49,8 @@ import assert from 'node:assert/strict';
 const m = new WebAssembly.Module(readFileSync(process.argv[1]));
 assert.deepEqual(WebAssembly.Module.imports(m), []);
 const e = new WebAssembly.Instance(m).exports;
+assert.equal(e.rbel_abi_version(),2);
+assert.equal(e.runtime_init(2097152,262144,65536,65536,512),0);
 '''
     run('node', '--input-type=module', '-e', prefix + script, binary)
 
@@ -66,13 +69,11 @@ def main():
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if not args.skip_bootstrap:
-        # All Rust execution ends here. Subsequent generations receive data only.
-        ast = run(ROOT / 'target/debug/bel-read-json', SOURCE)
-        (OUT / 'compiler.ast.json').write_text(ast.stdout)
-        boot = run(ROOT / 'target/debug/bel-eval-text', '--max-text-bytes', '8388608',
-                   '--max-eval-depth', '4096', '--call', 'sc-compile', SOURCE, SOURCE)
-        (OUT / 'stage0.wat').write_text(boot.stdout)
-        assemble(OUT / 'stage0.wat', OUT / 'stage0.wasm')
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('rbel_language_bootstrap',HERE / 'bootstrap-language.py')
+        bootstrap_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bootstrap_module)
+        bootstrap_module.bootstrap()
     ast = json.loads((OUT / 'compiler.ast.json').read_text())
     stages = [OUT / 'stage0.wasm']
     for i in range(1, 4):
@@ -128,12 +129,12 @@ assert.equal(v.getInt32(tail,true),0); assert.equal(v.getInt32(tail+4,true),1);'
     inspect(product, 'assert.equal(e.choose,undefined); assert.deepEqual([e.picked(0),e.picked(1)],[0,1]);')
     print('PASS: changing compiler source changes generated program exports', flush=True)
 
-    invalid = [None, 't', [], ['bad'], [['def', 'x', [], None, None]],
+    invalid = [None, 't', [], ['bad'],
         [['fn', 'x', [], None]], program('t', [], None), program('nil', [], None),
-        program('o', [], None), program('apply', [], None), program('bad name', [], None),
+        program('let', [], None), program('apply', [], None), program('bad name', [], None),
         program('x)(func', [], None), program('🙂', [], None), program('', [], None),
         program('test', ['x','x'], 'x'), program('test', ['if'], 'if'),
-        program('test', ['fn'], None), program('test', {'pair':['x','tail']}, None),
+        program('test', ['fn'], None), program('test', {'pair':['x',{'char':'z'}]}, None),
         program('test', ['x'], 'missing'), program('test', ['x'], ['missing', 'x']),
         program('test', ['x'], ['car','x','x']), program('test', ['x'], ['join','x']),
         program('test', ['x'], ['fn', ['a','a'], 'a']), program('test', ['x'], ['quote','t',None]),
@@ -141,8 +142,6 @@ assert.equal(v.getInt32(tail,true),0); assert.equal(v.getInt32(tail+4,true),1);'
         program('test', ['x'], {'pair':['if','tail']}),
         [['def','test',['x'],['other']], ['def','other',['y'],'y']],
         [['def','test',[],None], ['def','test',[],None]],
-        program('test', [], {'char':'🙂'}),
-        program('test', [], q({'char':'\x00'})),
     ]
     bad = OUT / 'invalid.json'
     output = OUT / 'recovery.wasm'

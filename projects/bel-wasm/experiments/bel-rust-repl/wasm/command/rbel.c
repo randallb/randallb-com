@@ -18,13 +18,13 @@
 #include "wasm-rt-impl.h"
 #include "wasm-rt-exceptions.h"
 
-#define LIMIT (8 * 1024 * 1024)
-#define SOURCE_LIMIT (128 * 1024)
+#define LIMIT (32 * 1024 * 1024)
+#define SOURCE_LIMIT (512 * 1024)
 #define MAX_FILES 32
 #define MAX_NAMES 2048
 
 typedef struct { char *data; size_t size, capacity; } Buffer;
-typedef struct { char *name; const char *file; size_t line; int example; } Name;
+typedef struct { char *name; const char *file; size_t line; int example; const char *display; } Name;
 static Name names[MAX_NAMES];
 static size_t name_count, example_count;
 static Buffer definitions, rows;
@@ -46,13 +46,16 @@ static void fail(const char *format, ...) {
   vfprintf(stderr, format, args); fputc('\n', stderr); va_end(args);
   cleanup(); exit(1);
 }
+#define RBEL_FAILURE(message) fail("%s", (message))
+#include "value-roots.h"
+
 static char *formatted(const char *format, ...) {
   va_list args; va_start(args, format); char *text = NULL;
   if (vasprintf(&text, format, args) < 0) { va_end(args); fail("allocation failed"); }
   va_end(args); return text;
 }
 static void append(Buffer *b, const void *text, size_t size) {
-  if (size > LIMIT || b->size > LIMIT - size) fail("text exceeds 8 MiB bound");
+  if (size > LIMIT || b->size > LIMIT - size) fail("text exceeds 32 MiB bound");
   size_t needed = b->size + size + 1;
   if (needed > b->capacity) {
     size_t capacity = b->capacity ? b->capacity : 256;
@@ -68,18 +71,33 @@ static int blank(const char *s, size_t n) {
   for (size_t i = 0; i < n; ++i) if (!isspace((unsigned char)s[i])) return 0;
   return 1;
 }
+static void source_utf8(const unsigned char *source, size_t size, const char *path) {
+  for(size_t i=0;i<size;) {
+    uint32_t c=source[i++], minimum=0;unsigned continuation=0;
+    if(c<128) { }
+    else if((c&224)==192) { c&=31;continuation=1;minimum=128; }
+    else if((c&240)==224) { c&=15;continuation=2;minimum=2048; }
+    else if((c&248)==240) { c&=7;continuation=3;minimum=65536; }
+    else fail("%s: invalid UTF-8 source",path);
+    while(continuation--) {
+      if(i==size || (source[i]&192)!=128) fail("%s: invalid UTF-8 source",path);
+      c=(c<<6)|(source[i++]&63);
+    }
+    if(c<minimum || c>1114111 || (c>=55296 && c<=57343)) fail("%s: invalid UTF-8 source",path);
+  }
+}
 static Buffer readfile(const char *path) {
   FILE *file = fopen(path, "rb"); if (!file) fail("%s: %s", path, strerror(errno));
   Buffer b = {0}; char chunk[8192]; size_t count;
   while ((count = fread(chunk, 1, sizeof(chunk), file))) {
-    if (b.size + count > SOURCE_LIMIT) fail("%s: source exceeds 128 KiB", path);
+    if (b.size + count > SOURCE_LIMIT) fail("%s: source exceeds 512 KiB", path);
     for (size_t i = 0; i < count; ++i)
       if ((unsigned char)chunk[i] < 32 && chunk[i] != '\n' && chunk[i] != '\r' && chunk[i] != '\t')
         fail("%s: unsupported control byte", path);
     append(&b, chunk, count);
   }
   if (ferror(file)) fail("%s: read failed", path);
-  fclose(file); if (!b.data) text(&b, ""); return b;
+  fclose(file); if (!b.data) text(&b, ""); source_utf8((const unsigned char *)b.data,b.size,path); return b;
 }
 static int suffix(const char *s, const char *end) {
   size_t a = strlen(s), b = strlen(end); return a >= b && !strcmp(s + a - b, end);
@@ -92,7 +110,8 @@ static void addname(const char *name, const char *file, size_t line, int example
   for (size_t i = 0; i < name_count; ++i)
     if (!strcmp(names[i].name, name)) fail("%s:%zu: duplicate block name %s", file, line, name);
   if (name_count == MAX_NAMES) fail("too many blocks");
-  names[name_count++] = (Name){strdup(name), file, line, example};
+  names[name_count++] = (Name){strdup(name), file, line, example, NULL};
+  names[name_count-1].display = names[name_count-1].name;
   if (example) ++example_count;
 }
 /* Return marker length and the first byte following it. */
@@ -166,7 +185,7 @@ static uint32_t load32(const uint8_t *p) {
 }
 static uint32_t part(w2c_bel *m, uint32_t x, unsigned offset) {
   const wasm_rt_memory_t *memory = w2c_bel_memory(m);
-  if (x < 4096 || (x & 7) || (uint64_t)x + 8 > memory->size) fail("invalid value transport pair");
+  if (!w2c_bel_pair_valid(m,x)) fail("invalid value transport pair");
   return load32(memory->data + x + offset);
 }
 static uint32_t encode(w2c_bel *m, const char *s, size_t size) {
@@ -186,7 +205,7 @@ static uint32_t encode(w2c_bel *m, const char *s, size_t size) {
     if (c < minimum || c > 0x10ffff || (c >= 0xd800 && c <= 0xdfff)) fail("source is not valid UTF-8");
     chars[used++] = (c << 3) | 2;
   }
-  uint32_t list = 0; while (used) list = w2c_bel_join(m, chars[--used], list);
+  uint32_t list = 0; while (used) list = rb_join(m, chars[--used], list);
   free(chars); return list;
 }
 static void utf8(Buffer *b, uint32_t c) {
@@ -227,30 +246,127 @@ static void json_value(w2c_bel *m, uint32_t x, unsigned depth, unsigned *steps, 
   if (!x) { text(out, "null"); return; }
   if ((x & 7) == 2) { text(out, "{\"char\":\""); escaped(out, x >> 3); text(out, "\"}"); return; }
   if ((x & 7) == 1) {
-    uint32_t chars = w2c_bel_symbolname(m, x); text(out, "\"");
+    uint32_t chars = rb_symbolname(m, x); text(out, "\"");
     while (chars) { if (++*steps > 32768) fail("symbol traversal limit"); uint32_t c = part(m, chars, 0); if ((c & 7) != 2) fail("invalid symbol transport"); escaped(out, c >> 3); chars = part(m, chars, 4); }
     text(out, "\""); return;
   }
   text(out, "{\"pair\":["); json_value(m, part(m, x, 0), depth + 1, steps, out); text(out, ",");
   json_value(m, part(m, x, 4), depth + 1, steps, out); text(out, "]}");
 }
+#include "module-loader.h"
+static ModGraph module_graph;
+static uint32_t module_text(w2c_bel *m,const char *s) { return encode(m,s,strlen(s)); }
+static uint32_t module_symbol(w2c_bel *m,const char *s) { return rb_intern(m,module_text(m,s)); }
+static uint32_t module_unit_value(w2c_bel *m,const ModUnit *unit) {
+  uint32_t id=module_symbol(m,unit->id); RbRoot idroot=rb_hold(m,id);
+  uint32_t label=module_text(m,unit->label); RbRoot labelroot=rb_hold(m,label);
+  uint32_t *blocks=calloc(unit->block_count,sizeof(*blocks));
+  RbRoot *roots=calloc(unit->block_count,sizeof(*roots));
+  if(unit->block_count && (!blocks||!roots)) fail("module value allocation failed");
+  for(size_t i=0;i<unit->block_count;++i) {
+    uint32_t line=module_text(m,unit->blocks[i].line); RbRoot line_root=rb_hold(m,line);
+    uint32_t body=encode(m,unit->blocks[i].text.data,unit->blocks[i].text.size);
+    uint32_t fields[]={line,body};blocks[i]=rb_list(m,fields,2);roots[i]=rb_hold(m,blocks[i]);
+    rb_drop(m,line_root);
+  }
+  uint32_t list=rb_list(m,blocks,unit->block_count);
+  uint32_t fields[]={id,label,list};uint32_t answer=rb_list(m,fields,3);
+  for(size_t i=0;i<unit->block_count;++i) rb_drop(m,roots[i]);
+  rb_drop(m,labelroot);rb_drop(m,idroot);free(roots);free(blocks);return answer;
+}
+static uint32_t module_bundle_value(w2c_bel *m,const ModGraph *graph) {
+  uint32_t *items=calloc(MAX_NAMES,sizeof(*items));RbRoot *roots=calloc(MAX_NAMES,sizeof(*roots));
+  if(!items||!roots) fail("module bundle allocation failed");
+  for(size_t i=0;i<graph->root_count;++i) {
+    items[i]=module_symbol(m,graph->units[graph->roots[i]].id);roots[i]=rb_hold(m,items[i]);
+  }
+  uint32_t root_ids=rb_list(m,items,graph->root_count);RbRoot root_ids_root=rb_hold(m,root_ids);
+  for(size_t i=0;i<graph->root_count;++i) rb_drop(m,roots[i]);
+  for(size_t i=0;i<graph->unit_count;++i) {items[i]=module_unit_value(m,&graph->units[i]);roots[i]=rb_hold(m,items[i]);}
+  uint32_t units=rb_list(m,items,graph->unit_count);RbRoot units_root=rb_hold(m,units);
+  for(size_t i=0;i<graph->unit_count;++i) rb_drop(m,roots[i]);
+  for(size_t i=0;i<graph->edge_count;++i) {
+    const ModEdge *edge=&graph->edges[i];
+    uint32_t importer=module_symbol(m,graph->units[edge->importer].id);RbRoot importer_root=rb_hold(m,importer);
+    uint32_t path=module_text(m,edge->authored_path);RbRoot path_root=rb_hold(m,path);
+    uint32_t target=module_symbol(m,graph->units[edge->target].id);
+    uint32_t fields[]={importer,path,target};items[i]=rb_list(m,fields,3);roots[i]=rb_hold(m,items[i]);
+    rb_drop(m,path_root);rb_drop(m,importer_root);
+  }
+  uint32_t edges=rb_list(m,items,graph->edge_count);RbRoot edges_root=rb_hold(m,edges);
+  for(size_t i=0;i<graph->edge_count;++i) rb_drop(m,roots[i]);
+  size_t count=0;
+  for(size_t i=0;i<graph->unit_count;++i) for(size_t j=0;j<graph->units[i].example_count;++j) {
+    const ModUnit *unit=&graph->units[i];const ModExample *example=&unit->examples[j];
+    uint32_t fields[5];RbRoot holds[4];
+    fields[0]=module_symbol(m,unit->id);holds[0]=rb_hold(m,fields[0]);
+    fields[1]=module_text(m,example->line);holds[1]=rb_hold(m,fields[1]);
+    fields[2]=module_symbol(m,example->name);holds[2]=rb_hold(m,fields[2]);
+    fields[3]=encode(m,example->expression.data,example->expression.size);holds[3]=rb_hold(m,fields[3]);
+    fields[4]=encode(m,example->expected.data,example->expected.size);
+    items[count]=rb_list(m,fields,5);roots[count]=rb_hold(m,items[count]);++count;
+    for(size_t k=0;k<4;++k) rb_drop(m,holds[k]);
+  }
+  uint32_t examples=rb_list(m,items,count);RbRoot examples_root=rb_hold(m,examples);
+  for(size_t i=0;i<count;++i) rb_drop(m,roots[i]);
+  uint32_t tag=module_symbol(m,"source-bundle-v1");
+  uint32_t fields[]={tag,root_ids,units,edges,examples};uint32_t answer=rb_list(m,fields,5);
+  rb_drop(m,examples_root);rb_drop(m,edges_root);rb_drop(m,units_root);rb_drop(m,root_ids_root);
+  free(roots);free(items);return answer;
+}
+static char *module_decode_text(w2c_bel *m,uint32_t value) {
+  Buffer out={0};
+  while(value) {
+    if(!w2c_bel_pair_valid(m,value)) fail("module scanner returned invalid metadata");
+    uint32_t c=part(m,value,0);if(w2c_bel_value_kind(m,c)!=3 || !(c>>3)) fail("module metadata must be non-NUL text");
+    utf8(&out,c>>3);value=part(m,value,4);
+  }
+  if(!out.data) text(&out,"");return out.data;
+}
+static int scan_module(ModUnit *unit,void *context) {
+  (void)context;w2c_bel *m=calloc(1,sizeof(*m));if(!m) fail("module scanner allocation failed");
+  wasm_rt_init();const wasm_rt_trap_t trap=wasm_rt_impl_try();
+  if(trap!=WASM_RT_TRAP_NONE) fail("module scanner runtime defect: %s",wasm_rt_strerror(trap));
+  wasm2c_bel_instantiate(m);rb_initialize_compiler(m);
+  uint32_t value=module_unit_value(m,unit);RbRoot unit_root=rb_hold(m,value);
+  uint32_t tag=module_symbol(m,"scan-unit");uint32_t fields[]={tag,value};
+  uint32_t rows=rb_choose(m,rb_list(m,fields,2));RbRoot result_root=rb_hold(m,rows);
+  while(rows) {
+    if(unit->import_count==MAX_FILES || !w2c_bel_pair_valid(m,rows)) fail("module scanner import bound");
+    uint32_t row=part(m,rows,0),field[3];
+    for(size_t i=0;i<3;++i) {if(!w2c_bel_pair_valid(m,row)) fail("module scanner invalid import row");field[i]=part(m,row,0);row=part(m,row,4);}
+    if(row) fail("module scanner invalid import row");
+    ModImport *next=realloc(unit->imports,(unit->import_count+1)*sizeof(*next));if(!next) fail("module import allocation failed");
+    unit->imports=next;ModImport *item=&next[unit->import_count++];
+    item->path=module_decode_text(m,field[0]);item->line=module_decode_text(m,field[2]);item->alias=NULL;
+    if(field[1]) {
+      if(w2c_bel_value_kind(m,field[1])!=2) fail("module scanner invalid alias");
+      item->alias=module_decode_text(m,w2c_bel_symbol_name_view(m,field[1]));
+    }
+    rows=part(m,rows,4);
+  }
+  rb_drop(m,result_root);rb_drop(m,unit_root);rb_forget(m); wasm2c_bel_free(m);free(m);wasm_rt_free();return 0;
+}
+
 static Buffer core(const char *action) {
-  if (definitions.size > SOURCE_LIMIT || rows.size > SOURCE_LIMIT) fail("combined source/examples exceed 128 KiB");
   Buffer out = {0}; w2c_bel *m = calloc(1, sizeof(*m)); if (!m) fail("allocation failed");
   wasm_rt_init(); const wasm_rt_trap_t trap = wasm_rt_impl_try();
   if (trap != WASM_RT_TRAP_NONE) {
-    if (w2c_bel_memory(m)->data) wasm2c_bel_free(m); free(m); wasm_rt_free();
-    fail("%s: reader/compiler rejected input or reached a resource bound (%s)", action, wasm_rt_strerror(trap));
+    if (w2c_bel_memory(m)->data) { rb_forget(m); wasm2c_bel_free(m); } free(m); wasm_rt_free();
+    fail("%s: unexpected reader/compiler runtime trap (%s)", action, wasm_rt_strerror(trap));
   }
-  wasm2c_bel_instantiate(m);
-  uint32_t source = encode(m, definitions.data, definitions.size);
-  uint32_t examples = !strcmp(action, "check") ? encode(m, rows.data, rows.size) : 0;
-  uint32_t tag = w2c_bel_intern(m, encode(m, action, strlen(action)));
-  uint32_t request = w2c_bel_join(m, tag, w2c_bel_join(m, source, w2c_bel_join(m, examples, 0)));
-  uint32_t result = w2c_bel_choose(m, request);
+  wasm2c_bel_instantiate(m); rb_initialize_compiler(m);
+  uint32_t source_bundle = module_bundle_value(m,&module_graph);
+  RbRoot bundle_root = rb_hold(m,source_bundle);
+  const char *operation = !strcmp(action,"read") ? "read-bundle" : !strcmp(action,"check") ? "check-bundle" : "compile-bundle";
+  uint32_t tag = module_symbol(m,operation);
+  uint32_t fields[] = {tag,source_bundle};
+  uint32_t result = rb_choose(m,rb_list(m,fields,2));
+  RbRoot result_root = rb_hold(m,result); rb_drop(m,bundle_root);
   if (!strcmp(action, "read")) { unsigned steps = 0; json_value(m, result, 0, &steps, &out); text(&out, "\n"); }
   else flatten(m, result, &out);
-  wasm2c_bel_free(m); free(m); wasm_rt_free(); return out;
+  rb_drop(m,result_root);
+  rb_forget(m); wasm2c_bel_free(m); free(m); wasm_rt_free(); return out;
 }
 static int run(char *const argv[]) {
   pid_t pid = fork(); if (pid < 0) fail("fork failed");
@@ -317,6 +433,8 @@ static void help(void) {
        "build produces a native byte-list stdin/stdout filter; emit writes Wasm text.");
 }
 int main(int argc, char **argv) {
+  if (argc == 2 && !strcmp(argv[1], "--abi-version")) { puts("2"); return 0; }
+  atexit(cleanup);
   if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "--version"))) {
     if (!strcmp(argv[1], "--version")) puts("rbel 0.1 native-command"); else help(); return 0;
   }
@@ -332,18 +450,25 @@ int main(int argc, char **argv) {
   int producing = !strcmp(mode, "build") || !strcmp(mode, "emit");
   if (!!output_arg != producing) { help(); return 2; }
   find_bundle(); char *output = NULL;
+  mod_load_graph(&module_graph,sources,count,scan_module,NULL);
+  size_t example_index=0;
+  for(size_t i=0;i<module_graph.unit_count;++i) for(size_t j=0;j<module_graph.units[i].example_count;++j) {
+    char selector[64];snprintf(selector,sizeof(selector),"mod-example-%zu",example_index++);
+    const ModExample *example=&module_graph.units[i].examples[j];
+    addname(selector,module_graph.units[i].label,(size_t)strtoul(example->line,NULL,10),1);
+    names[name_count-1].display = example->name;
+  }
   if (producing) {
     output = canonical(output_arg);
     if (suffix(output, ".md") || suffix(output, ".rbel") || suffix(output, ".bel") || suffix(output, ".c") || suffix(output, ".h")) fail("output has a protected source extension");
     if (!strncmp(output, bundle, strlen(bundle)) && output[strlen(bundle)] == '/') fail("output must not overwrite command bundle resources");
-    for (size_t i = 0; i < count; ++i) {
-      char *source = canonical(sources[i]); struct stat a, b;
+    for (size_t i = 0; i < module_graph.unit_count; ++i) {
+      char *source = canonical(module_graph.units[i].path); struct stat a, b;
       int alias = !strcmp(source, output) || (!stat(source, &a) && !stat(output, &b) && a.st_dev == b.st_dev && a.st_ino == b.st_ino);
       free(source); if (alias) fail("output must not overwrite source");
     }
     if (unlink(output) && errno != ENOENT) fail("cannot clear old output: %s", strerror(errno));
   }
-  for (size_t i = 0; i < count; ++i) extract_file(sources[i]);
   if (!strcmp(mode, "read")) { Buffer answer = core("read"); int failed = fwrite(answer.data, 1, answer.size, stdout) != answer.size; free(answer.data); return failed || fflush(stdout) ? 1 : 0; }
   make_temp(output);
   if (example_count) {
@@ -351,7 +476,7 @@ int main(int argc, char **argv) {
     char *binary = formatted("%s/candidate", tempdir);
     for (size_t i = 0; i < name_count; ++i) if (names[i].example) {
       char *args[] = {binary, names[i].name, NULL};
-      if (run(args)) fail("%s:%zu: example %s failed", names[i].file, names[i].line, names[i].name);
+      if (run(args)) fail("%s:%zu: example %s failed", names[i].file, names[i].line, names[i].display);
     }
     free(binary); if (!quiet) fprintf(stderr, "checked %zu examples\n", example_count);
   } else if (!strcmp(mode, "check")) fail("no examples to check");

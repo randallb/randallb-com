@@ -27,7 +27,9 @@ try {
     mkdirSync(stateDirectory);
     const host = hostModule ? await hostModule.createHost({module, WasmValues, directory: stateDirectory}) : null;
     try {
-      let value = driver.exports.choose(driver.encode(['test', test.name]));
+      let value = driver.choose(driver.encode(['test', test.name]));
+      let valueRoot = driver.retain(value);
+      try {
       for (let step = 0; ; step++) {
         if (step >= 2048) throw Error('test step limit');
         const fields = driver.fields(value);
@@ -47,8 +49,12 @@ try {
           if (!host) throw Error(`no host for operation ${operation}`);
           reply = await host.request(operation, argumentsValue);
         }
-        value = driver.exports.choose(driver.list(driver.encode('resume'), fields[3], driver.encode(reply)));
+        const next = driver.resume(fields[3], reply);
+        const nextRoot = driver.retain(next);
+        driver.release(valueRoot);
+        value = next; valueRoot = nextRoot;
       }
+      } finally { driver.release(valueRoot); }
       if (!result.assertions.length) throw Error('test completed without an assertion');
       result.passed = true;
       if (host?.evidence) result.host = host.evidence();

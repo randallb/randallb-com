@@ -7,6 +7,7 @@
 #include "module.h"
 #include "wasm-rt-impl.h"
 #include "wasm-rt-exceptions.h"
+#include "value-roots.h"
 
 static unsigned steps;
 static void failed(const char *message) {
@@ -19,7 +20,7 @@ static uint32_t load32(const uint8_t *p) {
 }
 static uint32_t part(w2c_bel *module, uint32_t value, unsigned offset) {
   const wasm_rt_memory_t *memory = w2c_bel_memory(module);
-  if (value < 4096 || (value & 7) || (uint64_t)value + 8 > memory->size)
+  if (!w2c_bel_pair_valid(module,value))
     failed("invalid pair");
   return load32(memory->data + value + offset);
 }
@@ -41,7 +42,7 @@ static void value(w2c_bel *module, uint32_t x, unsigned depth) {
     fputs("{\"char\":\"", stdout); character(x >> 3); fputs("\"}", stdout); return;
   }
   if ((x & 7) == 1) {
-    uint32_t chars = w2c_bel_symbolname(module, x);
+    uint32_t chars = rb_symbolname(module, x);
     putchar('"');
     while (chars) {
       if (++steps > 32768) failed("symbol traversal limit");
@@ -64,15 +65,18 @@ int main(int argc, char **argv) {
   const wasm_rt_trap_t trap = wasm_rt_impl_try();
   if (trap != WASM_RT_TRAP_NONE) {
     fprintf(stderr, "native value runner: program trapped: %s\n", wasm_rt_strerror(trap));
-    if (w2c_bel_memory(module)->data) wasm2c_bel_free(module);
+    if (w2c_bel_memory(module)->data) { rb_forget(module); wasm2c_bel_free(module); }
     free(module); wasm_rt_free(); return 1;
   }
   wasm2c_bel_instantiate(module);
+  rb_initialize(module);
   uint32_t name = 0;
   for (size_t i = strlen(argv[1]); i > 0; --i)
-    name = w2c_bel_join(module, ((uint32_t)(unsigned char)argv[1][i - 1] << 3) | 2, name);
-  uint32_t result = w2c_bel_choose(module, w2c_bel_intern(module, name));
-  value(module, result, 0); putchar('\n');
+    name = rb_join(module, ((uint32_t)(unsigned char)argv[1][i - 1] << 3) | 2, name);
+  uint32_t result = rb_choose(module, rb_intern(module, name));
+  RbRoot result_root = rb_hold(module,result);
+  value(module, result, 0);
+  rb_drop(module,result_root); putchar('\n');
   int status = ferror(stdout) ? 1 : 0;
-  wasm2c_bel_free(module); free(module); wasm_rt_free(); return status;
+  rb_forget(module); wasm2c_bel_free(module); free(module); wasm_rt_free(); return status;
 }

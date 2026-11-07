@@ -65,9 +65,9 @@ def main():
             'empty-test': (base + '```rbel test=empty\n\n```\n', 'empty block'),
             'malformed-expression': (base + '```rbel test=bad\n(fn (x)\n```\n', 'test failure'),
             'malformed-example': (base + '```rbel example=bad\n(identity t)\n```\n', 'malformed example'),
-            'wasm-trap': (base + "```rbel test=trap\n(err 'deliberate-trap)\n```\n", 'trap: unreachable'),
-            'resource-trap': ('```rbel definition=consume\n(def consume (x) (consume (join x x)))\n```\n'
-                              '```rbel test=bounded\n(consume nil)\n```\n', 'call stack'),
+            'explicit-language-error': (base + "```rbel test=trap\n(err 'deliberate-trap)\n```\n", 'deliberate-trap'),
+            'heap-resource-bound': ('```rbel definition=consume\n(def consume (x) (consume (join x x)))\n```\n'
+                              '```rbel test=bounded\n(consume nil)\n```\n', 'heap-exhausted'),
             'false-assertion': (base + "```rbel test=false\n(rt-assert 'named-failure t nil (fn (ignored) (rt-done)))\n```\n", 'named-failure'),
             'no-assertions': (base + '```rbel test=empty-proof\n(rt-done)\n```\n', 'without an assertion'),
             'reserved-definition': ('```rbel definition=bad\n(def rt-evil (x) x)\n```\n'

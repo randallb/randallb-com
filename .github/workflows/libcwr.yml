@@ -13,7 +13,7 @@ concurrency:
 jobs:
   wasm:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: projects/bel-wasm
@@ -29,6 +29,15 @@ jobs:
           npm install --prefix target/bel-wasm-tools --no-save --ignore-scripts wabt@1.0.39
           python3 experiments/bel-rust-repl/wasm/verify-selfhost.py
           python3 literate/bootstrap-wasm.py
+      - name: Verify portable command example publication
+        run: python3 literate/verify-bootstrap-command.py
+      - name: Verify ABI2 memory, control flow, modules and Unicode
+        run: |
+          python3 experiments/bel-rust-repl/wasm/verify-runtime-core.py
+          python3 experiments/bel-rust-repl/wasm/verify-language-compiler.py
+          python3 experiments/bel-rust-repl/wasm/command/verify-modules.py --portable-only
+          python3 literate/test.py literate/language-core.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/language-examples.json
+          python3 literate/test.py literate/utf8.rbel.md --include literate/integers.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/utf8-examples.json
       - name: Verify exact numbers, explicit floats and reader examples
         run: |
           python3 literate/test.py literate/integers.rbel.md --rbel target/rbel-wasm-bootstrap/bin/rbel --report target/integer-examples.json
@@ -48,6 +57,15 @@ jobs:
           name: libcwr-evidence
           path: |
             projects/bel-wasm/target/integer-examples.json
+            projects/bel-wasm/target/language-examples.json
+            projects/bel-wasm/target/utf8-examples.json
+            projects/bel-wasm/target/runtime-core/results.json
+            projects/bel-wasm/target/language-compiler-verification/
+            projects/bel-wasm/target/module-verification/results.json
+            projects/bel-wasm/target/bootstrap-command-verification/results.json
+            projects/bel-wasm/target/bel-selfhost/selfhost-results.json
+            projects/bel-wasm/target/bel-selfhost/abi-bootstrap.json
+            projects/bel-wasm/target/rbel-core-bootstrap/core-build.json
             projects/bel-wasm/target/reader-examples.json
             projects/bel-wasm/target/float-examples.json
             projects/bel-wasm/target/numeric-verification/
