@@ -55,8 +55,8 @@ rbel read SOURCE
 or resource failures return 1. `--quiet` suppresses successful build/check messages.
 
 `.md` inputs use the existing `rbel definition=NAME` and `rbel example=NAME`
-fences. Every literate input requires both kinds. Names must be unique across
-all inputs. Example bodies contain one expression, an entire line `=>`, and one
+fences. Every literate input requires both kinds. Definition fence names must be unique within each input. Example labels are
+local to their source unit; imported modules may reuse them. Example bodies contain one expression, an entire line `=>`, and one
 expected value. Backtick and tilde fences, up to three leading spaces, CRLF,
 and explanatory fences follow the extractor's supported rules. Unknown rbel
 attributes, duplicate names, unclosed fences, and malformed examples fail.
@@ -65,7 +65,7 @@ examples, but `check` requires examples. There is no implicit foundation import.
 
 `check` compiles a separate example module and runs each named check in a fresh
 native process. Expected values are read as data, never evaluated. The structural
-comparison helper is generated in Bel. Results and traps identify the example,
+comparison helper is generated in Bel. Results and language errors identify the example,
 source file, and opening-fence line. The prefix `rbel-internal-` is reserved for
 these generated checks. There is no expected-error fence notation yet.
 
@@ -118,24 +118,27 @@ boundary/failure cases and an executable that prints a large integer. The `read`
 command exposes value trees as JSON; it does not evaluate or pretty-print them.
 See the [numeric contract](../../../literate/numbers.md).
 
-The compiler's fixed-arity functions, lexical closures, and remaining limits are
-in [higher-order compilation](higher-order.md). `sym` is now a compiled primitive:
-it interns a character list as a symbol, providing the reader's symbol boundary.
-Unicode text can be transported and read, but target source literals remain
-limited to the compiler's documented ASCII/tab/LF/CR coverage.
+The [ABI2 language core](../../../language-core/readme.md) supports proper tail
+calls, GC, recoverable errors, rest arguments and `apply`, local binding,
+sequencing, namespace modules, and Unicode scalar literals. That guide records
+host rooting, explicit external resource lifetimes and migration requirements.
+`(module name)`, `(export names...)` and `(import "relative/path" as alias)`
+provide private definitions and qualified references. Bare legacy imports combine
+legacy units without introducing module visibility rules.
 
-The C command handles files, Markdown block extraction, UTF-8 transport, native
-processes, and output publication. The rbel reader constructs source values;
-`frontend.bel` constructs compiled checks; `self-compiler.bel` makes compilation
-decisions. Native WABT assembles Wasm and translates it to C. Apple's compiler
-produces the executable. No C or Rust expression evaluator is used.
+The C command handles files, Markdown extraction, UTF-8 transport, native
+processes and output publication. The rbel reader constructs source values;
+`frontend.bel` constructs checks; `modules.bel` resolves and renames bindings;
+`self-compiler.bel` makes compilation decisions. Native WABT assembles Wasm and
+translates it to C. Apple's compiler produces the executable.
 
-Each file is limited to 128 KiB, as are combined definition text and example-row
-text separately. At most 32 files and 2048 block names are accepted. Each core
-action uses a fresh bounded 64 MiB arena and a 4096-frame call allowance; source
-within the byte bound can still exceed structural/stack limits. Text output is
-limited to 8 MiB; debug JSON rendering has a 128-depth/32768-step bound. Produced
-filters/checkers retain the native 1024-frame limit. Bound failures are errors.
+Source inputs have a combined 512 KiB transport bound. At most 32 files and 2048
+block names are accepted. Compiler instances use four million pair cells, plus
+roots and collector metadata, below the 64 MiB total memory maximum. Text output
+is limited to 32 MiB. Non-tail calls have an explicit maximum of 512; tail calls
+use bounded stack. Native filters reuse an initialized collecting instance across
+input chunks. Source within the byte bound can still exceed configured limits;
+these failures report language errors.
 
 ## Build the command from the maintained project
 

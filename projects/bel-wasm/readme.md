@@ -2,6 +2,15 @@
 
 An experimental Rust-hosted Bel bootstrap and a compiler written in Bel that emits WebAssembly. This is a standalone source distribution from randallb.com.
 
+## Language core candidate
+
+The [ABI2 language core](language-core/readme.md) adds proper tail calls, garbage
+collection, recoverable errors, rest arguments and `apply`, local binding and
+sequencing, module namespaces, and Unicode. Its preserved Astra design, host
+migration contract, executable examples and verification paths are linked there.
+This work is a draft above the numeric milestone; installed ABI1 bundles need a
+coordinated rebuild.
+
 ## libcwr Wasm milestone
 
 The [libcwr source](libcwr/workflow.rbel.md) implements the first conversation and

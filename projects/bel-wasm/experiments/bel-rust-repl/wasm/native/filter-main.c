@@ -10,6 +10,7 @@
 #include "module.h"
 #include "wasm-rt-impl.h"
 #include "wasm-rt-exceptions.h"
+#include "value-roots.h"
 
 #define CHUNK_BYTES 256
 #define MAX_OUTPUT_BYTES (1024 * 1024)
@@ -19,47 +20,36 @@ static uint32_t load32(const uint8_t *p) {
          ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static int transform(const unsigned char *input, size_t count) {
-  /* Keep modified module state on the heap so trap recovery does not read
-   * indeterminate automatic variables after longjmp. */
-  w2c_bel *module = calloc(1, sizeof(*module));
+static int transform(w2c_bel *module, const unsigned char *input, size_t count) {
   unsigned char *output = malloc(MAX_OUTPUT_BYTES);
-  if (!module || !output) {
+  if (!output) {
     fprintf(stderr, "bel filter: allocation failed\n");
-    free(module);
     free(output);
     return 1;
   }
   const wasm_rt_trap_t trap = wasm_rt_impl_try();
   if (trap != WASM_RT_TRAP_NONE) {
     fprintf(stderr, "bel filter: program trapped: %s\n", wasm_rt_strerror(trap));
-    if (w2c_bel_memory(module)->data) wasm2c_bel_free(module);
-    free(module);
     free(output);
     return 1;
   }
-  wasm2c_bel_instantiate(module);
   uint32_t list = 0;
   for (size_t i = count; i > 0; --i)
-    list = w2c_bel_join(module, ((uint32_t)input[i - 1] << 3) | 2, list);
-  uint32_t result = w2c_bel_choose(module, list);
+    list = rb_join(module, ((uint32_t)input[i - 1] << 3) | 2, list);
+  uint32_t result = rb_choose(module, list);
   size_t size = 0;
   while (result) {
     const wasm_rt_memory_t *memory = w2c_bel_memory(module);
-    if (result < 4096 || (result & 7) || (uint64_t)result + 8 > memory->size ||
+    if (!w2c_bel_pair_valid(module,result) ||
         size == MAX_OUTPUT_BYTES) {
       fprintf(stderr, "bel filter: result must be a bounded proper byte list\n");
-      wasm2c_bel_free(module);
-      free(module);
-      free(output);
+        free(output);
       return 1;
     }
     const uint32_t head = load32(memory->data + result);
     if ((head & 7) != 2 || (head >> 3) > 255) {
       fprintf(stderr, "bel filter: result contains a non-byte character\n");
-      wasm2c_bel_free(module);
-      free(module);
-      free(output);
+        free(output);
       return 1;
     }
     output[size++] = (unsigned char)(head >> 3);
@@ -68,8 +58,6 @@ static int transform(const unsigned char *input, size_t count) {
   /* Validate a complete output chunk before writing any part of that chunk. */
   const int failed = fwrite(output, 1, size, stdout) != size;
   if (failed) fprintf(stderr, "bel filter: stdout: %s\n", strerror(errno));
-  wasm2c_bel_free(module);
-  free(module);
   free(output);
   return failed;
 }
@@ -86,11 +74,20 @@ int main(int argc, char **argv) {
   /* Report a closed pipe as an ordinary I/O failure. */
   signal(SIGPIPE, SIG_IGN);
   wasm_rt_init();
+  w2c_bel *module = calloc(1,sizeof(*module));
+  if (!module) { fputs("bel filter: allocation failed\n",stderr); wasm_rt_free(); return 1; }
+  const wasm_rt_trap_t init_trap = wasm_rt_impl_try();
+  if (init_trap != WASM_RT_TRAP_NONE) {
+    fprintf(stderr,"bel filter: initialization runtime defect: %s\n",wasm_rt_strerror(init_trap));
+    if (w2c_bel_memory(module)->data) { rb_forget(module); wasm2c_bel_free(module); }
+    free(module);wasm_rt_free();return 1;
+  }
+  wasm2c_bel_instantiate(module);rb_initialize(module);
   unsigned char input[CHUNK_BYTES];
   size_t count;
   int status = 0;
   while ((count = fread(input, 1, sizeof(input), stdin)) != 0) {
-    if (transform(input, count)) {
+    if (transform(module, input, count)) {
       status = 1;
       break;
     }
@@ -103,6 +100,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "bel filter: stdout: %s\n", strerror(errno));
     status = 1;
   }
+  rb_forget(module); wasm2c_bel_free(module);free(module);
   wasm_rt_free();
   return status;
 }

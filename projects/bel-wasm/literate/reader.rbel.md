@@ -19,7 +19,17 @@ the next routine continue exactly where the previous one stopped. A separate
 failure operation stops malformed or unsupported input.
 
 ```rbel definition=rn-read-all
-(def rn-read-all (source) (rn-many (rn-skip source)))
+(def rn-read-all (source) (rn-many (rn-skip (rn-check-source source))))
+(def rn-check-source (source)
+  (if (rn-source-valid source) source (err 'invalid-source-control)))
+(def rn-source-valid (source)
+  (if source
+    (if (id (type source) 'pair)
+      (if (id (type (car source)) 'char)
+        (if (n-less (n-numerator (char-code (car source))) "32")
+          (if (rn-member (car source) '(\tab \lf \cr))
+            (rn-source-valid (cdr source)) nil)
+          (rn-source-valid (cdr source))) nil) nil) t))
 (def rn-fail () (err 'invalid-or-unsupported-reader-input))
 ```
 
@@ -112,7 +122,11 @@ a missing tail, or extra values after a dotted tail is an error.
 A token collects characters until a boundary. Symbol names use ASCII letters,
 hyphens, and digits. The arithmetic and comparison names `+`, `-`, `*`, `/`, `=`,
 `<`, `<=`, `>`, and `>=` are also symbols. The `sym` operation turns a character
-list into a symbol, giving the same symbol for the same name.
+list into a symbol, giving the same symbol for the same name. A qualified
+reference such as `words/finish`, `math/+`, or `math//` is one symbol token; module linking
+resolves it when it appears as a reference. In `math//`, the first slash is
+the namespace separator and the second is the division operator. Quoting it retains ordinary symbol
+data. Numeric-looking tokens are read first, so `1/3` remains a fraction.
 
 Numeric literals are exact unless an `f` suffix requests an approximate binary64
 float. Integers have no fixed magnitude limit. Fractions such as `1/3`, decimals
@@ -160,6 +174,18 @@ unquote, and other unsupported abbreviations remain errors.
           (if (rn-text-equal xs "<") t
             (if (rn-text-equal xs "<=") t
               (if (rn-text-equal xs ">") t (rn-text-equal xs ">=")))))))))
+(def rn-qualified-token (xs)
+  (rn-qualified-left xs nil))
+(def rn-qualified-left (xs left)
+  (if xs
+    (if (id (car xs) \/)
+      (if left
+        (if (cdr xs)
+          (if (rn-text-equal (cdr xs) "/") t
+            (if (rn-member \/ (cdr xs)) nil
+              (if (rn-operator (cdr xs)) t (rn-legal-token (cdr xs))))) nil) nil)
+      (if (rn-member (car xs) "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-0123456789")
+        (rn-qualified-left (cdr xs) t) nil)) nil))
 (def rn-numeric-start (xs)
   (if (rn-member (car xs) "0123456789") t
     (if (rn-member (car xs) '(\+ \-))
@@ -170,7 +196,7 @@ unquote, and other unsupported abbreviations remain errors.
       (join (rn-number (car parsed)) (cdr parsed))
       (if (rn-operator (car parsed))
         (join (sym (car parsed)) (cdr parsed))
-        (if (rn-legal-token (car parsed))
+        (if (if (rn-qualified-token (car parsed)) t (rn-legal-token (car parsed)))
           (join (sym (car parsed)) (cdr parsed)) (rn-fail)))) (rn-fail)))
 ```
 
@@ -304,7 +330,12 @@ A missing closing quote or an unfinished escape is an error.
 A backslash outside a string starts a character. A punctuation character
 is taken directly; ASCII alphabetic text is read as one character name. The names sp,
 tab, lf, and cr mean space, tab, line feed, and carriage return. Any other name
-must contain exactly one character. Text equality here compares character lists
+must contain exactly one character. An actual non-ASCII scalar is one character
+as well: `\é` and `\🦉` are supported. Explicit scalar notation `\u{HEX}` accepts
+one through six hexadecimal digits and rejects surrogate values and values above
+U+10FFFF. It can express controls, including `\u{0}`. This escape applies outside
+strings; inside a string the existing backslash rule still only quotes the next
+character. Text equality here compares character lists
 by their contents rather than pair identity.
 
 ```rbel definition=rn-text-equal
@@ -312,8 +343,26 @@ by their contents rather than pair identity.
   (if a (if b (if (id (car a) (car b)) (rn-text-equal (cdr a) (cdr b)) nil) nil)
     (if b nil t)))
 (def rn-character (xs)
-  (if xs (if (rn-letter (car xs)) (rn-named-character (rn-token xs))
-    (if (rn-white (car xs)) (rn-fail) (join (car xs) (cdr xs)))) (rn-fail)))
+  (if xs
+    (if (if (id (car xs) \u) (id (car (cdr xs)) \{) nil)
+      (rn-scalar-escape (cdr (cdr xs)) "0" nil '(t t t t t t))
+      (if (rn-letter (car xs)) (rn-named-character (rn-token xs))
+        (if (rn-white (car xs)) (rn-fail) (join (car xs) (cdr xs))))) (rn-fail)))
+(def rn-hex-value (c chars values)
+  (if chars
+    (if (id c (car chars)) (car values) (rn-hex-value c (cdr chars) (cdr values))) nil))
+(def rn-scalar-escape (xs magnitude seen budget)
+  (if xs
+    (if (id (car xs) \})
+      (if seen (join (code-char (n-build '+ magnitude "1")) (cdr xs)) (rn-fail))
+      (if budget
+        ((fn (digit)
+           (if digit
+             (rn-scalar-escape (cdr xs) (n-add (n-mul magnitude "16") digit) t (cdr budget))
+             (rn-fail)))
+         (rn-hex-value (car xs) "0123456789abcdefABCDEF"
+           '("0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15" "10" "11" "12" "13" "14" "15")))
+        (rn-fail))) (rn-fail)))
 (def rn-named-character (parsed)
   (if (rn-text-equal (car parsed) "sp") (join \sp (cdr parsed))
     (if (rn-text-equal (car parsed) "tab") (join \tab (cdr parsed))
@@ -464,6 +513,30 @@ t
 (car (rn-read-all "0.5f"))
 =>
 0.5f
+```
+
+```rbel example=reader-qualified-symbol
+(rn-text-equal (nom (car (rn-read-all "math/+"))) "math/+")
+=>
+t
+```
+
+```rbel example=reader-scalar-escape
+(char-code (car (rn-read-all "\\u{1F989}")))
+=>
+129417
+```
+
+```rbel example=reader-scalar-nul
+(char-code (car (rn-read-all "\\u{0}")))
+=>
+0
+```
+
+```rbel example=reader-raw-source-control-rejected
+(try (rn-read-all (join (code-char 0) nil)) (catch problem problem))
+=>
+invalid-source-control
 ```
 
 ## Scope and verification

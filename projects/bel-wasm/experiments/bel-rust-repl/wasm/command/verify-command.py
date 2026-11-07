@@ -110,17 +110,24 @@ def main():
         binary.write_bytes(b'stale')
         result = invoke('build', bad, '-o', binary, success=False)
         assert b'example wrong failed' in result.stderr and not binary.exists(), result.stderr
-        for changed in [valid.replace('(b)\n```', "(err 'expected-must-not-execute)\n```"),
-                        valid.replace('=>', ''), valid + '```rbel example=wrong\nx\n=>\ny\n```\n',
-                        valid + '```rbel unsupported=x\nx\n```\n', valid[:-4],
-                        valid.replace('(def echo (xs) xs)', '(def echo (xs) missing)'),
-                        valid.replace('(echo \'(a))', '(err \'intentional)')]:
-            bad.write_text(changed)
-            binary.write_bytes(b'stale')
-            failed = invoke('build', bad, '-o', binary, success=False)
+        failures = [
+            (valid.replace('(b)\n```', "(err 'expected-must-not-execute)\n```"),False),
+            (valid.replace('=>',''),True),
+            (valid+'```rbel example=wrong\nx\n=>\ny\n```\n',True),
+            (valid+'```rbel unsupported=x\nx\n```\n',True),
+            (valid[:-4],True),
+            (valid.replace('(def echo (xs) xs)','(def echo (xs) missing)'),False),
+            (valid.replace("(echo '(a))","(err 'intentional)"),False),
+        ]
+        for changed, discovery_failure in failures:
+            bad.write_text(changed); binary.write_bytes(b'stale')
+            failed=invoke('build',bad,'-o',binary,success=False)
             if 'expected-must-not-execute' in changed:
-                assert b'result differs from expected data' in failed.stderr and b'example trapped' not in failed.stderr, failed.stderr
-            assert not binary.exists()
+                assert b'result differs from expected data' in failed.stderr and b'example trapped' not in failed.stderr,failed.stderr
+            if discovery_failure:
+                assert binary.read_bytes()==b'stale', 'discovery must preserve outputs until all aliases are known'
+            else:
+                assert not binary.exists()
         # Ordinary fences, tildes, indentation, and CRLF follow extraction rules.
         good = directory / 'a; shell $(must-not-run).rbel.md'
         good.write_text('````text\n```rbel definition=ignored\ninvalid\n```\n````\n' +
@@ -152,7 +159,8 @@ def main():
         print('PASS: example failures, malformed fences, source aliases, stale cleanup, missing tools, and recovery', flush=True)
         # Read and compile the compiler itself natively, without the Rust reader/Node adapter.
         native_source = directory / 'compiler.rbel'
-        native_source.write_bytes((HERE.parent / 'self-compiler.bel').read_bytes())
+        native_source.write_bytes((HERE.parent / 'self-compiler.bel').read_bytes()+b'\n'+
+                                  (HERE.parent / 'core-runtime.bel').read_bytes())
         emitted = directory / 'compiler.wat'
         invoke('emit', native_source, '-o', emitted)
         # Check deterministic compiler self-emission. The core comparison below
@@ -162,7 +170,7 @@ def main():
         invoke('emit', native_source, '-o', second_wat)
         assert emitted.read_bytes() == second_wat.read_bytes()
         core_source = directory / 'core.rbel'
-        core_source.write_bytes((ROOT / 'target/rbel-command-build/core.bel').read_bytes())
+        core_source.write_bytes((ROOT / 'target/rbel-command-build/core.rbel').read_bytes())
         core_wat = directory / 'core.wat'
         invoke('emit', core_source, '-o', core_wat)
         assert core_wat.read_bytes() == (ROOT / 'target/rbel-command-build/core.wat').read_bytes()
