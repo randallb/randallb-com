@@ -11,6 +11,10 @@ migration contract, executable examples and verification paths are linked there.
 This work is a draft above the numeric milestone; installed ABI1 bundles need a
 coordinated rebuild.
 
+The [benchmark suite](benchmarks/readme.md) measures native and Wasm execution,
+source compilation, allocation and collection pressure with reproducible reports
+and guarded baseline comparisons. CI checks results without timing thresholds.
+
 ## libcwr Wasm milestone
 
 The [libcwr source](libcwr/workflow.rbel.md) implements the first conversation and
