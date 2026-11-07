@@ -81,7 +81,7 @@ def main():
     shutil.copy2(ROOT / 'LICENSE', licenses / 'PROJECT-LICENSE')
     samples = bundle / 'examples'
     samples.mkdir(exist_ok=True)
-    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md']:
+    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'integers.rbel.md']:
         shutil.copy2(ROOT / 'literate' / name, samples / name)
     for name in ['NOTICE.txt', 'ORIGIN.json', 'NATIVE-ORIGIN.json']:
         shutil.copy2(ROOT / name, bundle / name)
@@ -127,7 +127,8 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
     source_snapshot = bundle / 'source'
     source_snapshot.mkdir(exist_ok=True)
     for source_file in [HERE / 'rbel.c', HERE / 'check-main.c', HERE / 'frontend.bel',
-                        HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md']:
+                        HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md',
+                        ROOT / 'literate/integers.rbel.md']:
         shutil.copy2(source_file, source_snapshot / source_file.name)
     shutil.copy2(source, source_snapshot / 'core.rbel')
     # Preserve executable blocks while making exported documentation links portable.

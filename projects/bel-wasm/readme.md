@@ -67,8 +67,16 @@ target/rbel-command/bin/rbel check literate/foundation.rbel.md
 ```
 
 The [reader chapter](literate/reader.rbel.md) maintains its explanation, definitions,
-and 12 examples together. See the command guide for the relocatable bundle,
+and 19 examples together. See the command guide for the relocatable bundle,
 initial bootstrap, native-seed rebuild, supported syntax, and failure checks.
+
+## Signed integers
+
+The compiled path supports signed decimal integer literals through magnitude 256.
+Load the [integer library](literate/integers.rbel.md) with `--include` for addition,
+subtraction, numeric equality, ordering, and decimal text output. Arithmetic
+rejects other value types and results outside -256 through 256. Zero is a true
+value, distinct from `nil`.
 
 ## Native macOS ARM64 command
 
