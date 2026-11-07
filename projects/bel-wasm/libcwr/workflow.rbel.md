@@ -178,6 +178,41 @@ participant, invocation, or action effect.
 (def cw-textp (value)
   (if value (if (id (type value) 'pair)
     (if (id (type (car value)) 'char) (cw-textp (cdr value)) nil) nil) t))
+(def cw-interface-record (record)
+  (if record
+    (if (id (type record) 'pair)
+      ((fn (entry)
+        (if (id (type entry) 'pair)
+          (if (id (type (cdr entry)) 'pair)
+            (if (cdr (cdr entry)) nil
+              (if (id (type (car entry)) 'symbol)
+                (if (cw-interface-key (car entry) (cdr record)) nil
+                  (cw-interface-record (cdr record))) nil)) nil) nil)) (car record)) nil) t))
+(def cw-interface-key (key record)
+  (if record (if (id key (car (car record))) t
+    (cw-interface-key key (cdr record))) nil))
+(def cw-interface-fields (fields value)
+  (if fields
+    ((fn (key kind)
+      (if (cw-interface-key key value)
+        (if (cw-textp (cw-get key value))
+          (if (id kind 'nonempty-text)
+            (if (cw-get key value) (cw-interface-fields (cdr fields) value) nil)
+            (if (id kind 'text) (cw-interface-fields (cdr fields) value) nil)) nil) nil))
+      (car (car fields)) (car (cdr (car fields)))) t))
+(def cw-interface-no-extra (value fields)
+  (if value (if (cw-interface-key (car (car value)) fields)
+    (cw-interface-no-extra (cdr value) fields) nil) t))
+(def cw-interface-valid (interface value)
+  (if (id (cw-get 'type interface) 'record)
+    (if (cw-interface-record value)
+      (if (cw-interface-no-extra value (cw-get 'fields interface))
+        (cw-interface-fields (cw-get 'fields interface) value) nil) nil) nil))
+(def cw-input-valid (event environment)
+  ((fn (interface)
+    (if interface (cw-interface-valid interface (cw-get 'input event))
+      (cw-textp (cw-get 'input event))))
+    (cw-get 'input-interface (cw-get 'binding environment))))
 (def cw-create (state event environment)
   ((fn (old)
     (if (id (cw-get 'owner event) (cw-get 'context environment))
@@ -213,14 +248,17 @@ participant, invocation, or action effect.
 (def cw-find-origin (origin records)
   (if records (if (cw-equal origin (cw-get 'origin (car records))) (car records)
     (cw-find-origin origin (cdr records))) nil))
+(def cw-chat-reserved-valid (state event)
+  (if (cw-get 'response-message event)
+    (if (cw-used-ref state (cw-get 'response-message event)) nil
+      (if (id (cw-get 'response-message event) (cw-get 'ref event)) nil
+        (if (id (cw-get 'response-message event) (cw-get 'message event)) nil t))) t))
 (def cw-chat-request-valid (state event)
   (if (cw-get 'response-message event)
-    (if (id (cw-target-action (cw-get 'target event)) 'uppercase--text)
-      (if (cw-used-ref state (cw-get 'response-message event)) nil
-        (if (id (cw-get 'response-message event) (cw-get 'ref event)) nil
-          (if (id (cw-get 'response-message event) (cw-get 'message event)) nil t))) nil) t))
+    (if (cw-member (cw-target-action (cw-get 'target event)) '(uppercase--text source--text))
+      (cw-chat-reserved-valid state event) nil) t))
 (def cw-admit (state event environment)
-  (if (cw-textp (cw-get 'input event))
+  (if (cw-input-valid event environment)
     (if (cw-textp (cw-get 'text event)) (cw-admit-checked state event environment)
       (cw-reply state 'invalid nil)) (cw-reply state 'invalid nil)))
 (def cw-admit-checked (state event environment)
@@ -247,7 +285,8 @@ participant, invocation, or action effect.
 (def cw-source-link (event message)
   (if (cw-get 'response-message event) (cw-set 'invocation (cw-get 'ref event) message) message))
 (def cw-admit-new (state event environment conversation)
-  (if (cw-chat-request-valid state event)
+  (if (if (cw-get 'input-interface (cw-get 'binding environment))
+        (cw-chat-reserved-valid state event) (cw-chat-request-valid state event))
     (cw-admit-new-valid state event environment conversation) (cw-reply state 'conflict nil)))
 (def cw-admit-new-valid (state event environment conversation)
   ((fn (invocation)
@@ -275,7 +314,9 @@ participant, invocation, or action effect.
                 (cw-set 'target (cw-get 'target event)
                   (cw-set 'input (cw-get 'input event)
                     (cw-set 'route (cw-get 'route (cw-get 'binding environment))
-                      (cw-set 'phase 'admitted nil))))))))))))
+                      (cw-set 'phase 'admitted
+                        (if (cw-get 'output-interface (cw-get 'binding environment))
+                          (cw-set 'output-interface (cw-get 'output-interface (cw-get 'binding environment)) nil) nil)))))))))))))
 ```
 
 
@@ -411,6 +452,36 @@ external effects.
 (rt-done)))))))))))))))))))))))
 ```
 
+## Source coworker response reservations
+
+A source-backed text action reserves its reply identity just as the builtin
+uppercase action does. Naming a source action does not establish authorization;
+admission still checks the current exact target and trusted binding.
+
+```rbel example=source-reply-reference-is-fresh
+(cw-chat-request-valid nil
+  '((response-message reply) (ref invocation) (message request)
+    (target (runtime greeter role source--text binding contract))))
+=>
+t
+```
+
+```rbel example=source-reply-cannot-reuse-invocation-reference
+(cw-chat-request-valid nil
+  '((response-message invocation) (ref invocation) (message request)
+    (target (runtime greeter role source--text binding contract))))
+=>
+nil
+```
+
+```rbel example=unknown-action-cannot-reserve-a-chat-response
+(cw-chat-request-valid nil
+  '((response-message reply) (ref invocation) (message request)
+    (target (runtime greeter role unknown-action binding contract))))
+=>
+nil
+```
+
 ## Local rbel uppercase coworker
 
 The chat demonstration uses the same ASCII-only transformation as the maintained
@@ -420,7 +491,10 @@ processes bounded chunks through this pure compiled value operation only after t
 uppercase action passes normal authorization. The operation itself has no state
 or filesystem effects. Its direct result is not a coworker publication.
 
-An admission may reserve `response-message` for the uppercase action. It must be
+An admission may reserve `response-message` for the uppercase action or a
+named source coworker's `source--text` action. These use the same authority,
+retained target and reply attribution rules; the host executes the configured
+source only after authorized admission and claim. The reserved reference must be
 fresh and distinct from its invocation and source-message refs; all future
 admissions respect that reservation. First authenticated completion atomically
 adds the coworker's message and terminal invocation. The reply author is the
@@ -482,7 +556,7 @@ execution is rejected. The successful deterministic action is the slice's only
 terminal response variant; other status classes remain unmigrated.
 
 ```rbel definition=completion
-(def cw-chat-publish (state invocation result)
+(def cw-chat-publish (state invocation result text)
   ((fn (request conversation)
     (cw-save 'conversations
       (cw-set 'messages
@@ -492,19 +566,27 @@ terminal response variant; other status classes remain unmigrated.
               (cw-set 'addressed (cw-get 'author invocation)
                 (cw-set 'reply (cw-get 'message request)
                   (cw-set 'invocation (cw-get 'ref invocation)
-                    (cw-set 'text result nil)))))))
+                    (cw-set 'text (if text text (if (cw-textp result) result nil))
+                      (if (cw-get 'output-interface invocation) (cw-set 'value result nil) nil))))))))
           (cw-get 'messages conversation)) conversation) state))
     (cw-get 'request invocation) (cw-conversation state (cw-get 'conversation invocation))))
 (def cw-finish-record (state invocation result)
   ((fn (completed) (cw-reply (cw-save 'invocations completed state) 'completed completed))
     (cw-set 'phase 'completed (cw-set 'attempt nil (cw-set 'uncertain nil
       (cw-set 'checked nil (cw-set 'result result invocation)))))))
-(def cw-finish (state invocation result)
-  (if (cw-get 'response-message (cw-get 'request invocation))
-    (if (cw-textp result)
-      (cw-finish-record (cw-chat-publish state invocation result) invocation result)
-      (cw-reply state 'invalid invocation))
-    (cw-finish-record state invocation result)))
+(def cw-output-valid (invocation result)
+  (if (cw-get 'output-interface invocation)
+    (cw-interface-valid (cw-get 'output-interface invocation) result)
+    (if (cw-get 'response-message (cw-get 'request invocation)) (cw-textp result) t)))
+(def cw-finish-text (state invocation result text)
+  (if (cw-output-valid invocation result)
+    (if (cw-get 'response-message (cw-get 'request invocation))
+      (if (cw-textp text)
+        (cw-finish-record (cw-chat-publish state invocation result text) invocation result)
+        (cw-reply state 'invalid invocation))
+      (cw-finish-record state invocation result))
+    (cw-reply state 'invalid invocation)))
+(def cw-finish (state invocation result) (cw-finish-text state invocation result nil))
 (def cw-complete (state event environment)
   ((fn (invocation)
     (if invocation
@@ -512,7 +594,7 @@ terminal response variant; other status classes remain unmigrated.
         (if (cw-equal (cw-get 'executor environment) (cw-get 'target invocation))
           (if (id (cw-get 'claim event) (cw-get 'claim invocation))
             (if (id (cw-get 'phase invocation) 'completed) (cw-reply state 'completed invocation)
-              (if (cw-get 'attempt invocation) (cw-finish state invocation (cw-get 'result event))
+              (if (cw-get 'attempt invocation) (cw-finish-text state invocation (cw-get 'result event) (cw-get 'text event))
                 (cw-reply state 'reconciliation-required invocation)))
             (cw-reply state 'denied nil)) (cw-reply state 'denied nil))
         (cw-reply state 'denied nil)) (cw-reply state 'unavailable nil)))

@@ -37,11 +37,40 @@
   (if (id x 'car) t (if (id x 'cdr) t (if (id x 'type) t
   (if (id x 'nom) t (if (id x 'err) t (if (id x 'o) t
   (if (id x 'apply) t nil))))))))))))))))))))))))
+; Integer values use Bel's existing literal-pair representation.
+; Keep this compiler readable by the pre-integer bootstrap reader.
+(def sc-integer-operator (x)
+  (if (id x (sym "+")) t (if (id x (sym "-")) t
+    (if (id x (sym "=")) t (if (id x (sym "<")) t
+      (if (id x (sym "<=")) t (if (id x (sym ">")) t
+        (id x (sym ">=")))))))))
+(def sc-integer (x)
+  (if (sc-four x)
+    (if (id (car x) 'lit)
+      (if (id (sc-second x) 'num)
+        (if (sc-integer-real (sc-third x))
+          (sc-integer-zero (sc-fourth x)) nil) nil) nil) nil))
+(def sc-integer-denominator (x)
+  (if (sc-one x) (id (car x) t) nil))
+(def sc-integer-zero (x)
+  (if (sc-three x)
+    (if (id (car x) (sym "+"))
+      (if (id (sc-second x) nil) (sc-integer-denominator (sc-third x)) nil) nil) nil))
+(def sc-integer-real (x)
+  (if (sc-three x)
+    (if (sc-integer-denominator (sc-third x))
+      (if (id (car x) (sym "+")) (sc-integer-unary (sc-second x))
+        (if (id (car x) (sym "-"))
+          (if (sc-second x) (sc-integer-unary (sc-second x)) nil) nil)) nil) nil))
+(def sc-integer-unary (x)
+  (if x (if (id (type x) 'pair)
+    (if (id (car x) t) (sc-integer-unary (cdr x)) nil) nil) t))
 (def sc-name (x)
   (if x (if (id x t) nil
     (if (id (type x) 'symbol)
       (if (sc-reserved x) nil
-        (if (nom x) (sc-name-chars (nom x)) nil)) nil)) nil))
+        (if (sc-integer-operator x) t
+          (if (nom x) (sc-name-chars (nom x)) nil))) nil)) nil))
 (def sc-find (name forms)
   (if forms (if (id name (sc-second (car forms)))
                  (car forms) (sc-find name (cdr forms))) nil))
@@ -118,7 +147,8 @@
       (if (sc-access x params) (sc-access x params)
         (if (id (type x) 'char) (sc-char x)
           (if (id (type x) 'pair)
-            (if (sc-chars x) (sc-global path) (sc-compound x params forms path))
+            (if (sc-integer x) (sc-global path)
+              (if (sc-chars x) (sc-global path) (sc-compound x params forms path)))
             (if (sc-find x forms) (sc-function-value x)
               (if (sc-primitive-name x) (sc-function-value x) (sc-reject)))))))))
 (def sc-constant (x)
@@ -133,7 +163,7 @@
     (sc-l3 "(global $literal-" path " (mut i32) (i32.const 0))")))
 (def sc-scan (x path mode)
   (if (id (type x) 'pair)
-    (if (sc-chars x) (sc-literal x path mode)
+    (if (if (sc-integer x) t (sc-chars x)) (sc-literal x path mode)
       (if (id (car x) 'quote)
         (if (sc-two x) (sc-literal (sc-second x) path mode) (sc-reject))
         (if (id (car x) 'fn)
@@ -490,7 +520,7 @@
       (sc-reject)) (sc-reject)))
 (def sc-lambda-scan (x ctx forms path mode)
   (if (id (type x) 'pair)
-    (if (sc-chars x) nil
+    (if (if (sc-integer x) t (sc-chars x)) nil
       (if (id (car x) 'quote) nil
         (if (id (car x) 'fn)
           (sc-l2 (sc-lambda-item x ctx forms path mode)

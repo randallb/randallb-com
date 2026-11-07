@@ -1,5 +1,6 @@
 (def rbel-core (request)
-  (if (id (car request) 'read) (rn-read-all (sc-second request))
+  (if (id (car request) 'lint) (rl-lint (sc-second request))
+    (id (car request) 'read) (rn-read-all (sc-second request))
     (if (id (car request) 'compile) (sc-compile (rn-read-all (sc-second request)))
       (if (id (car request) 'check)
         (sc-compile (rbel-test-module (rn-read-all (sc-second request))

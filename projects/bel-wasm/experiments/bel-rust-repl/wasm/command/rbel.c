@@ -26,11 +26,24 @@
 typedef struct { char *data; size_t size, capacity; } Buffer;
 typedef struct { char *name; const char *file; size_t line; int example; } Name;
 static Name names[MAX_NAMES];
+typedef struct {
+  char *path;
+  Buffer source;
+  dev_t device;
+  ino_t inode;
+  int active;
+  char *imports[MAX_FILES];
+  size_t import_count;
+} Source;
+static Source inputs[MAX_FILES];
+static size_t input_count;
+static Source *extracting;
+static int discovering = 1;
 static size_t name_count, example_count;
 static Buffer definitions, rows;
 static char tempdir[PATH_MAX];
 static char bundle[PATH_MAX];
-static int quiet;
+static int quiet, value_interface;
 
 static void cleanup(void) {
   if (!*tempdir) return;
@@ -104,11 +117,12 @@ static size_t fence(const char *line, size_t size, char *marker, size_t *after) 
   if (end - start < 3) return 0;
   *after = end; return end - start;
 }
+#include "imports-command.h"
 static void extract_file(const char *path) {
-  Buffer source = readfile(path);
-  if (!suffix(path, ".md")) { append(&definitions, source.data, source.size); text(&definitions, "\n"); free(source.data); return; }
+  Buffer source = extracting->source;
+  if (!suffix(path, ".md")) { import_definitions(path, source.data, source.size); return; }
   size_t offset = 0, line_number = 0, start_line = 0, width = 0;
-  char marker = 0; int kind = 0; Buffer body = {0}; char *name = NULL;
+  char marker = 0; int kind = 0; Buffer body = {0}, file_definitions = {0}; char *name = NULL;
   size_t file_defs = 0, file_examples = 0;
   while (offset < source.size) {
     const char *line = source.data + offset;
@@ -119,9 +133,9 @@ static void extract_file(const char *path) {
     char current = 0; size_t after = 0, count = fence(line, len, &current, &after);
     if (width) {
       if (current == marker && count >= width && blank(line + after, len - after)) {
-        if (kind && blank(body.data, body.size)) fail("%s:%zu: empty block", path, start_line);
-        if (kind == 1) { append(&definitions, body.data, body.size); text(&definitions, "\n"); ++file_defs; }
-        if (kind == 2) {
+        if (!discovering && kind && blank(body.data, body.size)) fail("%s:%zu: empty block", path, start_line);
+        if (kind == 1) { append(&file_definitions, body.data, body.size); text(&file_definitions, "\n"); ++file_defs; }
+        if (kind == 2 && !discovering) {
           size_t separator = SIZE_MAX, end_separator = 0;
           for (size_t p = 0; p < body.size;) {
             size_t e = p; while (e < body.size && body.data[e] != '\n') ++e;
@@ -152,14 +166,34 @@ static void extract_file(const char *path) {
       const char *label = NULL;
       if (!strncmp(info, "rbel definition=", 16)) { kind = 1; label = info + 16; }
       else if (!strncmp(info, "rbel example=", 13)) { kind = 2; label = info + 13; }
-      else fail("%s:%zu: unsupported rbel fence", path, line_number);
-      addname(label, path, line_number, kind == 2); name = strdup(label);
+      else if (!discovering) fail("%s:%zu: unsupported rbel fence", path, line_number);
+      if (label) { if (!discovering) addname(label, path, line_number, kind == 2); name = strdup(label); }
     }
     free(info);
   }
-  if (width) fail("%s:%zu: unclosed fence", path, start_line);
-  if (!file_defs || !file_examples) fail("%s: literate input needs definition and example blocks", path);
-  free(body.data); free(source.data);
+  if (width && discovering && kind == 1) { append(&file_definitions, body.data, body.size); text(&file_definitions, "\n"); }
+  if (width && !discovering) fail("%s:%zu: unclosed fence", path, start_line);
+  import_definitions(path, file_definitions.data, file_definitions.size);
+  free(file_definitions.data);
+  if (!discovering && (!file_defs || (!file_examples && !extracting->import_count))) fail("%s: literate input needs definition and example blocks", path);
+  free(body.data); free(name);
+}
+static void load_source(const char *path) {
+  char resolved[PATH_MAX]; struct stat info;
+  if (!realpath(path, resolved) || stat(resolved, &info)) fail("%s: %s", path, strerror(errno));
+  if (!S_ISREG(info.st_mode)) fail("%s: source must be a regular file", path);
+  for (size_t i = 0; i < input_count; ++i) {
+    if (inputs[i].device != info.st_dev || inputs[i].inode != info.st_ino) continue;
+    if (inputs[i].active) fail("%s: import cycle through %s", path, inputs[i].path);
+    return;
+  }
+  if (input_count == MAX_FILES) fail("too many source files (maximum 32)");
+  Source *entry = &inputs[input_count++];
+  entry->path = strdup(resolved); entry->device = info.st_dev; entry->inode = info.st_ino;
+  entry->source = readfile(entry->path);
+  entry->active = 1; extracting = entry; extract_file(entry->path);
+  for (size_t i = 0; i < entry->import_count; ++i) load_source(entry->imports[i]);
+  entry->active = 0;
 }
 static uint32_t load32(const uint8_t *p) {
   return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
@@ -275,7 +309,7 @@ static void compile_native(const Buffer *wat, int checking) {
   char *validate[] = {validator, wasm, NULL};
   char *translate[] = {translator, wasm, "-n", "bel", "-o", code, NULL};
   if (run(assemble) || run(validate) || run(translate)) fail("WABT compilation failed");
-  char *runtime = resource("runtime"), *adapter = resource(checking ? "check-main.c" : "filter-main.c");
+  char *runtime = resource("runtime"), *adapter = resource(checking ? "check-main.c" : value_interface ? "value-main.c" : "filter-main.c");
   char *impl = formatted("%s/wasm-rt-impl.c", runtime), *mem = formatted("%s/wasm-rt-mem-impl.c", runtime);
   char *exceptions = formatted("%s/wasm-rt-exceptions-impl.c", runtime);
   char *cc[] = {"/usr/bin/clang", "-std=c99", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -285,6 +319,7 @@ static void compile_native(const Buffer *wat, int checking) {
     "-DWASM_RT_STACK_DEPTH_COUNT=1", "-DWASM_RT_STACK_EXHAUSTION_HANDLER=0",
     "-DWASM_RT_MAX_CALL_STACK_DEPTH=1024", "-I", runtime, "-I", tempdir,
     adapter, code, impl, mem, exceptions, "-lm", "-pthread", "-o", candidate, NULL};
+
   if (run(cc)) fail("native C compilation failed");
   free(watpath); free(wasm); free(code); free(candidate); free(assembler); free(validator); free(translator);
   free(runtime); free(adapter); free(impl); free(mem); free(exceptions);
@@ -308,18 +343,23 @@ static void make_temp(const char *output) {
   else if (!getcwd(parent, sizeof(parent))) fail("cannot locate current directory");
   if (snprintf(tempdir, sizeof(tempdir), "%s/.rbel-build-XXXXXX", parent) >= (int)sizeof(tempdir) || !mkdtemp(tempdir)) fail("cannot create build directory: %s", strerror(errno));
 }
+#include "lint-command.h"
+
 static void help(void) {
-  puts("Usage: rbel build SOURCE [--include SOURCE ...] -o OUTPUT\n"
+  puts("Usage: rbel build SOURCE [--include SOURCE ...] [--value-interface] -o OUTPUT\n"
        "       rbel check SOURCE [--include SOURCE ...]\n"
        "       rbel emit SOURCE [--include SOURCE ...] -o OUTPUT.wat\n"
        "       rbel read SOURCE\n"
+       "       rbel lint SOURCE [--file-limit N] [--block-limit N]\n"
        "Literate .md input uses rbel definition=NAME and example=NAME fences.\n"
-       "build produces a native byte-list stdin/stdout filter; emit writes Wasm text.");
+       "Top-level (import \"relative/path\") loads relative source dependencies.\n"
+       "build produces a byte-list filter; --value-interface accepts one JSON value. emit writes Wasm text.");
 }
 int main(int argc, char **argv) {
   if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "--version"))) {
     if (!strcmp(argv[1], "--version")) puts("rbel 0.1 native-command"); else help(); return 0;
   }
+  if (argc >= 2 && !strcmp(argv[1], "lint")) return lint_command(argc, argv);
   if (argc < 3 || (strcmp(argv[1], "build") && strcmp(argv[1], "check") && strcmp(argv[1], "emit") && strcmp(argv[1], "read"))) { help(); return 2; }
   const char *mode = argv[1], *sources[MAX_FILES]; size_t count = 1; sources[0] = argv[2];
   const char *output_arg = NULL;
@@ -327,23 +367,28 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[i], "--include") && i + 1 < argc && count < MAX_FILES) sources[count++] = argv[++i];
     else if (!strcmp(argv[i], "-o") && i + 1 < argc && !output_arg) output_arg = argv[++i];
     else if (!strcmp(argv[i], "--quiet")) quiet = 1;
+    else if (!strcmp(argv[i], "--value-interface") && !strcmp(mode,"build")) value_interface = 1;
     else { help(); return 2; }
   }
   int producing = !strcmp(mode, "build") || !strcmp(mode, "emit");
   if (!!output_arg != producing) { help(); return 2; }
   find_bundle(); char *output = NULL;
+  for (size_t i = 0; i < count; ++i) load_source(sources[i]);
   if (producing) {
     output = canonical(output_arg);
     if (suffix(output, ".md") || suffix(output, ".rbel") || suffix(output, ".bel") || suffix(output, ".c") || suffix(output, ".h")) fail("output has a protected source extension");
     if (!strncmp(output, bundle, strlen(bundle)) && output[strlen(bundle)] == '/') fail("output must not overwrite command bundle resources");
-    for (size_t i = 0; i < count; ++i) {
-      char *source = canonical(sources[i]); struct stat a, b;
+    for (size_t i = 0; i < input_count; ++i) {
+      char *source = canonical(inputs[i].path); struct stat a, b;
       int alias = !strcmp(source, output) || (!stat(source, &a) && !stat(output, &b) && a.st_dev == b.st_dev && a.st_ino == b.st_ino);
       free(source); if (alias) fail("output must not overwrite source");
     }
     if (unlink(output) && errno != ENOENT) fail("cannot clear old output: %s", strerror(errno));
   }
-  for (size_t i = 0; i < count; ++i) extract_file(sources[i]);
+  discovering = 0; definitions.size = 0; rows.size = 0;
+  if (definitions.data) definitions.data[0] = 0;
+  if (rows.data) rows.data[0] = 0;
+  for (size_t i = 0; i < input_count; ++i) { extracting = &inputs[i]; extract_file(inputs[i].path); }
   if (!strcmp(mode, "read")) { Buffer answer = core("read"); int failed = fwrite(answer.data, 1, answer.size, stdout) != answer.size; free(answer.data); return failed || fflush(stdout) ? 1 : 0; }
   make_temp(output);
   if (example_count) {

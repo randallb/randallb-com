@@ -61,3 +61,39 @@ The executable includes the user-facing commands described in the [CLI guide](cl
 successive builds can be identified. Uncommitted builds carry a `-dirty` suffix;
 source archives without Git metadata are labeled `unversioned-source`. Native
 and standalone manifests retain the revision alongside exact source hashes.
+
+
+Source-backed chat and `/reload` use `native-reload.c/.h` to compile a private
+native byte-list worker and replace it after successful checks. The compiler
+bundle and system C compiler are development dependencies of this mode. See
+[the chat guide](chat-guide.md#edit-and-reload-a-source-coworker) for invocation,
+bounds, last-working-version behavior, and retained conversation semantics.
+
+Workspace `/check` invokes `language--do--check` on the configured source,
+including its imported examples, without activating a new worker. `/reload`
+checks examples while building and activates only a successful candidate.
+Compiler stdout/stderr is captured into an 8 KiB UTF-8 diagnostic result, with
+explicit truncation; execution keeps the existing 120-second build deadline.
+Both terminal and JSONL action calls retain diagnostics in their invocation result.
+JSONL launchers can supply paired `--source SOURCE --rbel COMPILER`; those options
+validate local paths without compiling at startup. Action authorization still
+precedes compilation, and no action input selects arbitrary source/compiler paths.
+
+Fresh local runtime identities use `cwp://local.<hostname>/runtimes/<uuid>`.
+On macOS the host reads Bonjour `LocalHostName`, falling back to the OS hostname;
+the short label is normalized to lowercase ASCII letters, digits and hyphens.
+This is identity allocation, without DNS lookup. `context.json` saves the entire
+root and trusted context, so moving a saved workspace or renaming the machine
+does not rewrite references. Existing demo and other supplied roots remain exact.
+New claims derive from the saved runtime root. The old example namespace remains
+only in explicit fixtures and their template; fresh local initialization rewrites
+that template into the newly allocated local identity.
+
+`workspace --coworker NAME --source SOURCE --rbel COMPILER` gives the configured
+source worker a distinct identity and `source--text` action alongside the builtin
+uppercase worker. This first interface supports one named source per launcher.
+The compiled rbel rules validate its authority, admission and retained reply links.
+Raw source-action hosts build configured source only after an authorized run;
+build failure retains diagnostics for reconciliation and never falls back to the
+uppercase implementation. Example-driven checks/reload still address the one
+configured source. Launcher paths are trusted configuration, not action inputs.
