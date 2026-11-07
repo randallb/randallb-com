@@ -74,6 +74,9 @@ def main():
         shutil.copy2(tools / name, libexec / name)
     shutil.copytree(runtime, share / 'runtime', dirs_exist_ok=True)
     shutil.copy2(HERE / 'check-main.c', share / 'check-main.c')
+    shutil.copy2(HERE / 'value-main.c', share / 'value-main.c')
+    for name in ['native-values.c', 'native-values.h']:
+        shutil.copy2(ROOT / 'libcwr/embedding' / name, share / name)
     shutil.copy2(HERE.parent / 'native/filter-main.c', share / 'filter-main.c')
     licenses = bundle / 'licenses'
     licenses.mkdir(exist_ok=True)
@@ -82,7 +85,7 @@ def main():
     shutil.copy2(ROOT / 'LICENSE', licenses / 'PROJECT-LICENSE')
     samples = bundle / 'examples'
     samples.mkdir(exist_ok=True)
-    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'lint.rbel.md', 'import-filter.rbel.md']:
+    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'lint.rbel.md', 'import-filter.rbel.md', 'integers.rbel.md']:
         shutil.copy2(ROOT / 'literate' / name, samples / name)
     for name in ['NOTICE.txt', 'ORIGIN.json', 'NATIVE-ORIGIN.json']:
         shutil.copy2(ROOT / name, bundle / name)
@@ -129,8 +132,8 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
     shutil.copy2(HERE.parent / 'native/readme.md', docs / 'native-filter.md')
     source_snapshot = bundle / 'source'
     source_snapshot.mkdir(exist_ok=True)
-    for source_file in [HERE / 'rbel.c', HERE / 'lint-command.h', HERE / 'imports-command.h', HERE / 'check-main.c', HERE / 'frontend.bel',
-                        ROOT / 'literate/lint.rbel.md',
+    for source_file in [HERE / 'rbel.c', HERE / 'lint-command.h', HERE / 'imports-command.h', HERE / 'check-main.c', HERE / 'value-main.c', ROOT / 'libcwr/embedding/native-values.c', ROOT / 'libcwr/embedding/native-values.h', HERE / 'frontend.bel',
+                        ROOT / 'literate/lint.rbel.md', ROOT / 'literate/integers.rbel.md',
                         HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md']:
         shutil.copy2(source_file, source_snapshot / source_file.name)
     shutil.copy2(source, source_snapshot / 'core.rbel')

@@ -70,6 +70,14 @@ The [reader chapter](literate/reader.rbel.md) maintains its explanation, definit
 and 12 examples together. See the command guide for the relocatable bundle,
 initial bootstrap, native-seed rebuild, supported syntax, and failure checks.
 
+## Signed integers
+
+The compiled path supports signed decimal integer literals and the
+[source-defined integer library](literate/integers.rbel.md). Import that library
+for addition, subtraction, numeric equality, ordering, and decimal text output.
+The [WLD&D example](libcwr/examples/wldnd/table.rbel.md) uses it to add a dice bonus
+and determine whether a check succeeds. Random dice generation remains separate.
+
 ## Native macOS ARM64 command
 
 The [literate Unix filter](literate/unix-filter.rbel.md) builds into a native

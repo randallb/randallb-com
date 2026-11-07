@@ -27,6 +27,7 @@ static char *worker_record;
 static unsigned char worker_bytes[TEXT_LIMIT+1024];
 static size_t worker_size;
 static char selection[65];
+static const char *source_coworker;
 static unsigned long serial;
 static int prompt_shown;
 static void prompt(void);
@@ -42,6 +43,8 @@ static void valid_name(const char *s){size_t n=strlen(s);if(!n||n>64)v_fail("nam
 static V *directory_coworker(const char *argument,int *available_out){
   const char *name=*argument=='@'?argument+1:argument;
   V *available=v_record_get(host_environment(),"available"),*match=NULL;
+  V *resource=host_workspace_resource_target(name,NULL);
+  if(resource){V *worker=at(resource,1);for(size_t i=0;available&&i<available->n;i++)if(v_isstr(available->items[i],symbol(worker)))*available_out=1;return worker;}
   *available_out=0;
   for(size_t i=0;available&&i<available->n;i++)
     if(v_isstr(available->items[i],name)){*available_out=1;return available->items[i];}
@@ -55,6 +58,41 @@ static V *directory_coworker(const char *argument,int *available_out){
   /* Unknown aliases still pass through protocol validation and report unavailable. */
   return host_workspace_ref("coworkers",name);
 }
+/* The launcher selects source code; messages select only a registered identity. */
+static V *conversation_target(V *recipient) {
+  if(source_coworker) {
+    V *target=host_workspace_binding(source_coworker);
+    if(v_isstr(recipient,symbol(at(target,1))))return target;
+  }
+  V *target=host_workspace_binding("uppercase");
+  return v_isstr(recipient,symbol(at(target,1)))?target:NULL;
+}
+/* Friendly JSON is a terminal presentation only; protocol values retain their
+ * ordinary rbel records and character lists. No resource meaning lives here. */
+static V *user_value(V *value){
+  if(!value)return v_array();
+  if(value->type!=VT_ARRAY)return value;
+  int chars=value->n>0,record_value=value->n>0;
+  for(size_t i=0;i<value->n;i++){
+    V *item=value->items[i];
+    if(!item||item->type!=VT_OBJECT||!v_get(item,"char"))chars=0;
+    if(!item||item->type!=VT_ARRAY||item->n!=2||!at(item,0)||at(item,0)->type!=VT_STRING)record_value=0;
+  }
+  if(chars){size_t n;char *text=v_text_n(value,&n);return v_string_n(text,n);}
+  V *out=record_value?v_object():v_array();
+  for(size_t i=0;i<value->n;i++){
+    if(record_value)v_put(out,at(value->items[i],0)->s,user_value(at(value->items[i],1)));
+    else v_push(out,user_value(value->items[i]));
+  }return out;
+}
+static V *program_value(V *value){
+  if(!value)return NULL;
+  if(value->type==VT_STRING)return v_chars_n(value->s,value->n);
+  V *out=v_array();
+  if(value->type==VT_OBJECT){for(size_t i=0;i<value->n;i++)field(out,value->keys[i],program_value(value->items[i]));return out;}
+  if(value->type==VT_ARRAY){for(size_t i=0;i<value->n;i++)v_push(out,program_value(value->items[i]));return out;}
+  v_fail("action input supports JSON records, arrays and strings");return NULL;
+}
 static void print_text(V *value){size_t n;char *s=v_text_n(value,&n);if(n)fwrite(s,1,n,stdout);}
 static V *input_conversation(void){V *input=v_array();if(selection[0])field(input,"conversation",host_workspace_ref("conversations",selection));return input;}
 static V *control(const char *action,V *input){
@@ -62,13 +100,15 @@ static V *control(const char *action,V *input){
   field(event,"ref",host_workspace_ref("invocations",name));field(event,"origin",host_workspace_ref("requests",name));
   field(event,"target",host_workspace_binding(action));field(event,"input",input);
   V *answer=host_workspace_step(event),*response=at(answer,0),*effect=at(answer,1);
-  if(v_isstr(at(effect,0),"reload")){
-    V *invocation=at(effect,1);int failed=coworker_reload();
+  if(v_isstr(at(effect,0),"reload")||v_isstr(at(effect,0),"check")){
+    int checking=v_isstr(at(effect,0),"check");
+    V *invocation=at(effect,1);int failed=checking?coworker_check():coworker_reload();
     V *done=record("workspace-complete");field(done,"ref",v_record_get(invocation,"ref"));field(done,"claim",v_record_get(invocation,"claim"));
-    field(done,"result",v_chars(failed?"reload failed; last working coworker retained":"Reloaded coworker source."));
+    field(done,"result",v_chars(coworker_diagnostics()));
     if(failed)field(done,"failed",v_string("t"));
     answer=host_workspace_finish(done,v_record_get(invocation,"target"));response=at(answer,0);
-    if(!failed)puts("Reloaded coworker source.");else fputs("libcwr: reload failed; last working coworker retained.\n",stderr);
+    if(!failed&&!checking&&coworker_resource_mode())host_workspace_resource(coworker_resource_descriptor());
+    if(!failed)puts(checking?"Source checks passed; active coworker unchanged.":"Reloaded coworker source.");else fputs(checking?"libcwr: source check failed; last working coworker retained.\n":"libcwr: reload failed; last working coworker retained.\n",stderr);
   }
   return response;
 }
@@ -109,8 +149,17 @@ static void start_worker(V *invocation){
     struct sigaction action={0};action.sa_handler=outer_stop;sigemptyset(&action.sa_mask);sigaction(SIGTERM,&action,NULL);sigaction(SIGINT,&action,NULL);sigprocmask(SIG_SETMASK,&previous,NULL);
     jmp_buf handler;v_handler=&handler;
     if(setjmp(handler)){unsigned char bad=1;send_bytes(descriptors[1],&bad,1);send_bytes(descriptors[1],v_error,strlen(v_error));_exit(1);}
-    V *input=v_record_get(invocation,"input");size_t n;char *body=v_text_n(input,&n),*answer;
-    if(coworker_active())answer=coworker_transform(body,n,&n);else answer=v_text_n(builtin_transform(input),&n);
+    V *input=v_record_get(invocation,"input");
+    if(coworker_resource_mode()&&host_workspace_resource_matches(v_record_get(invocation,"target"))){
+      V *request=v_array();v_push(request,v_string("invoke"));v_push(request,at(v_record_get(invocation,"target"),3));v_push(request,input);
+      V *reply=coworker_resource_invoke(request);
+      if(!v_isstr(at(reply,0),"ok"))v_fail("resource action failed: %s",v_json(reply));
+      if(!host_resource_output_valid(invocation,at(reply,1)))v_fail("resource output violates its declared interface");
+      char *json=v_json(at(reply,1));unsigned char typed=2;send_bytes(descriptors[1],&typed,1);send_bytes(descriptors[1],json,strlen(json));close(descriptors[1]);_exit(0);
+    }
+    size_t n;char *body=v_text_n(input,&n),*answer;
+    int use_source=!coworker_resource_mode()&&coworker_active()&&(!source_coworker||v_isstr(at(v_record_get(invocation,"target"),3),"source--text"));
+    if(use_source)answer=coworker_transform(body,n,&n);else answer=v_text_n(builtin_transform(input),&n);
     v_chars_n(answer,n); /* Validate complete UTF-8 before publishing a result. */
     unsigned char good=0;send_bytes(descriptors[1],&good,1);send_bytes(descriptors[1],answer,n);close(descriptors[1]);_exit(0);
   }
@@ -129,15 +178,16 @@ static void settle_worker(int status){
   if(setjmp(parsing)){char error[sizeof(v_error)];memcpy(error,v_error,sizeof(error));free(saved);v_handler=previous;v_fail("%s",error);}
   V *invocation=v_parse(saved,strlen(saved));free(saved);v_handler=previous;
   V *target=v_record_get(invocation,"target");
-  int failed=size<1||worker_bytes[0]!=0||!WIFEXITED(status)||WEXITSTATUS(status);
+  int failed=size<1||(worker_bytes[0]!=0&&worker_bytes[0]!=2)||!WIFEXITED(status)||WEXITSTATUS(status);
   V *done=record(cancelled?"workspace-stopped":failed?"workspace-failed":"complete");
   field(done,"ref",v_record_get(invocation,"ref"));field(done,"claim",v_record_get(invocation,"claim"));
-  if(!cancelled&&!failed)field(done,"result",v_chars_n((char*)worker_bytes+1,size-1));
+  if(!cancelled&&!failed)field(done,"result",worker_bytes[0]==2?v_parse((char*)worker_bytes+1,size-1):v_chars_n((char*)worker_bytes+1,size-1));
+  if(!cancelled&&!failed&&worker_bytes[0]==2)field(done,"text",v_chars(v_json(user_value(v_record_get(done,"result")))));
   if(failed&&!cancelled){field(done,"uncertain",v_string("t"));field(done,"result",v_chars(size>1?(char*)worker_bytes+1:"worker failed"));}
   V *answer=host_workspace_finish(done,target),*response=at(answer,0);
   int redraw=prompt_shown;if(redraw)putchar('\n');
   if(!cancelled&&!failed&&v_isstr(at(response,0),"completed")){
-    printf("uppercase [%s]: ",tail(v_record_get(invocation,"conversation")));print_text(v_record_get(at(response,1),"result"));putchar('\n');
+    printf("%s [%s]: ",host_workspace_resource_matches(target)?symbol(v_record_get(coworker_resource_descriptor(),"slug")):tail(at(target,1)),tail(v_record_get(invocation,"conversation")));if(worker_bytes[0]==2)fputs(v_json(user_value(v_record_get(at(response,1),"result"))),stdout);else print_text(v_record_get(at(response,1),"result"));putchar('\n');
   }else{printf("Work %s: %s\n",tail(v_record_get(invocation,"ref")),symbol(at(response,0)));if(failed&&size>1)fprintf(stderr,"libcwr: %.*s\n",(int)(size-1),worker_bytes+1);}
   if(redraw)prompt();else fflush(stdout);
 }
@@ -160,13 +210,19 @@ static void worker_tick(void){
   }
   V *all=v_record_get(host_state(),"invocations");
   for(size_t i=0;all&&i<all->n;i++){V *inv=all->items[i];
-    if(v_record_get(inv,"control")||!v_isstr(v_record_get(inv,"phase"),"admitted")||!v_isstr(at(v_record_get(inv,"target"),3),"uppercase--text"))continue;
-    host_workspace_binding("uppercase");V *run=record("run");field(run,"ref",v_record_get(inv,"ref"));V *answer=host_workspace_step(run),*effect=at(answer,1);
+    if(v_record_get(inv,"control")||!v_isstr(v_record_get(inv,"phase"),"admitted"))continue;
+    V *target=v_record_get(inv,"target");
+    if(!host_workspace_resource_matches(target)&&!v_isstr(at(target,3),"uppercase--text")&&!(source_coworker&&v_isstr(at(target,3),"source--text")))continue;
+    if(host_workspace_resource_matches(target)){
+      V *selected=host_workspace_resource_target(symbol(v_record_get(coworker_resource_descriptor(),"slug")),symbol(at(target,3)));
+      if(!selected||strcmp(v_json(selected),v_json(target)))continue;
+    }else if(!conversation_target(at(target,1)))continue;
+    V *run=record("run");field(run,"ref",v_record_get(inv,"ref"));V *answer=host_workspace_step(run),*effect=at(answer,1);
     if(v_isstr(at(effect,0),"execute")){start_worker(at(effect,1));break;}
   }
 }
 static void prompt(void){prompt_shown=1;if(selection[0])printf("you[%s]> ",selection);else fputs("workspace> ",stdout);fflush(stdout);}
-static void help(void){puts("Workspace: /new NAME, /open NAME, /home, /conversations, /coworkers, /actions\nConversation: /invite NAME, /remove NAME, /history, /status\nUnaddressed text is shared history and activates nobody; @uppercase TEXT requests work.\n/reload rebuilds configured language source; /exit leaves. Commands invoke coworker actions.");}
+static void help(void){puts("Workspace: /new NAME, /open NAME, /home, /inspect (/list, /conversations), /coworkers, /actions\nConversation: /invite NAME, /remove NAME, /history, /status\nUnaddressed text is shared history and activates nobody; @uppercase TEXT requests work.\n/call NAME ACTION JSON invokes a resource action; /resource shows its definition.\n/check runs configured source examples; /reload checks and rebuilds source; /exit leaves. Commands invoke coworker actions.");}
 static void conversation_required(void){if(!selection[0])v_fail("open a conversation first with /new NAME or /open NAME");}
 static int command(char *line){
   if(!line[0])return 0;
@@ -175,8 +231,8 @@ static int command(char *line){
     if(line[0]=='@'){
       char *space=strchr(line,' ');if(!space||space==line+1)v_fail("mention requires @coworker followed by text");
       *space=0;int available=0;V *recipient=directory_coworker(line+1,&available);
-      V *worker_target=host_workspace_binding("uppercase");
-      if(!v_isstr(recipient,symbol(at(worker_target,1)))){
+      V *worker_target=conversation_target(recipient);
+      if(!worker_target){
         if(available)v_fail("coworker has no conversational route; use /actions");
         v_fail("coworker is unavailable in this workspace");
       }
@@ -189,6 +245,23 @@ static int command(char *line){
       char message[96];fresh(message,"message");V *event=record("workspace-publish");field(event,"conversation",host_workspace_ref("conversations",selection));
       field(event,"message",host_workspace_ref("messages",message));field(event,"text",v_chars(line));V *response=at(host_workspace_step(event),0);describe("message",response);
     }return 0;
+  }
+  if(!strncmp(line,"/resource",9)&&(line[9]==0)){
+    if(!coworker_resource_mode())v_fail("no resource program configured");
+    puts(v_json(user_value(coworker_resource_descriptor())));printf("Source: %s\nActive build: %lu\n",coworker_source_path(),coworker_build_version());puts(v_json(user_value(host_resource_provenance())));return 0;
+  }
+  if(!strncmp(line,"/call ",6)){
+    conversation_required();
+    char *name=line+6,*action=strchr(name,' ');if(!action)v_fail("use /call NAME ACTION JSON");*action++=0;
+    while(*action==' ')action++;char *body=strchr(action,' ');if(!body)v_fail("use /call NAME ACTION JSON");*body++=0;while(*body==' ')body++;
+    V *target=host_workspace_resource_target(name,action);if(!target)v_fail("resource action unavailable; use /actions");
+    V *input=program_value(v_parse(body,strlen(body)));char request_name[96];fresh(request_name,"call");V *request=record("admit");
+    field(request,"ref",host_workspace_ref("invocations",request_name));field(request,"origin",host_workspace_ref("requests",request_name));
+    field(request,"conversation",host_workspace_ref("conversations",selection));field(request,"message",host_workspace_ref("messages",request_name));
+    field(request,"response-message",host_workspace_ref("replies",request_name));field(request,"target",target);field(request,"input",input);
+    /* Keep the actual request readable while typed input is retained separately. */
+    action[-1]=' ';body[-1]=' ';field(request,"text",v_chars(line));
+    V *response=at(host_workspace_step(request),0);printf("Work %s: %s\n",request_name,symbol(at(response,0)));return 0;
   }
   char *verb=line+1,*argument=NULL;
   for(char *p=verb;*p;p++)if(isspace((unsigned char)*p)){*p++=0;while(isspace((unsigned char)*p))p++;argument=*p?p:NULL;break;}
@@ -203,14 +276,14 @@ static int command(char *line){
     if(v_isstr(at(response,0),"found"))help();return 0;
   }
   const char *action=verb;
-  if(!strcmp(verb,"conversations"))action="list";else if(!strcmp(verb,"use"))action="open";else if(!strcmp(verb,"coworkers"))action="coworkers";
+  if(!strcmp(verb,"conversations")||!strcmp(verb,"inspect"))action="list";else if(!strcmp(verb,"use"))action="open";else if(!strcmp(verb,"coworkers"))action="coworkers";
   V *input=(!strcmp(action,"new")||!strcmp(action,"open"))?v_array():input_conversation();
   if(!strcmp(action,"new")||!strcmp(action,"open")){
     if(!argument)v_fail("%s requires a conversation name",verb);valid_name(argument);field(input,"conversation",host_workspace_ref("conversations",argument));
   }else if(!strcmp(action,"invite")||!strcmp(action,"remove")){
     conversation_required();if(!argument)v_fail("%s requires a coworker name",verb);int available=0;field(input,"coworker",directory_coworker(argument,&available));
   }else if(!strcmp(action,"history")){conversation_required();}
-  else if(strcmp(action,"home")&&strcmp(action,"list")&&strcmp(action,"actions")&&strcmp(action,"coworkers")&&strcmp(action,"status")&&strcmp(action,"reload"))v_fail("unknown command; use /help");
+  else if(strcmp(action,"home")&&strcmp(action,"list")&&strcmp(action,"actions")&&strcmp(action,"coworkers")&&strcmp(action,"status")&&strcmp(action,"reload")&&strcmp(action,"check"))v_fail("unknown command; use /help");
   if(argument&&strcmp(action,"new")&&strcmp(action,"open")&&strcmp(action,"invite")&&strcmp(action,"remove"))v_fail("unexpected command argument");
   V *response=control(action,input);const char *code=symbol(at(response,0));describe(verb,response);V *value=at(response,1);
   if((!strcmp(action,"new")||!strcmp(action,"open"))&&(!strcmp(code,"created")||!strcmp(code,"existing")||!strcmp(code,"found")||!strcmp(code,"opened"))){snprintf(selection,sizeof(selection),"%s",argument);printf("Conversation: %s\n",selection);participants(value);}
@@ -227,13 +300,19 @@ static int command(char *line){
   else if(!strcmp(action,"actions")||!strcmp(action,"list")||!strcmp(action,"status")){puts(v_json(value));}
   return 0;
 }
-int workspace_main(const char *directory,const char *source,const char *compiler){
+int workspace_main(const char *directory,const char *source,const char *compiler,const char *coworker_name,const char *resource){
+  source_coworker=coworker_name;
   jmp_buf startup;jmp_buf *previous=v_handler;v_handler=&startup;
   if(setjmp(startup)){fprintf(stderr,"libcwr: %s\n",v_error);host_close();coworker_close();v_handler=previous;return 1;}
   host_prepare_signals();if(source&&coworker_configure(source,compiler)){coworker_close();v_handler=previous;return 1;}
   struct stat info;if(lstat(directory,&info)<0){if(errno!=ENOENT)v_fail("cannot inspect workspace");host_init(directory);host_close();}
-  host_open(directory,NULL);host_workspace_environment();selection[0]=0;worker_pid=0;worker_fd=-1;
-  puts("Workspace home. /help lists commands; /new NAME creates a conversation.");prompt();
+  host_open(directory,NULL);host_workspace_environment();
+  if(resource){coworker_resource_validator(host_resource_check);if(coworker_resource_configure(resource,compiler))v_fail("resource configuration failed; %s",coworker_diagnostics());host_workspace_resource(coworker_resource_descriptor());}
+  if(source_coworker)host_workspace_source(source_coworker);selection[0]=0;worker_pid=0;worker_fd=-1;
+  puts("Workspace home. /help lists commands; /new NAME creates a conversation.");
+  if(source_coworker)printf("Source coworker: @%s. /check and /reload use its configured source.\n",source_coworker);
+  if(resource)puts("Native rbel resource loaded. /resource inspects it; /call NAME ACTION JSON invokes it in an open conversation.");
+  prompt();
   char *line=malloc(TEXT_LIMIT+1);if(!line)v_fail("allocation failed");size_t length=0;int oversized=0,done=0;
   while(!done){
     jmp_buf turn;v_handler=&turn;

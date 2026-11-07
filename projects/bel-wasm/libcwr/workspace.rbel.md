@@ -167,7 +167,9 @@ retained parent chain, so a different child target does not escape the stop.
 
 The exact target and input are retained in each control invocation. Pure controls
 finish in one atomic transition together with their state change and result.
-Reload is admitted as running with a host claim and an explicit platform effect.
+Language check and reload are admitted as running with a host claim and an explicit
+platform effect. Check validates configured source and examples without activating
+a build; reload checks before replacing the last working executable.
 Mutation retries recover the retained result without repeating their state change.
 Read controls retain a small `current-view` result reference and reproject the
 currently authorized view on retry; they do not claim to preserve an old snapshot.
@@ -197,6 +199,7 @@ Permission denial changes neither state nor membership.
       (id action 'repl--do--help) (cw-reply state 'found (cw-get 'workspace-actions environment))
       (id action 'repl--do--exit) (cw-reply state 'exited nil)
       (id action 'language--do--reload) (cw-reply state 'reload nil)
+      (id action 'language--do--check) (cw-reply state 'check nil)
       (cw-reply state 'unsupported nil)))
     (cw-target-action (cw-get 'target event)) (cw-get 'input event)))
 (def ws-home (state environment)
@@ -257,10 +260,11 @@ Permission denial changes neither state nor membership.
     (cw-target-action (cw-get 'target event)) (cw-get 'input event) (cw-get 'ref event)))
 (def ws-control-new (state event environment)
   (if (if (cw-used-ref state (cw-get 'ref event)) t (ws-control-input-conflict event)) (cw-reply state 'conflict nil)
-    (if (id (cw-target-action (cw-get 'target event)) 'language--do--reload)
+    (if (cw-member (cw-target-action (cw-get 'target event)) '(language--do--reload language--do--check))
       ((fn (invocation)
         (cw-three (cw-save 'invocations invocation state)
-          (cw-two 'running invocation) (cw-two 'reload invocation)))
+          (cw-two 'running invocation)
+          (cw-two (if (id (cw-target-action (cw-get 'target event)) 'language--do--check) 'check 'reload) invocation)))
         (cw-set 'claim (cw-get 'claim environment)
           (cw-set 'attempt t (ws-control-record event environment 'running))))
       (ws-control-finish event environment (ws-operation state event environment)))))
@@ -388,7 +392,7 @@ The fixture block is excluded from the shipped core.
 ```rbel definition=workspace-fixtures
 (def ws-fixture-target (action)
   (join 'runtime (join (if (id action 'uppercase--text) 'uppercase
-    (if (id action 'language--do--reload) 'language 'repl))
+    (if (cw-member action '(language--do--reload language--do--check)) 'language 'repl))
     (join 'role (join action (join 'binding (join 'contract nil)))))))
 (def ws-fixture-environment (action)
   ((fn (target)
@@ -535,4 +539,37 @@ reload
     (ws-fixture-environment 'uppercase--text)))
 =>
 "hi"
+```
+
+
+```rbel example=workspace-check-emits-a-host-effect
+(car (car (cdr (cdr (ws-fixture-call nil 'language--do--check nil 'check-call)))))
+=>
+check
+```
+
+```rbel example=workspace-check-retains-the-language-target
+(cw-target-action (cw-get 'target
+  (car (cw-get 'invocations (car (ws-fixture-call nil 'language--do--check nil 'check-call))))))
+=>
+language--do--check
+```
+
+```rbel example=workspace-check-requires-current-authority
+(ws-fixture-code (ws-step nil
+  (cw-set 'op 'workspace-call (cw-set 'ref 'check-call (cw-set 'origin 'check-call
+    (cw-set 'target (ws-fixture-target 'language--do--check) nil))))
+  (cw-set 'allow nil (ws-fixture-environment 'language--do--check))))
+=>
+denied
+```
+
+```rbel example=workspace-check-retry-does-not-repeat-host-effect
+((fn (event environment)
+  (car (cdr (cdr (ws-step (car (ws-step nil event environment)) event environment)))))
+  '((op workspace-call) (ref check-call) (origin check-call)
+    (target (runtime language role language--do--check binding contract)))
+  (ws-fixture-environment 'language--do--check))
+=>
+nil
 ```

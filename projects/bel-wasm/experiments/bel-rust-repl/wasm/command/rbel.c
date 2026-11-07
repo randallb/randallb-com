@@ -43,7 +43,7 @@ static size_t name_count, example_count;
 static Buffer definitions, rows;
 static char tempdir[PATH_MAX];
 static char bundle[PATH_MAX];
-static int quiet;
+static int quiet, value_interface;
 
 static void cleanup(void) {
   if (!*tempdir) return;
@@ -309,7 +309,7 @@ static void compile_native(const Buffer *wat, int checking) {
   char *validate[] = {validator, wasm, NULL};
   char *translate[] = {translator, wasm, "-n", "bel", "-o", code, NULL};
   if (run(assemble) || run(validate) || run(translate)) fail("WABT compilation failed");
-  char *runtime = resource("runtime"), *adapter = resource(checking ? "check-main.c" : "filter-main.c");
+  char *runtime = resource("runtime"), *adapter = resource(checking ? "check-main.c" : value_interface ? "value-main.c" : "filter-main.c");
   char *impl = formatted("%s/wasm-rt-impl.c", runtime), *mem = formatted("%s/wasm-rt-mem-impl.c", runtime);
   char *exceptions = formatted("%s/wasm-rt-exceptions-impl.c", runtime);
   char *cc[] = {"/usr/bin/clang", "-std=c99", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -319,6 +319,7 @@ static void compile_native(const Buffer *wat, int checking) {
     "-DWASM_RT_STACK_DEPTH_COUNT=1", "-DWASM_RT_STACK_EXHAUSTION_HANDLER=0",
     "-DWASM_RT_MAX_CALL_STACK_DEPTH=1024", "-I", runtime, "-I", tempdir,
     adapter, code, impl, mem, exceptions, "-lm", "-pthread", "-o", candidate, NULL};
+
   if (run(cc)) fail("native C compilation failed");
   free(watpath); free(wasm); free(code); free(candidate); free(assembler); free(validator); free(translator);
   free(runtime); free(adapter); free(impl); free(mem); free(exceptions);
@@ -345,14 +346,14 @@ static void make_temp(const char *output) {
 #include "lint-command.h"
 
 static void help(void) {
-  puts("Usage: rbel build SOURCE [--include SOURCE ...] -o OUTPUT\n"
+  puts("Usage: rbel build SOURCE [--include SOURCE ...] [--value-interface] -o OUTPUT\n"
        "       rbel check SOURCE [--include SOURCE ...]\n"
        "       rbel emit SOURCE [--include SOURCE ...] -o OUTPUT.wat\n"
        "       rbel read SOURCE\n"
        "       rbel lint SOURCE [--file-limit N] [--block-limit N]\n"
        "Literate .md input uses rbel definition=NAME and example=NAME fences.\n"
        "Top-level (import \"relative/path\") loads relative source dependencies.\n"
-       "build produces a native byte-list stdin/stdout filter; emit writes Wasm text.");
+       "build produces a byte-list filter; --value-interface accepts one JSON value. emit writes Wasm text.");
 }
 int main(int argc, char **argv) {
   if (argc == 2 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "--version"))) {
@@ -366,6 +367,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[i], "--include") && i + 1 < argc && count < MAX_FILES) sources[count++] = argv[++i];
     else if (!strcmp(argv[i], "-o") && i + 1 < argc && !output_arg) output_arg = argv[++i];
     else if (!strcmp(argv[i], "--quiet")) quiet = 1;
+    else if (!strcmp(argv[i], "--value-interface") && !strcmp(mode,"build")) value_interface = 1;
     else { help(); return 2; }
   }
   int producing = !strcmp(mode, "build") || !strcmp(mode, "emit");

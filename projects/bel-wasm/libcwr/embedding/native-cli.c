@@ -33,6 +33,8 @@ static void help(void) {
        "  workspace [--directory DIR]       Open the workspace home\n"
        "  chat [--directory DIR]            Chat with the local rbel coworker\n"
        "       [--source SOURCE --rbel COMPILER]  Enable source reload\n"
+       "       workspace: [--coworker NAME]  Name the source coworker\n"
+       "       [--resource PROGRAM --rbel COMPILER] Load a native rbel resource\n"
        "  repl [--directory DIR]            Start an interactive session\n"
        "  (no arguments on a terminal starts workspace)\n"
        "  Inside: use NAME, submit INVOCATION --text TEXT, history, exit\n"
@@ -518,7 +520,7 @@ static int repl_main(const char *directory) {
   return result;
 }
 static int cli_command(int argc, char **argv, char *selection) {
-  if (argc == 1 && isatty(STDIN_FILENO)) return workspace_main(".libcwr", NULL, NULL);
+  if (argc == 1 && isatty(STDIN_FILENO)) return workspace_main(".libcwr", NULL, NULL, NULL, NULL);
   jmp_buf top;
   jmp_buf *previous = v_handler;
   volatile int status = 1;
@@ -530,7 +532,7 @@ static int cli_command(int argc, char **argv, char *selection) {
     return status;
   }
   const char *directory = ".libcwr";
-  const char *text = NULL, *source = NULL, *compiler = NULL;
+  const char *text = NULL, *source = NULL, *compiler = NULL, *coworker_name = NULL, *resource = NULL;
   const char *words[8];
   size_t count = 0;
   int directory_set = 0, json = 0, show_help = 0;
@@ -550,8 +552,8 @@ static int cli_command(int argc, char **argv, char *selection) {
       }
       directory = arg + 12;
       directory_set = 1;
-    } else if (!strcmp(arg, "--source") || !strcmp(arg, "--rbel")) {
-      const char **value = !strcmp(arg, "--source") ? &source : &compiler;
+    } else if (!strcmp(arg, "--source") || !strcmp(arg, "--rbel") || !strcmp(arg, "--coworker") || !strcmp(arg, "--resource")) {
+      const char **value = !strcmp(arg, "--source") ? &source : !strcmp(arg, "--rbel") ? &compiler : !strcmp(arg, "--resource") ? &resource : &coworker_name;
       if (*value || i + 1 >= argc || !strncmp(argv[i + 1], "--", 2)) {
         status = 2; v_fail("%s requires one path", arg);
       }
@@ -605,14 +607,20 @@ static int cli_command(int argc, char **argv, char *selection) {
   }
   const char *command = words[0];
   if (!strcmp(command, "workspace")) {
-    if (count != 1 || text || json || (!!source != !!compiler)) {
+    if (count != 1 || text || json || (source && resource) || (!!(source || resource) != !!compiler)) {
       status = 2; v_fail("workspace accepts --directory and paired --source SOURCE --rbel COMPILER");
     }
+    if(coworker_name) {
+      if(!source) { status=2; v_fail("--coworker requires --source and --rbel"); }
+      valid_name(coworker_name);
+      if(!strcmp(coworker_name,"uppercase")||!strcmp(coworker_name,"repl")||!strcmp(coworker_name,"language")) { status=2; v_fail("coworker name is reserved"); }
+    }
     v_handler = previous;
-    return workspace_main(directory, source, compiler);
+    if(resource && coworker_name) v_fail("--resource supplies its own coworker identity");
+    return workspace_main(directory, source, compiler, coworker_name, resource);
   }
   if (!strcmp(command, "chat")) {
-    if (count != 1 || text || json || (!!source != !!compiler)) {
+    if (count != 1 || text || json || resource || coworker_name || (!!source != !!compiler)) {
       status = 2; v_fail("chat accepts --directory and paired --source SOURCE --rbel COMPILER");
     }
     v_handler = previous;
@@ -622,7 +630,7 @@ static int cli_command(int argc, char **argv, char *selection) {
     coworker_close();
     return result;
   }
-  if (source || compiler) { status = 2; v_fail("--source and --rbel are workspace/chat options only"); }
+  if (source || compiler || coworker_name || resource) { status = 2; v_fail("--source and --rbel are workspace/chat options only"); }
   if (!strcmp(command, "repl")) {
     if (count != 1 || text || json) {
       status = 2;

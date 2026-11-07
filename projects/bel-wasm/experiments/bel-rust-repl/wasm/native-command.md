@@ -173,11 +173,25 @@ libcwr workflow source. It records results under `target/lint-verification`.
 
 The reader implements whitespace, semicolon comments, proper/dotted lists,
 apostrophe quotation, strings, and character notation. Symbol tokens use ASCII
-letters, digits, and hyphens, with numeric-looking starts rejected. It explicitly
-rejects unsupported numeric syntax, bracket functions, backquote, unquote, and
-other abbreviations. This is the reader for the compiled subset, not every Bel
+letters, digits, and hyphens, plus the integer operators `+`, `-`, `=`, `<`,
+`<=`, `>`, and `>=`. Signed decimal integer literals are supported; malformed
+numeric tokens, fractions, decimal points, and exponent notation are rejected.
+Bracket functions, backquote, unquote, and other abbreviations remain unsupported. This is the reader for the compiled subset, not every Bel
 notation. Character names use ASCII letters and the names sp/tab/lf/cr. String
 escapes take the next character literally, matching the existing reader's rule.
+
+Integer values use Bel's existing `(lit num ...)` representation, made of pairs
+and symbols. A literal evaluates to itself, including inside quoted lists and
+records. Zero is distinct from `nil` and is true in a conditional. Numeric
+comparison uses `=`, rather than pair identity with `id`.
+
+Import [the integer library](../../../literate/integers.rbel.md), or supply it
+with `--include`, to use arithmetic and comparisons. It provides signed addition,
+subtraction, equality and ordering. These operations check their operands and
+reject results outside the documented magnitude bound. `integer-text` converts
+an integer to decimal text for a byte-list filter's output. The `read` command
+continues to expose the underlying value tree as JSON; it does not evaluate or
+pretty-print numeric values.
 
 The compiler's fixed-arity functions, lexical closures, and remaining limits are
 in [higher-order compilation](higher-order.md). `sym` is now a compiled primitive:

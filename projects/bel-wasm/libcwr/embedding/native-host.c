@@ -10,6 +10,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <ctype.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -141,7 +144,84 @@ static void random_bytes(unsigned char *bytes,size_t n) {
   int fd=open("/dev/urandom",O_RDONLY);if(fd<0)v_fail("cannot obtain claim entropy");
   size_t offset=0;while(offset<n){ssize_t got=read(fd,bytes+offset,n-offset);if(got<0&&errno==EINTR)continue;if(got<=0){close(fd);v_fail("cannot obtain claim entropy");}offset+=(size_t)got;}if(close(fd)<0)v_fail("cannot close entropy source");
 }
-static V *claim(void) { unsigned char bytes[16];random_bytes(bytes,sizeof(bytes));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;char text[96];snprintf(text,sizeof(text),"cwp://org.example.libcwr/claims/%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7],bytes[8],bytes[9],bytes[10],bytes[11],bytes[12],bytes[13],bytes[14],bytes[15]);return v_string(text); }
+/* Host identity is a local namespace, never a DNS lookup. The full runtime
+ * root is saved in context.json; reopening never consults the current hostname. */
+static int hostname_label(const char *raw, char output[64]) {
+  char label[256];
+  const unsigned char *first=(const unsigned char *)raw,*end=first+strlen(raw);
+  while(first<end&&isspace(*first))first++;
+  while(end>first&&isspace(end[-1]))end--;
+  size_t length=0;
+  while(first<end&&*first!='.') {
+    unsigned ch=*first++; char next;
+    if(ch>127) {
+      unsigned width=ch>=194&&ch<=223?2:ch>=224&&ch<=239?3:ch>=240&&ch<=244?4:0;
+      if(!width||(size_t)(end-first)<width-1)return 0;
+      for(unsigned i=0;i<width-1;i++)if((first[i]&192)!=128)return 0;
+      if((ch==224&&first[0]<160)||(ch==237&&first[0]>=160)||(ch==240&&first[0]<144)||(ch==244&&first[0]>=144))return 0;
+      first+=width-1; next='-';
+    }else if(ch>='A'&&ch<='Z')next=(char)(ch+'a'-'A');
+    else next=(ch>='a'&&ch<='z')||(ch>='0'&&ch<='9')||ch=='-'?(char)ch:'-';
+    /* Ignore leading separators, and defer the final 63-byte limit until
+     * trailing separators have been removed. */
+    if(!length&&next=='-')continue;
+    if(length>=256)return 0;
+    /* OS input is at most 255 bytes; this local buffer handles trimmed suffixes. */
+    label[length++]=next;
+  }
+  while(length&&label[length-1]=='-')length--;
+  if(!length||length>63)return 0;
+  memcpy(output,label,length);output[length]=0;return 1;
+}
+#ifdef __APPLE__
+static int bonjour_hostname(char raw[256]) {
+  int pipefd[2];if(pipe(pipefd))return 0;
+  if(fcntl(pipefd[0],F_SETFL,O_NONBLOCK)<0){close(pipefd[0]);close(pipefd[1]);return 0;}
+  pid_t pid=fork();
+  if(!pid){
+    signal(SIGINT,SIG_DFL);signal(SIGTERM,SIG_DFL);
+    close(pipefd[0]);
+    int quiet=open("/dev/null",O_WRONLY);
+    if(dup2(pipefd[1],STDOUT_FILENO)<0||quiet<0||dup2(quiet,STDERR_FILENO)<0)_exit(126);
+    close(pipefd[1]);close(quiet);
+    execl("/usr/sbin/scutil","scutil","--get","LocalHostName",(char *)NULL);_exit(127);
+  }
+  close(pipefd[1]);if(pid<0){close(pipefd[0]);return 0;}
+  size_t size=0;int status=0,finished=0;
+  /* Avoid waiting indefinitely on a platform discovery command. */
+  for(unsigned tick=0;tick<100;tick++) {
+    ssize_t n=read(pipefd[0],raw+size,255-size);
+    if(n>0)size+=(size_t)n;
+    pid_t done=waitpid(pid,&status,WNOHANG);
+    if(done==pid){finished=1;break;}
+    if(done<0&&errno!=EINTR)break;
+    struct timespec pause={0,20000000};nanosleep(&pause,NULL);
+  }
+  if(!finished){kill(pid,SIGKILL);while(waitpid(pid,&status,0)<0&&errno==EINTR){};}
+  else if(size<255){ssize_t n=read(pipefd[0],raw+size,255-size);if(n>0)size+=(size_t)n;}
+  close(pipefd[0]);raw[size]=0;
+  return finished&&WIFEXITED(status)&&!WEXITSTATUS(status)&&size&&size<255;
+}
+#endif
+static void machine_label(char label[64]) {
+  char raw[256];
+#ifdef __APPLE__
+  if(bonjour_hostname(raw)&&hostname_label(raw,label))return;
+#endif
+  memset(raw,0,sizeof(raw));
+  if(gethostname(raw,sizeof(raw))||!memchr(raw,0,sizeof(raw))||!hostname_label(raw,label))
+    v_fail("cannot obtain a valid local hostname for a new runtime");
+}
+static void fresh_uuid(char output[37]) {
+  unsigned char bytes[16];random_bytes(bytes,sizeof(bytes));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
+  snprintf(output,37,"%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7],bytes[8],bytes[9],bytes[10],bytes[11],bytes[12],bytes[13],bytes[14],bytes[15]);
+}
+static V *claim(void) {
+  V *runtime=v_record_get(environment,"runtime");
+  if(!runtime||runtime->type!=VT_STRING||memchr(runtime->s,0,runtime->n))v_fail("claim requires a saved runtime identity");
+  char uuid[37];fresh_uuid(uuid);size_t n=runtime->n+sizeof("/claims/")+36;
+  char *reference=v_alloc(n);snprintf(reference,n,"%s/claims/%s",runtime->s,uuid);return v_string(reference);
+}
 static void atomic_bytes(const char *name,const char *data,size_t n) {
   unsigned char nonce[8];random_bytes(nonce,sizeof(nonce));char temporary[192];int count=snprintf(temporary,sizeof(temporary),".%s.new-%ld-%02x%02x%02x%02x%02x%02x%02x%02x",name,(long)getpid(),nonce[0],nonce[1],nonce[2],nonce[3],nonce[4],nonce[5],nonce[6],nonce[7]);
   if(count<0||(size_t)count>=sizeof(temporary))v_fail("local filename bound");
@@ -167,15 +247,23 @@ static V *transition(V *event,V *trusted,V **effect) {
   atomic_value("state.json",at(value,0));state=at(value,0);V *response=at(value,1);*effect=at(value,2);add_trace(event,response,*effect);return response;
 }
 static V *complete(V *evidence,V *replacement) {
-  V *event=v_array();field(event,"op",v_string("complete"));field(event,"ref",v_record_get(evidence,"ref"));field(event,"claim",v_record_get(evidence,"claim"));field(event,"result",replacement?replacement:v_record_get(evidence,"result"));V *effect=NULL;return transition(event,v_record_set(environment,"executor",v_record_get(evidence,"target")),&effect);
+  V *event=v_array();field(event,"op",v_string("complete"));field(event,"ref",v_record_get(evidence,"ref"));field(event,"claim",v_record_get(evidence,"claim"));field(event,"result",replacement?replacement:v_record_get(evidence,"result"));if(v_record_get(evidence,"text"))field(event,"text",v_record_get(evidence,"text"));V *effect=NULL;return transition(event,v_record_set(environment,"executor",v_record_get(evidence,"target")),&effect);
 }
 static V *execute(V *invocation) {
-  V *reference=v_record_get(invocation,"ref"),*exact=v_record_get(invocation,"target"),*input=v_record_get(invocation,"input");size_t n;char *body=v_text_n(input,&n),name[96],digest[65];hash_bytes(body,n,digest);hashed_name(reference,"artifact-",".txt",name);V *action=at(exact,3);
+  V *reference=v_record_get(invocation,"ref"),*exact=v_record_get(invocation,"target"),*input=v_record_get(invocation,"input");size_t n;int resource=host_workspace_resource_matches(exact);
+  char *body=resource?v_json(input):v_text_n(input,&n),name[96],digest[65];if(resource)n=strlen(body);hash_bytes(body,n,digest);hashed_name(reference,"artifact-",".txt",name);V *action=at(exact,3);
   V *result = v_chars(digest);
-  if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);
-  else if(v_isstr(action,"uppercase--text")) {
+  if(resource) {
+    V *request=v_array();v_push(request,v_string("invoke"));v_push(request,action);v_push(request,input);
+    V *answer=coworker_resource_invoke(request);
+    if(!v_isstr(at(answer,0),"ok")||!answer||answer->type!=VT_ARRAY||answer->n!=2)v_fail("resource program rejected invocation");
+    result=at(answer,1);if(!host_resource_output_valid(invocation,result))v_fail("resource output does not match retained output interface");
+    char *output=v_json(result);atomic_bytes(name,output,strlen(output));
+  } else if(v_isstr(action,"store--text"))atomic_bytes(name,body,n);else if(v_isstr(action,"append--text"))append_bytes(name,body,n);
+  else if((v_isstr(action,"uppercase--text")||v_isstr(action,"source--text"))) {
+    if(v_isstr(action,"source--text")&&!coworker_active())v_fail("source coworker is not configured");
     result=v_array();
-    if(coworker_active()) {
+    if(coworker_active()&&!coworker_resource_mode()) {
       size_t converted_size;char *converted=coworker_transform(body,n,&converted_size);
       result=v_chars_n(converted,converted_size);
     } else for(size_t offset=0;input&&offset<input->n;offset+=256) {
@@ -190,7 +278,7 @@ static V *execute(V *invocation) {
     char *converted=v_text_n(result,&n);atomic_bytes(name,converted,n);
   } else v_fail("unsupported fixture action");
   V *entry=v_object();v_put(entry,"reference",reference);v_put(entry,"action",action);v_put(entry,"sha256",v_string(digest));char *json=v_json(entry);append_bytes("executions.jsonl",json,strlen(json));append_bytes("executions.jsonl","\n",1);
-  V *evidence=v_array();field(evidence,"ref",reference);field(evidence,"claim",v_record_get(invocation,"claim"));field(evidence,"target",exact);field(evidence,"input",input);field(evidence,"result",result);
+  V *evidence=v_array();field(evidence,"ref",reference);field(evidence,"claim",v_record_get(invocation,"claim"));field(evidence,"target",exact);field(evidence,"input",input);field(evidence,"result",result);if(resource)field(evidence,"text",v_chars(v_json(result)));
   if(consume_fault("lose-receipt")) {
     return NULL;
   }
@@ -199,21 +287,56 @@ static V *execute(V *invocation) {
   return evidence;
 }
 static V *dispatch(V *event) {
+  /* Exact catalog selection is mechanical. Admission still checks the current
+   * caller, availability and grant inside the compiled protocol. */
+  V *target=v_record_get(event,"target");
+  if(!target) {
+    V *records=v_record_get(state,"invocations"),*reference=v_record_get(event,"ref");
+    for(size_t i=0;records&&i<records->n;i++)if(equal_string(v_record_get(records->items[i],"ref"),reference))target=v_record_get(records->items[i],"target");
+  }
+  if(host_workspace_resource_matches(target)) {
+    V *catalog=v_record_get(environment,"workspace-actions");
+    for(size_t i=0;catalog&&i<catalog->n;i++)if(!strcmp(v_json(target),v_json(v_record_get(catalog->items[i],"target"))))
+      environment=v_record_set(environment,"binding",catalog->items[i]);
+  }
   V *trusted=v_record_set(environment,"claim",claim());
   if(v_isstr(v_record_get(event,"op"),"reconcile")) {V *evidence=receipt(v_record_get(event,"ref"));if(evidence&&consume_fault("tamper-receipt"))evidence=v_record_set(evidence,"input",v_chars("different"));trusted=v_record_set(trusted,"evidence",evidence);}
   V *effect=NULL,*response=transition(event,trusted,&effect);if(!effect)return response;
-  if(v_isstr(at(effect,0),"reload")&&effect->type==VT_ARRAY&&effect->n==2) {
-    V *invocation=at(effect,1);int failed=coworker_reload();V *done=v_array();
+  if((v_isstr(at(effect,0),"reload")||v_isstr(at(effect,0),"check"))&&effect->type==VT_ARRAY&&effect->n==2) {
+    V *invocation=at(effect,1);int failed=v_isstr(at(effect,0),"check")?coworker_check():coworker_reload();V *done=v_array();
     field(done,"op",v_string("workspace-complete"));field(done,"ref",v_record_get(invocation,"ref"));
-    field(done,"claim",v_record_get(invocation,"claim"));field(done,"result",v_chars(failed?"reload failed; last working coworker retained":"Reloaded coworker source."));
-    if(failed)field(done,"failed",v_string("t"));
+    field(done,"claim",v_record_get(invocation,"claim"));field(done,"result",v_chars(coworker_diagnostics()));
+    if(failed)field(done,"failed",v_string("t"));else if(coworker_resource_mode()&&!v_isstr(at(effect,0),"check"))host_workspace_resource(coworker_resource_descriptor());
     V *ignored=NULL;return transition(done,v_record_set(environment,"executor",v_record_get(invocation,"target")),&ignored);
   }
   if(!v_isstr(at(effect,0),"execute")||effect->type!=VT_ARRAY||effect->n!=2)v_fail("unknown mechanism effect");
   if(consume_fault("skip-execution")) {
     return response;
   }
-  V *evidence=execute(at(effect,1));
+  V *invocation=at(effect,1);
+  /* Raw hosts prepare source paths without running tools at startup. Build only
+   * after the compiled protocol has authorized and claimed this exact action. */
+  if((v_isstr(at(v_record_get(invocation,"target"),3),"source--text")||host_workspace_resource_matches(v_record_get(invocation,"target")))&&!coworker_active()&&coworker_reload()) {
+    V *done=v_array();field(done,"op",v_string("workspace-failed"));
+    field(done,"ref",v_record_get(invocation,"ref"));field(done,"claim",v_record_get(invocation,"claim"));
+    field(done,"result",v_chars(coworker_diagnostics()));V *ignored=NULL;
+    return transition(done,v_record_set(environment,"executor",v_record_get(invocation,"target")),&ignored);
+  }
+  V *evidence;
+  if(host_workspace_resource_matches(v_record_get(invocation,"target"))) {
+    /* A source program is not the authority for its own output contract.
+     * Reject malformed/runtime failures before writing any successful receipt,
+     * and settle the claimed attempt instead of leaving it running forever. */
+    jmp_buf local;jmp_buf *outer=v_handler;v_handler=&local;
+    if(setjmp(local)) {
+      v_handler=outer;
+      V *done=v_array();field(done,"op",v_string("workspace-failed"));
+      field(done,"ref",v_record_get(invocation,"ref"));field(done,"claim",v_record_get(invocation,"claim"));
+      field(done,"result",v_chars(v_error));V *ignored=NULL;
+      return transition(done,v_record_set(environment,"executor",v_record_get(invocation,"target")),&ignored);
+    }
+    evidence=execute(invocation);v_handler=outer;
+  } else evidence=execute(invocation);
   if(!evidence||consume_fault("lose-completion")) {
     return response;
   }
@@ -338,9 +461,11 @@ static V *workspace_route(const char *name,const char *worker,const char *action
   V *row=v_array(),*old=v_record_get(base,"target"),*target=v_array();
   v_push(target,at(old,0));v_push(target,chat_reference("coworkers",worker));
   v_push(target,at(old,2));v_push(target,v_string(action));
-  v_push(target,chat_reference("bindings",action));v_push(target,chat_reference("contracts",action));
+  char source_key[96];const char *identity=action;
+  if(!strcmp(action,"source--text")){snprintf(source_key,sizeof(source_key),"%s--text",worker);identity=source_key;}
+  v_push(target,chat_reference("bindings",identity));v_push(target,chat_reference("contracts",identity));
   field(row,"name",v_string(name));field(row,"target",target);
-  field(row,"description",v_chars(!strcmp(worker,"language")?"Rebuild configured source; retain last working worker on failure":!strcmp(worker,"uppercase")?"Transform text with the configured source worker or builtin uppercase":"Workspace and conversation operation"));
+  field(row,"description",v_chars(!strcmp(action,"source--text")?"Transform text with this configured rbel source coworker":!strcmp(worker,"language")?(!strcmp(name,"check")?"Check configured source and examples without activating a build":"Check and rebuild configured source; retain last working worker on failure"):!strcmp(worker,"uppercase")?"Transform text with the configured source worker or builtin uppercase":"Workspace and conversation operation"));
   V *schema=v_array(),*fields=v_array(),*required=v_array();
   field(schema,"representation",v_string("association-list"));
   field(fields,"conversation",v_string("symbol"));field(fields,"coworker",v_string("symbol"));
@@ -349,28 +474,48 @@ static V *workspace_route(const char *name,const char *worker,const char *action
   if(!strcmp(name,"invite")||!strcmp(name,"remove"))v_push(required,v_string("coworker"));
   if(!strcmp(name,"publish")){v_push(required,v_string("message"));v_push(required,v_string("text"));}
   field(schema,"required",required);field(schema,"fields",fields);field(schema,"additional-fields",v_string("t"));
-  if(!strcmp(worker,"uppercase")) {
+  if(!strcmp(worker,"uppercase")||!strcmp(action,"source--text")) {
     schema=v_array();field(schema,"representation",v_string("character-list"));
     field(schema,"items",v_string("character"));
   }
   field(row,"input-schema",schema);
-  field(row,"route",chat_reference("routes",action));
+  field(row,"route",chat_reference("routes",identity));
   const char *keys[]={"required","grants","capabilities","repeat-safe"};
   for(size_t i=0;i<4;i++)field(row,keys[i],v_record_get(base,keys[i]));
   return row;
 }
 void host_workspace_environment(void) {
-  if(v_record_get(environment,"workspace-actions"))return;
+  V *existing=v_record_get(environment,"workspace-actions");
+  if(existing) {
+    V *reload=NULL;int found=0;
+    for(size_t i=0;i<existing->n;i++) {
+      V *row=existing->items[i];
+      if(v_isstr(v_record_get(row,"name"),"check"))found=1;
+      if(v_isstr(v_record_get(row,"name"),"reload")&&v_isstr(at(v_record_get(row,"target"),3),"language--do--reload"))reload=row;
+    }
+    if(found||!reload)return;
+    /* Upgrade the saved local catalog using the existing language binding.
+     * A caller without its exact reload grant acquires no check grant. */
+    V *row=workspace_route("check","language","language--do--check",reload);
+    V *allow=v_record_get(environment,"allow");int permitted=0;
+    for(size_t i=0;allow&&i<allow->n;i++)
+      if(!strcmp(v_json(allow->items[i]),v_json(v_record_get(reload,"target"))))permitted=1;
+    v_push(existing,row);
+    if(permitted)v_push(allow,v_record_get(row,"target"));
+    environment=v_record_set(environment,"workspace-actions",existing);
+    environment=v_record_set(environment,"allow",allow);
+    replace_json(&environment_json,environment);atomic_value("context.json",environment);return;
+  }
   V *base=v_record_get(environment,"binding"),*old=v_record_get(base,"target");
   V *catalog=v_array(),*allow=v_array(),*available=v_array();int permitted=0,online=0;
   V *prior=v_record_get(environment,"allow");
   for(size_t i=0;prior&&i<prior->n;i++){v_push(allow,prior->items[i]);if(!strcmp(v_json(prior->items[i]),v_json(old)))permitted=1;}
   prior=v_record_get(environment,"available");
   for(size_t i=0;prior&&i<prior->n;i++){v_push(available,prior->items[i]);if(v_isstr(prior->items[i],at(old,1)->s))online=1;}
-  const char *names[]={"new","home","list","open","publish","invite","remove","history","status","actions","reload","uppercase","help","exit","coworkers"};
-  const char *actions[]={"repl--do--new","repl--do--home","repl--do--list","repl--do--open","repl--do--publish","repl--do--invite","repl--do--remove","repl--do--history","repl--do--status","repl--do--actions","language--do--reload","uppercase--text","repl--do--help","repl--do--exit","repl--do--coworkers"};
-  for(size_t i=0;i<15;i++) {
-    const char *worker=i==10?"language":i==11?"uppercase":"repl";
+  const char *names[]={"new","home","list","open","publish","invite","remove","history","status","actions","reload","uppercase","help","exit","coworkers","check"};
+  const char *actions[]={"repl--do--new","repl--do--home","repl--do--list","repl--do--open","repl--do--publish","repl--do--invite","repl--do--remove","repl--do--history","repl--do--status","repl--do--actions","language--do--reload","uppercase--text","repl--do--help","repl--do--exit","repl--do--coworkers","language--do--check"};
+  for(size_t i=0;i<16;i++) {
+    const char *worker=(i==10||i==15)?"language":i==11?"uppercase":"repl";
     V *row=workspace_route(names[i],worker,actions[i],base);v_push(catalog,row);
     if(permitted)v_push(allow,v_record_get(row,"target"));
   }
@@ -379,6 +524,115 @@ void host_workspace_environment(void) {
   environment=v_record_set(environment,"allow",allow);environment=v_record_set(environment,"available",available);
   replace_json(&environment_json,environment);
   atomic_value("context.json",environment);
+}
+void host_workspace_source(const char *name) {
+  size_t length=strlen(name);
+  if(!length||length>64)v_fail("source coworker names require 1-64 letters, digits, hyphens or underscores");
+  for(size_t i=0;i<length;i++)if(!((name[i]>='a'&&name[i]<='z')||(name[i]>='A'&&name[i]<='Z')||(name[i]>='0'&&name[i]<='9')||name[i]=='-'||name[i]=='_'))v_fail("invalid source coworker name");
+  V *catalog=v_record_get(environment,"workspace-actions"),*base=NULL,*existing=NULL;
+  V *worker=chat_reference("coworkers",name);
+  if(!strcmp(name,"source--text"))v_fail("source coworker name conflicts with a reserved action");
+  V *directory=v_record_get(environment,"available");
+  for(size_t i=0;directory&&i<directory->n;i++) {
+    V *entry=directory->items[i];
+    const char *tail=entry&&entry->type==VT_STRING?strrchr(entry->s,'/'):NULL;
+    if(tail&&!strcmp(tail+1,name)&&!equal_string(entry,worker))v_fail("source coworker name conflicts with an available identity");
+  }
+  for(size_t i=0;catalog&&i<catalog->n;i++) {
+    V *row=catalog->items[i],*target=v_record_get(row,"target");
+    if(v_isstr(v_record_get(row,"name"),"uppercase")&&v_isstr(at(target,3),"uppercase--text"))base=row;
+    if(v_isstr(at(target,3),name))v_fail("source coworker name conflicts with an existing action alias");
+    if(v_isstr(v_record_get(row,"name"),name))existing=row;
+    if(v_isstr(at(target,1),worker->s)&&!v_isstr(v_record_get(row,"name"),name))v_fail("source coworker identity conflicts with another workspace action");
+  }
+  if(!base)v_fail("workspace has no uppercase binding from which to configure a source coworker");
+  V *row=workspace_route(name,name,"source--text",base),*target=v_record_get(row,"target");
+  if(existing) {
+    /* Reopening may not restore a revoked grant or unavailable coworker. */
+    if(strcmp(v_json(v_record_get(existing,"target")),v_json(target))||
+       !equal_string(v_record_get(existing,"route"),v_record_get(row,"route")))
+      v_fail("source coworker name conflicts with an existing workspace action");
+    return;
+  }
+  V *allow=v_record_get(environment,"allow"),*available=v_record_get(environment,"available");
+  int permitted=0,online=0;
+  for(size_t i=0;allow&&i<allow->n;i++)if(!strcmp(v_json(allow->items[i]),v_json(v_record_get(base,"target"))))permitted=1;
+  V *base_worker=at(v_record_get(base,"target"),1);
+  for(size_t i=0;available&&i<available->n;i++)if(equal_string(available->items[i],base_worker))online=1;
+  v_push(catalog,row);
+  if(permitted)v_push(allow,target);
+  if(online)v_push(available,worker);
+  environment=v_record_set(environment,"workspace-actions",catalog);
+  environment=v_record_set(environment,"allow",allow);
+  environment=v_record_set(environment,"available",available);
+  replace_json(&environment_json,environment);atomic_value("context.json",environment);
+}
+int host_resource_output_valid(V *invocation,V *result) {
+  V *event=v_array();field(event,"op",v_string("resource-output-check"));
+  field(event,"invocation",invocation);field(event,"result",result);
+  V *value=core_transition(NULL,event,NULL),*answer=at(value,1);
+  return v_isstr(at(answer,0),"valid");
+}
+int host_resource_check(V *descriptor,V *previous) {
+  if(!previous&&environment)previous=v_record_get(environment,"resource-descriptor");
+  V *event=v_array();field(event,"op",v_string("resource-check"));field(event,"descriptor",descriptor);field(event,"previous",previous);
+  V *value=core_transition(NULL,event,NULL),*answer=at(value,1);
+  if(v_isstr(at(answer,0),"valid"))return 1;
+  V *diagnostic=at(answer,1);fprintf(stderr,"resource: %s\n",diagnostic?v_text(diagnostic):"invalid descriptor");return 0;
+}
+/* Hashing a local program key is only canonical name allocation. The key's
+ * meaning, descriptor shape, graph, contract and registration rules are rbel. */
+static V *resource_reference(const char *kind,V *resource,V *local) {
+  V *key=v_array();v_push(key,resource);v_push(key,local);char digest[65],name[80];
+  char *json=v_json(key);hash_bytes(json,strlen(json),digest);snprintf(name,sizeof(name),"resource-%s",digest);
+  return chat_reference(kind,name);
+}
+void host_workspace_resource(V *descriptor) {
+  if(!host_resource_check(descriptor,NULL))v_fail("resource descriptor is invalid");
+  V *identities=v_array(),*roles=v_array(),*bindings=v_array(),*contracts=v_array(),*routes=v_array();
+  V *id=v_record_get(descriptor,"id"),*source_roles=v_record_get(descriptor,"roles"),*source_bindings=v_record_get(descriptor,"bindings");
+  field(identities,"runtime",v_record_get(environment,"runtime"));
+  field(identities,"coworker",resource_reference("coworkers",id,id));
+  for(size_t i=0;source_roles&&i<source_roles->n;i++) {
+    V *role=source_roles->items[i],*role_id=v_record_get(role,"id"),*actions=v_record_get(role,"actions");
+    field(roles,role_id->s,resource_reference("roles",id,role_id));
+    for(size_t j=0;source_bindings&&j<source_bindings->n;j++) {
+      V *binding=source_bindings->items[j];
+      if(equal_string(role_id,v_record_get(binding,"role"))) {field(bindings,role_id->s,resource_reference("bindings",id,v_record_get(binding,"id")));break;}
+    }
+    for(size_t j=0;actions&&j<actions->n;j++) {
+      V *action=v_record_get(actions->items[j],"name");
+      field(contracts,action->s,resource_reference("contracts",id,action));field(routes,action->s,resource_reference("routes",id,action));
+    }
+  }
+  field(identities,"roles",roles);field(identities,"bindings",bindings);field(identities,"contracts",contracts);field(identities,"routes",routes);
+  V *event=v_array();field(event,"op",v_string("resource-register"));field(event,"descriptor",descriptor);field(event,"identities",identities);
+  V *value=core_transition(NULL,event,environment),*answer=at(value,1);
+  if(!v_isstr(at(answer,0),"registered"))v_fail("cannot register resource: %s",at(answer,1)?v_text(at(answer,1)):"invalid result");
+  V *next=at(answer,1);validate_environment(next);atomic_value("context.json",next);environment=next;replace_json(&environment_json,environment);
+}
+V *host_workspace_resource_target(const char *slug,const char *action) {
+  V *catalog=v_record_get(environment,"workspace-actions");
+  for(size_t i=0;catalog&&i<catalog->n;i++) {
+    V *row=catalog->items[i];if(v_isstr(v_record_get(row,"slug"),slug)&&
+      (!action||v_isstr(at(v_record_get(row,"target"),3),action))) {
+      environment=v_record_set(environment,"binding",row);replace_json(&environment_json,environment);return v_record_get(row,"target");
+    }
+  }return NULL;
+}
+int host_workspace_resource_matches(V *target) {
+  if(!target)return 0;V *catalog=v_record_get(environment,"workspace-actions");
+  for(size_t i=0;catalog&&i<catalog->n;i++)if(v_record_get(catalog->items[i],"resource")&&
+    !strcmp(v_json(target),v_json(v_record_get(catalog->items[i],"target"))))return 1;
+  return 0;
+}
+V *host_resource_provenance(void) {
+  V *result=v_array();const char *source=coworker_source_path(),*build=coworker_build_path();
+  field(result,"source",v_chars(source?source:""));
+  if(build&&*build) {
+    int fd=open(build,O_RDONLY|O_NOFOLLOW);if(fd<0)v_fail("cannot read active resource build");
+    size_t n;char *data=read_descriptor(fd,&n),digest[65];hash_bytes(data,n,digest);field(result,"build-sha256",v_string(digest));
+  }return result;
 }
 V *host_workspace_binding(const char *action) {
   V *catalog=v_record_get(environment,"workspace-actions");
@@ -442,7 +696,8 @@ static V *localize(V *value, const char *base) {
     const char *tail = value->s + sizeof(prefix) - 1;
     size_t n = strlen(base) + strlen(tail) + 2;
     char *text = v_alloc(n);
-    snprintf(text, n, "%s/%s", base, tail);
+    if(!strcmp(tail,"runtime"))snprintf(text,n,"%s",base);
+    else snprintf(text, n, "%s/%s", base, tail);
     return v_string(text);
   }
   if (value && value->type == VT_ARRAY) {
@@ -484,10 +739,9 @@ V *host_init(const char *directory) {
   if (nonempty) {
     v_fail("init requires a new or empty directory; existing files were preserved");
   }
-  V *fresh = claim();
-  const char *uuid = strrchr(fresh->s, '/');
-  char base[128];
-  snprintf(base, sizeof(base), "cwp://org.example.libcwr/local/%s", uuid + 1);
+  char uuid[37],hostname[64],base[160];
+  fresh_uuid(uuid);machine_label(hostname);
+  snprintf(base,sizeof(base),"cwp://local.%s/runtimes/%s",hostname,uuid);
   prepare_environment(localize(v_parse(fixture_json, strlen(fixture_json)), base));
   atomic_value("context.json", environment);
   V *info = v_object();
@@ -533,16 +787,16 @@ int main(int argc,char **argv) {
   v_handler=&top;
   volatile int status=0;
   if(setjmp(top)){fprintf(stderr,"libcwr: %s\n",v_error);status=1;goto done;}
-  const char *directory=NULL,*context=NULL;int help=0,license=0;
+  const char *directory=NULL,*context=NULL,*source=NULL,*compiler=NULL,*resource=NULL;int help=0,license=0;
   for(int i=1;i<argc;i++) {
     if(!strcmp(argv[i],"--test-host")){if(fixtures)v_fail("duplicate option --test-host");fixtures=1;}
     else if(!strcmp(argv[i],"--help")){if(help)v_fail("duplicate option --help");help=1;}
     else if(!strcmp(argv[i],"--runtime-license")){if(license)v_fail("duplicate option --runtime-license");license=1;}
-    else if(!strcmp(argv[i],"--directory")||!strcmp(argv[i],"--context")){const char **destination=!strcmp(argv[i],"--directory")?&directory:&context;if(*destination||i+1>=argc||!strncmp(argv[i+1],"--",2))v_fail("invalid option %s",argv[i]);*destination=argv[++i];}
+    else if(!strcmp(argv[i],"--directory")||!strcmp(argv[i],"--context")||!strcmp(argv[i],"--source")||!strcmp(argv[i],"--rbel")||!strcmp(argv[i],"--resource")){const char **destination=!strcmp(argv[i],"--directory")?&directory:!strcmp(argv[i],"--context")?&context:!strcmp(argv[i],"--source")?&source:!strcmp(argv[i],"--resource")?&resource:&compiler;if(*destination||i+1>=argc||!strncmp(argv[i+1],"--",2))v_fail("invalid option %s",argv[i]);*destination=argv[++i];}
     else v_fail("unknown option %s",argv[i]);
   }
   if(license){if(fputs(NATIVE_RUNTIME_LICENSE,stdout)==EOF||fflush(stdout))v_fail("license write failed");goto done;}
-  if(help){puts("Usage: libcwr --directory STATE --context TRUSTED.json\nReads one event as JSON per line; writes one protocol response per line.\n--test-host enables isolated acceptance fixture controls.\nCompiled rbel core via WABT wasm2c; no Node or separate Wasm engine required.");goto done;}
+  if(help){puts("Usage: libcwr --directory STATE --context TRUSTED.json\nReads one event as JSON per line; writes one protocol response per line.\nOptional --source SOURCE --rbel COMPILER configures language actions without building at startup.\n--test-host enables isolated acceptance fixture controls.\nCompiled rbel core via WABT wasm2c; no Node or separate Wasm engine required.");goto done;}
   if(!directory) {
     v_fail("--directory is required");
   }
@@ -552,12 +806,16 @@ int main(int argc,char **argv) {
   if(!fixtures&&!context) {
     v_fail("--context is required");
   }
+  if ((source&&resource) || !!(source||resource) != !!compiler || (fixtures && (source||resource))) v_fail("use paired --source and --rbel outside fixture mode");
+  if (source && coworker_prepare(source, compiler)) { status=1; goto done; }
   host_open(directory, context);
+  if(resource){coworker_resource_validator(host_resource_check);if(coworker_resource_prepare(resource,compiler)){status=1;goto done;}}
   v_reset();
   char *line=malloc(MAX_LINE+1);if(!line)v_fail("allocation failed");size_t n=0;int c;
   while((c=fgetc(stdin))!=EOF){if(c=='\n'){request(line,n);v_reset();n=0;}else{if(n==MAX_LINE){free(line);v_fail("request exceeds line bound");}line[n++]=(char)c;}}
   if(ferror(stdin)){free(line);v_fail("request read failed");}if(n)request(line,n);free(line);
  done:
+  coworker_close();
   host_close();
   return status;
 }

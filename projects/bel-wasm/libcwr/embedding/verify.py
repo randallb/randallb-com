@@ -40,7 +40,7 @@ def main():
         manifest = json.loads((package / 'manifest.json').read_text())
         # Require the complete maintained input set, not just self-consistent artifacts.
         input_names = {
-            'libcwr/workflow.rbel.md', 'libcwr/workspace.rbel.md', 'libcwr/embedding/workspace-verify.py', 'literate/wasm-values.mjs', 'literate/test.py',
+            'libcwr/workflow.rbel.md', 'libcwr/workspace.rbel.md', 'libcwr/resources.rbel.md', 'libcwr/resource-host.rbel.md', 'libcwr/coworkers/looper.rbel.md', 'libcwr/embedding/resource-verify.py', 'libcwr/embedding/workspace-verify.py', 'libcwr/embedding/language-verify.py', 'libcwr/embedding/identity-verify.py', 'libcwr/embedding/named-source-verify.py', 'libcwr/coworkers/greeter.rbel.md', 'literate/wasm-values.mjs', 'literate/test.py',
             'libcwr/coworkers/uppercase.rbel.md', 'literate/unix-filter.rbel.md', 'libcwr/embedding/reload-verify.py',
             'LICENSE', 'NOTICE.txt', 'ORIGIN.json',
             *['libcwr/embedding/' + name for name in [
@@ -78,8 +78,8 @@ def main():
                 env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
             (evidence / f'{mode}.txt').write_text(run.stdout)
             result = json.loads(path.read_text()) if path.exists() else {}
-            check(f'{mode}-adjacent-workflow', run.returncode == 0 and result.get('passed') and len(result['cases']) == 18
-                  and sum(len(c['assertions']) for c in result['cases']) == 128)
+            check(f'{mode}-adjacent-workflow', run.returncode == 0 and result.get('passed') and len(result['cases']) == 21
+                  and sum(len(c['assertions']) for c in result['cases']) == 131)
             reports.append(result)
         def observable(result):
             return [(c['name'], c['assertions'], c.get('host')) for c in result['cases']]
