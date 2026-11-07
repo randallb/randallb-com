@@ -92,7 +92,7 @@ return nil; other atoms trap. `type` returns `pair`, `symbol`, or `char`.
 `nom` returns a fresh list naming an interned symbol; `err` traps.
 
 Source character/string/symbol literals support printable ASCII, tab, LF, and
-CR. Runtime interned names may contain any Unicode scalar. Signed integer literals
+CR. Runtime interned names may contain any Unicode scalar. Exact numeric and explicit finite-float literals
 and the source-defined arithmetic library are now supported; see
 [integers](../../../literate/integers.rbel.md). Macros, dynamic scope, mutation, OS I/O, threads, and
 continuations are outside this core. Exhaustive shape/name/arity checks reject

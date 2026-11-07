@@ -133,10 +133,10 @@ def main():
     check('pinned-foundation', [sys.executable, ROOT / 'literate/check.py', '--extract-only'])
     check('extractor-regressions', [sys.executable, ROOT / 'literate/check_test.py'])
     check('existing-foundation-on-wasm', test_command(ROOT / 'literate/foundation.rbel.md'))
-    check('existing-reader-on-wasm', test_command(ROOT / 'literate/reader.rbel.md'))
+    check('existing-reader-on-wasm', test_command(ROOT / 'literate/reader.rbel.md', '--include', ROOT / 'literate/integers.rbel.md', '--include', ROOT / 'literate/floats.rbel.md'))
     if not SKIP_NATIVE:
         check('native-foundation-regression', [COMPILER, 'check', ROOT / 'literate/foundation.rbel.md'])
-        check('native-reader-regression', [COMPILER, 'check', ROOT / 'literate/reader.rbel.md'])
+        check('native-reader-regression', [COMPILER, 'check', ROOT / 'literate/reader.rbel.md', '--include', ROOT / 'literate/integers.rbel.md', '--include', ROOT / 'literate/floats.rbel.md'])
     else:
         print('UNVERIFIED here: native compiler regressions (portable Wasm bootstrap selected); run default verification on macOS ARM64')
     print(f'{len(results)} verification groups passed')
