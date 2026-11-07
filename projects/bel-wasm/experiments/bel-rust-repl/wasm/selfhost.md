@@ -1,5 +1,9 @@
 # A Bel compiler that builds its successor in Wasm
 
+The [ABI2 language core](../../../language-core/readme.md) supersedes this
+earlier milestone’s fixed-arity, arena-only and ASCII restrictions. Its guide
+owns the current runtime, bootstrap and host contract.
+
 `self-compiler.bel` is a complete compiler for a Bel core with fixed-arity function values and lexical closures,
 written in a first-order subset of that core. Rust evaluates it once to bootstrap `stage0`.
 That import-free Wasm compiler compiles the same source data to `stage1`;

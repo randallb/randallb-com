@@ -17,8 +17,8 @@ HEADER = re.compile(r'rbel (definition|example|test)=([a-z][a-z0-9-]*)\Z')
 def blocks(path, data=None):
     if data is None:
         data = path.read_bytes()
-    if len(data) > 131072:
-        raise ValueError(f'{path}: source exceeds 128 KiB')
+    if len(data) > 524288:
+        raise ValueError(f'{path}: source exceeds 512 KiB')
     lines = data.decode('utf-8').splitlines(keepends=True)
     index, result = 0, []
     while index < len(lines):
@@ -111,8 +111,8 @@ def run(args):
         output.unlink(missing_ok=True)
     snapshots = {p: p.read_bytes() for p in paths}
     source, cases, definitions = prepare(paths, args.entry, snapshots)
-    if len(source.encode('utf-8')) > 131072:
-        raise ValueError('combined compiler input exceeds 128 KiB')
+    if len(source.encode('utf-8')) > 524288:
+        raise ValueError('combined compiler input exceeds 512 KiB')
     rbel = args.rbel.resolve()
     assembler = rbel.parent.parent / 'libexec/rbel/wat2wasm'
     # Every run uses a new private output directory. No prior success can be reused.
@@ -141,7 +141,7 @@ def run(args):
                 raise ValueError(parsed.stderr.strip())
             for form in proper(json.loads(parsed.stdout)):
                 fields = proper(form)
-                if len(fields) != 4 or fields[0] != 'def' or not isinstance(fields[1], str):
+                if len(fields) < 4 or fields[0] != 'def' or not isinstance(fields[1], str):
                     raise ValueError('only named definitions are supported')
                 name = fields[1]
                 if name in seen or name.startswith('rt-'):

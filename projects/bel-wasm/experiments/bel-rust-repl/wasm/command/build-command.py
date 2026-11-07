@@ -57,46 +57,19 @@ def main():
     tools = ROOT / 'target/wabt-native-build'
     if not all((tools / name).exists() for name in ['wat2wasm', 'wasm2c', 'wasm-validate']):
         run(sys.executable, HERE / 'setup-tools.py')
-    reader, examples, _ = extract((ROOT / 'literate/reader.rbel.md').read_bytes().decode())
-    numeric = b'\n'.join(extract((ROOT / 'literate' / name).read_text())[0]
-                         for name in ['integers.rbel.md', 'floats.rbel.md'])
-    source = work / 'core.bel'
-    source.write_bytes((HERE / 'frontend.bel').read_bytes() + b'\n' + reader + b'\n' + numeric + b'\n' +
-                       (HERE.parent / 'self-compiler.bel').read_bytes())
+    from core_build import build_core, composition
+    source = work / 'core.rbel'
+    body, _ = composition(); source.write_bytes(body)
     wat, wasm = work / 'core.wat', work / 'core.wasm'
     if args.seed:
-        # First teach the old reader's compiler about the new primitive ABI.
-        # This intermediate core uses the seed's reader and needs no new numeric
-        # syntax. It then compiles the new reader and arithmetic from source.
         seed = args.seed.resolve()
-        old_source = seed.parent.parent / 'source'
-        seed_reader = extract((old_source / 'reader.rbel.md').read_text())[0]
-        if b'(def rn-seed-operator ' not in seed_reader:
-            seed_reader = seed_reader.replace(b'(def rn-operator ', b'(def rn-seed-operator ')
-            seed_reader += b'\n(def rn-operator (xs) (if (rn-text-equal xs "*") t (if (rn-text-equal xs "/") t (rn-seed-operator xs))))\n'
-        transition = work / 'transition'
-        (transition / 'bin').mkdir(parents=True, exist_ok=True)
-        for name in ['share', 'libexec']:
-            link = transition / name
-            if not link.exists():
-                link.symlink_to(seed.parent.parent / name, target_is_directory=True)
-        seed_numeric = b''
-        if (old_source / 'floats.rbel.md').exists():
-            seed_numeric = b'\n'.join(extract((old_source / name).read_text())[0]
-                                     for name in ['integers.rbel.md', 'floats.rbel.md'])
-        bridge = transition / 'bridge.rbel'
-        bridge.write_bytes((old_source / 'frontend.bel').read_bytes() + b'\n' + seed_reader + b'\n' + seed_numeric + b'\n' +
-                           (HERE.parent / 'self-compiler.bel').read_bytes())
-        bridge_wat = transition / 'core.wat'
-        run(seed, 'emit', bridge, '-o', bridge_wat)
-        native_core(bridge_wat, transition, transition / 'bin/rbel', tools)
-        run(transition / 'bin/rbel', 'emit', source, '-o', wat)
+        version = subprocess.run([str(seed),'--abi-version'],capture_output=True,text=True)
+        if version.returncode or version.stdout.strip() != '2':
+            raise ValueError('ABI1 seeds require the one-time language bootstrap; build without --seed first')
+        run(seed,'emit',source,'-o',wat)
     else:
-        data = work / 'core.json'
-        data.write_bytes(subprocess.check_output([str(ROOT / 'target/debug/bel-read-json'), str(source)]))
-        run(sys.executable, HERE.parent / 'self-compile.py', ROOT / 'target/bel-selfhost/stage1.wasm',
-            data, wasm, '--wat2wasm', tools / 'wat2wasm')
-        wat = wasm.with_suffix('.wat')
+        wat, wasm, source = build_core(work,tools / 'wat2wasm')
+    reader = extract((ROOT / 'literate/reader.rbel.md').read_text())[0]
     native_core(wat, work, work / 'rbel', tools)
     runtime = ROOT / 'target/wabt-native-1.0.39/wasm2c'
     libexec, share = bundle / 'libexec/rbel', bundle / 'share/rbel'
@@ -106,6 +79,7 @@ def main():
         shutil.copy2(tools / name, libexec / name)
     shutil.copytree(runtime, share / 'runtime', dirs_exist_ok=True)
     shutil.copy2(HERE / 'check-main.c', share / 'check-main.c')
+    shutil.copy2(HERE / 'value-roots.h', share / 'value-roots.h')
     shutil.copy2(HERE.parent / 'native/filter-main.c', share / 'filter-main.c')
     licenses = bundle / 'licenses'
     licenses.mkdir(exist_ok=True)
@@ -114,8 +88,9 @@ def main():
     shutil.copy2(ROOT / 'LICENSE', licenses / 'PROJECT-LICENSE')
     samples = bundle / 'examples'
     samples.mkdir(exist_ok=True)
-    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'integers.rbel.md', 'floats.rbel.md']:
+    for name in ['foundation.rbel.md', 'unix-filter.rbel.md', 'foundation-filter.rbel.md', 'reader.rbel.md', 'integers.rbel.md', 'floats.rbel.md', 'utf8.rbel.md', 'language-core.rbel.md', 'module-example.rbel.md']:
         shutil.copy2(ROOT / 'literate' / name, samples / name)
+    shutil.copytree(ROOT / 'literate/modules-demo',samples / 'modules-demo',dirs_exist_ok=True)
     for name in ['NOTICE.txt', 'ORIGIN.json', 'NATIVE-ORIGIN.json']:
         shutil.copy2(ROOT / name, bundle / name)
     (bundle / 'readme.md').write_text("""# rbel for macOS ARM64
@@ -158,10 +133,12 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
         shutil.copy2(HERE.parent / name, docs / name)
     shutil.copy2(HERE.parent / 'native/readme.md', docs / 'native-filter.md')
     shutil.copy2(ROOT / 'literate/numbers.md', docs / 'numbers.md')
+    shutil.copy2(ROOT / 'language-core/readme.md', docs / 'language-core.md')
+    shutil.copy2(ROOT / 'language-core/astra-design.md', docs / 'astra-design.md')
     source_snapshot = bundle / 'source'
     source_snapshot.mkdir(exist_ok=True)
-    for source_file in [HERE / 'rbel.c', HERE / 'check-main.c', HERE / 'frontend.bel',
-                        HERE.parent / 'self-compiler.bel', ROOT / 'literate/reader.rbel.md',
+    for source_file in [HERE / 'rbel.c', HERE / 'check-main.c', HERE / 'value-roots.h', HERE / 'module-loader.h', HERE / 'modules.bel', HERE / 'frontend.bel',
+                        HERE.parent / 'self-compiler.bel', HERE.parent / 'core-runtime.bel', ROOT / 'literate/reader.rbel.md',
                         ROOT / 'literate/integers.rbel.md', ROOT / 'literate/floats.rbel.md']:
         shutil.copy2(source_file, source_snapshot / source_file.name)
     shutil.copy2(source, source_snapshot / 'core.rbel')
@@ -179,6 +156,8 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
             candidates = [samples / filename, source_snapshot / filename, docs / filename]
             if target.endswith('native/readme.md'):
                 candidates.insert(0, docs / 'native-filter.md')
+            if target.endswith('language-core/readme.md'):
+                candidates.insert(0, docs / 'language-core.md')
             destination = next((p for p in candidates if p.exists()), bundle / 'readme.md')
             return '](' + os.path.relpath(destination, path.parent) + ')'
         body = re.sub(r'\]\(([^)]+)\)', link, body)
@@ -186,9 +165,11 @@ and project origin are retained in NOTICE.txt, ORIGIN.json, source, and licenses
             raise ValueError('portable link rewrite changed executable blocks')
         path.write_text(body)
     os.replace(work / 'rbel', bundle / 'bin/rbel')
-    manifest = {'platform': 'macOS ARM64', 'bootstrap': 'existing native seed' if args.seed else 'Rust reader and Wasm compiler via Node',
+    manifest = {'abi_version': 2, 'language_version': 2, 'platform': 'macOS ARM64', 'bootstrap': 'existing native seed' if args.seed else 'Rust reader and Wasm compiler via Node',
                 'reader_sha256': hashlib.sha256(reader).hexdigest(),
-                'compiler_sha256': hashlib.sha256((HERE.parent / 'self-compiler.bel').read_bytes()).hexdigest(),
+                'compiler_sha256': hashlib.sha256((HERE.parent / 'self-compiler.bel').read_bytes() + b'\n' +
+                       (HERE.parent / 'core-runtime.bel').read_bytes() + b'\n' +
+                       (HERE / 'modules.bel').read_bytes()).hexdigest(),
                 'wabt_version': '1.0.39', 'wabt_archive_sha256': '8aaafc02afdb8832bd51140b833816512a834601a65348e1f433cece6bbf2db7',
                 'wabt_build_adaptations': 'CMake custom-command quoting for spaces; pinned PicoSHA2 submodule; Apple clang',
                 'files': {str(p.relative_to(bundle)): hashlib.sha256(p.read_bytes()).hexdigest()

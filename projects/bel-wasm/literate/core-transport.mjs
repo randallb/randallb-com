@@ -5,12 +5,12 @@ const [binary, operation, path] = process.argv.slice(2);
 try {
   if (!['read', 'compile'].includes(operation)) throw Error('unknown core operation');
   const bytes = readFileSync(path);
-  if (bytes.length > 131072) throw Error('source exceeds 128 KiB');
+  if (bytes.length > 524288) throw Error('source exceeds 512 KiB');
   const source = new TextDecoder('utf-8', {fatal:true}).decode(bytes);
   const module = new WebAssembly.Module(readFileSync(binary));
-  const driver = new WasmValues(module);
+  const driver = new WasmValues(module,{pairCells:4194304});
   const request = driver.encode([operation, Array.from(source, char => ({char}))]);
-  const answer = driver.exports.choose(request);
+  const answer = driver.choose(request);
   if (operation === 'read') {
     const pairs = value => {
       if (Array.isArray(value)) return value.map(pairs).reduceRight((tail, head) => ({pair:[head,tail]}), null);
@@ -30,7 +30,7 @@ try {
         if (cp > 0x10ffff || cp >= 0xd800 && cp <= 0xdfff) throw Error('invalid output character');
         const char = String.fromCodePoint(cp);
         bytes += Buffer.byteLength(char);
-        if (bytes > 8388608) throw Error('compiler output exceeds 8 MiB');
+        if (bytes > 33554432) throw Error('compiler output exceeds 32 MiB');
         chunks.push(char);
       } else if (driver.pairp(value)) {
         const view = new DataView(driver.exports.memory.buffer);

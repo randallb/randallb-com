@@ -1,11 +1,9 @@
-; Compiler with first-class functions and lexical closures, written in its supported core.
-; The first definition is the exported entry point. No host compilation hooks.
-(def sc-compile (forms)
-  (if forms
-      (if (sc-definitions forms forms)
-          (sc-module forms)
-          (sc-reject))
-      (sc-reject)))
+; Rooted statement compiler. Implementation source uses the previous core syntax.
+; Runtime text is supplied by core-runtime.bel; generated language calls trampoline.
+(def sc-compile (forms) (sc-compile-located forms (sc-default-origins forms)))
+(def sc-compile-located (forms origins)
+  (if forms (if (sc-definitions forms forms)
+    (if (sc-valid-origins forms origins) (sc-module forms origins) (sc-reject)) (sc-reject)) (sc-reject)))
 (def sc-reject () (err 'unsupported-self-source))
 (def sc-l2 (a b) (join a (join b nil)))
 (def sc-l3 (a b c) (join a (join b (join c nil))))
@@ -25,22 +23,6 @@
 (def sc-chars (xs)
   (if xs (if (id (type xs) 'pair)
              (if (id (type (car xs)) 'char) (sc-chars (cdr xs)) nil) nil) t))
-(def sc-name-chars (xs)
-  (if xs (if (sc-member (car xs) "abcdefghijklmnopqrstuvwxyz-0123456789")
-             (sc-name-chars (cdr xs)) nil) t))
-(def sc-reserved-core (x)
-  (if (id x 'sym) t (if (id x 'def) t (if (id x 'fn) t (if (id x 'if) t
-  (if (id x 'quote) t (if (id x 'lit) t (if (id x 'dyn) t
-  (if (id x 'after) t (if (id x 'ccc) t (if (id x 'where) t
-  (if (id x 'bquote) t (if (id x 'mac) t (if (id x 'set) t
-  (if (id x 'thread) t (if (id x 'join) t (if (id x 'id) t
-  (if (id x 'car) t (if (id x 'cdr) t (if (id x 'type) t
-  (if (id x 'nom) t (if (id x 'err) t (if (id x 'o) t
-  (if (id x 'apply) t nil))))))))))))))))))))))))
-; Numeric literals remain ordinary immutable pairs. Their decimal components
-; avoid unary allocation and preserve exact values across the existing ABI.
-(def sc-reserved (x)
-  (if (sc-member x '(fp-add fp-sub fp-mul fp-div fp-lt fp-eq)) t (sc-reserved-core x)))
 (def sc-integer-operator (x)
   (sc-member x (join (sym "+") (join (sym "-") (join (sym "*")
     (join (sym "/") (join (sym "=") (join (sym "<")
@@ -75,575 +57,689 @@
       (if (id (sc-second x) 'float)
         (sc-bit-string (sc-third x) "0000000000000000000000000000000000000000000000000000000000000000") nil) nil) nil))
 (def sc-integer (x) (if (sc-exact x) t (sc-float x)))
-(def sc-name (x)
-  (if x (if (id x t) nil
-    (if (id (type x) 'symbol)
-      (if (sc-reserved x) nil
-        (if (sc-integer-operator x) t
-          (if (nom x) (sc-name-chars (nom x)) nil))) nil)) nil))
-(def sc-find (name forms)
-  (if forms (if (id name (sc-second (car forms)))
-                 (car forms) (sc-find name (cdr forms))) nil))
-(def sc-params (xs forms)
-  (if xs (if (id (type xs) 'pair)
-    (if (sc-variable (car xs))
-      (if (sc-member (car xs) (cdr xs)) nil (sc-params (cdr xs) forms)) nil) nil) t))
-(def sc-shapes (forms)
-  (if forms (if (id (type forms) 'pair)
-    (if (sc-four (car forms))
-      (if (id (car (car forms)) 'def)
-        (if (sc-name (sc-second (car forms))) (sc-shapes (cdr forms)) nil) nil) nil) nil) t))
-(def sc-definitions (forms all)
-  (if (sc-shapes forms) (sc-check-definitions forms all) nil))
-(def sc-check-definitions (forms all)
-  (if forms
-    (if (sc-find (sc-second (car forms)) (cdr forms)) nil
-      (if (sc-params (sc-third (car forms)) all)
-        (sc-check-definitions (cdr forms) all) nil)) t))
-(def sc-arity (a b)
-  (if a (if (id (type a) 'pair)
-    (if b (if (id (type b) 'pair) (sc-arity (cdr a) (cdr b)) nil) nil) nil)
+
+(def sc-text-equal (a b)
+  (if a (if b (if (id (car a) (car b)) (sc-text-equal (cdr a) (cdr b)) nil) nil)
     (if b nil t)))
-(def sc-params-wat (xs)
-  (if xs (sc-l4 " (param $p-" (nom (car xs)) " i32)" (sc-params-wat (cdr xs))) nil))
-(def sc-args (xs params forms path)
-  (if xs (if (id (type xs) 'pair)
-    (sc-l3 " " (sc-expr (car xs) params forms (join \a path))
-      (sc-args (cdr xs) params forms (join \d path))) (sc-reject)) nil))
-(def sc-call (x params forms path)
-  (if (sc-access (car x) params)
-      (sc-indirect x params forms path)
-      (if (sc-find (car x) forms)
-        (if (sc-arity (cdr x) (sc-third (sc-find (car x) forms)))
-          (sc-l5 "(call $bel-" (nom (car x)) " " (sc-args (cdr x) params forms path) ")")
-          (sc-reject))
-        (if (sc-primitive-name (car x)) (sc-reject)
-          (sc-indirect x params forms path)))))
-(def sc-binary (x params forms path)
-  (if (sc-three x)
-    (if (id (car x) 'join) (sc-primitive x params forms path)
-      (if (sc-member (car x) '(id fp-add fp-sub fp-mul fp-div fp-lt fp-eq))
-        (sc-primitive x params forms path) (sc-unary x params forms path)))
-    (sc-unary x params forms path)))
-(def sc-unary (x params forms path)
-  (if (sc-two x)
-    (if (sc-member (car x) '(car cdr type nom sym err))
-      (sc-primitive x params forms path) (sc-call x params forms path))
-    (sc-call x params forms path)))
-(def sc-primitive (x params forms path)
-  (sc-l4 "(call $" (nom (car x)) (sc-args (cdr x) params forms path) ")"))
-(def sc-compound (x params forms path)
-  (if (id (car x) 'quote)
-    (if (sc-two x) (sc-global path) (sc-reject))
-    (if (id (car x) 'fn)
-      (if (sc-three x)
-        (if (sc-params (sc-second x) forms)
-          (sc-l5 "(call $closure (global.get $code-" path ") " (sc-environment params) ")")
-          (sc-reject)) (sc-reject))
-      (if (id (car x) 'if) (sc-if (cdr x) params forms path)
-        (if (sc-access (car x) params) (sc-indirect x params forms path)
-          (sc-binary x params forms path))))))
-(def sc-conditional (x params forms path)
-  (if (sc-four x)
-    (if (id (car x) 'if)
-      (sc-l6 "(if (result i32) "
-        (sc-expr (sc-second x) params forms (join \a path)) " (then "
-        (sc-expr (sc-third x) params forms (join \a (join \d path))) ") (else "
-        (sc-l2 (sc-expr (sc-fourth x) params forms (join \a (join \d (join \d path)))) "))"))
-      (sc-binary x params forms path)) (sc-binary x params forms path)))
-(def sc-global (path) (sc-l3 "(global.get $literal-" path ")"))
-(def sc-expr (x params forms path)
-  (if (id x nil) "(i32.const 0)"
-    (if (id x t) "(i32.const 1)"
-      (if (sc-access x params) (sc-access x params)
-        (if (id (type x) 'char) (sc-char x)
-          (if (id (type x) 'pair)
-            (if (sc-integer x) (sc-global path)
-              (if (sc-chars x) (sc-global path) (sc-compound x params forms path)))
-            (if (sc-find x forms) (sc-function-value x)
-              (if (sc-primitive-name x) (sc-function-value x) (sc-reject)))))))))
-(def sc-constant (x)
-  (if (id x nil) "(i32.const 0)"
-    (if (id x t) "(i32.const 1)"
-      (if (id (type x) 'char) (sc-char x)
-        (if (id (type x) 'symbol) (sc-l3 "(call $intern " (sc-constant (nom x)) ")")
-          (sc-l5 "(call $join " (sc-constant (car x)) " " (sc-constant (cdr x)) ")"))))))
-(def sc-literal (x path mode)
-  (if mode
-    (sc-l5 "(global.set $literal-" path " " (sc-constant x) ")")
-    (sc-l3 "(global $literal-" path " (mut i32) (i32.const 0))")))
-(def sc-scan (x path mode)
-  (if (id (type x) 'pair)
-    (if (if (sc-integer x) t (sc-chars x)) (sc-literal x path mode)
-      (if (id (car x) 'quote)
-        (if (sc-two x) (sc-literal (sc-second x) path mode) (sc-reject))
-        (if (id (car x) 'fn)
-          (if (sc-three x) (sc-scan (sc-third x) (join \b path) mode) (sc-reject))
-          (sc-l2 (sc-scan (car x) (join \f path) mode)
-            (sc-scan-args (cdr x) path mode))))) nil))
-(def sc-scan-args (xs path mode)
-  (if xs (if (id (type xs) 'pair)
-    (sc-l2 (sc-scan (car xs) (join \a path) mode)
-      (sc-scan-args (cdr xs) (join \d path) mode)) (sc-reject)) nil))
-(def sc-scan-forms (forms mode)
-  (if forms (sc-l2
-    (sc-scan (sc-fourth (car forms)) (join \_ (nom (sc-second (car forms)))) mode)
-    (sc-scan-forms (cdr forms) mode)) nil))
-(def sc-functions (forms all)
-  (if forms (sc-l2
-    (sc-l6 "(func $bel-" (nom (sc-second (car forms)))
-      (sc-params-wat (sc-third (car forms))) " (result i32) "
-      (sc-expr (sc-fourth (car forms)) (sc-local-context (sc-third (car forms))) all
-        (join \_ (nom (sc-second (car forms))))) ")")
-    (sc-functions (cdr forms) all)) nil))
-(def sc-export-args (xs)
-  (if xs (sc-l4 " (call $valid (local.get $p-" (nom (car xs)) "))" (sc-export-args (cdr xs))) nil))
-(def sc-export (first)
-  (sc-l6 "(func (export \"choose\")" (sc-params-wat (sc-third first))
-    " (result i32) (call $valid (call $bel-" (nom (sc-second first))
-    (sc-export-args (sc-third first)) ")))"))
-(def sc-module (forms)
-  (sc-l6 "(module " (sc-l2 (sc-runtime) (sc-float-runtime)) (sc-scan-forms forms nil)
-    (sc-l6 (sc-functions forms forms) (sc-l2 (sc-higher-runtime) (sc-l2 (sc-name-export) (sc-symbol-runtime))) (sc-function-globals forms nil)
-      (sc-primitive-globals (sc-primitives) nil) (sc-wrappers forms)
-      (sc-l3 (sc-primitive-wrappers (sc-primitives))
-        (sc-lambda-forms forms forms 'function) (sc-dispatch forms)))
-    (sc-l6 (sc-l2 "(func $initialize (call $reserved) (global.set $call-marker " "(call $join (i32.const 0) (i32.const 0))) ")
-      (sc-l2 (sc-float-initialize) (sc-scan-forms forms t)) (sc-function-globals forms t)
-      (sc-primitive-globals (sc-primitives) t) (sc-lambda-forms forms forms 'init)
-      ")(start $initialize)")
-    (sc-l3 (sc-lambda-forms forms forms 'global) (sc-export (car forms)) ")")))
-(def sc-char (c)
- 
-    (if (id c \tab) "(i32.const 74)"
-    (if (id c \lf) "(i32.const 82)"
-    (if (id c \cr) "(i32.const 106)"
-    (if (id c \sp) "(i32.const 258)"
-    (if (id c \!) "(i32.const 266)"
-    (if (id c \") "(i32.const 274)"
-    (if (id c \#) "(i32.const 282)"
-    (if (id c \$) "(i32.const 290)"
-    (if (id c \%) "(i32.const 298)"
-    (if (id c \&) "(i32.const 306)"
-    (if (id c \') "(i32.const 314)"
-    (if (id c \() "(i32.const 322)"
-    (if (id c \)) "(i32.const 330)"
-    (if (id c \*) "(i32.const 338)"
-    (if (id c \+) "(i32.const 346)"
-    (if (id c \,) "(i32.const 354)"
-    (if (id c \-) "(i32.const 362)"
-    (if (id c \.) "(i32.const 370)"
-    (if (id c \/) "(i32.const 378)"
-    (if (id c \0) "(i32.const 386)"
-    (if (id c \1) "(i32.const 394)"
-    (if (id c \2) "(i32.const 402)"
-    (if (id c \3) "(i32.const 410)"
-    (if (id c \4) "(i32.const 418)"
-    (if (id c \5) "(i32.const 426)"
-    (if (id c \6) "(i32.const 434)"
-    (if (id c \7) "(i32.const 442)"
-    (if (id c \8) "(i32.const 450)"
-    (if (id c \9) "(i32.const 458)"
-    (if (id c \:) "(i32.const 466)"
-    (if (id c \;) "(i32.const 474)"
-    (if (id c \<) "(i32.const 482)"
-    (if (id c \=) "(i32.const 490)"
-    (if (id c \>) "(i32.const 498)"
-    (if (id c \?) "(i32.const 506)"
-    (if (id c \@) "(i32.const 514)"
-    (if (id c \A) "(i32.const 522)"
-    (if (id c \B) "(i32.const 530)"
-    (if (id c \C) "(i32.const 538)"
-    (if (id c \D) "(i32.const 546)"
-    (if (id c \E) "(i32.const 554)"
-    (if (id c \F) "(i32.const 562)"
-    (if (id c \G) "(i32.const 570)"
-    (if (id c \H) "(i32.const 578)"
-    (if (id c \I) "(i32.const 586)"
-    (if (id c \J) "(i32.const 594)"
-    (if (id c \K) "(i32.const 602)"
-    (if (id c \L) "(i32.const 610)"
-    (if (id c \M) "(i32.const 618)"
-    (if (id c \N) "(i32.const 626)"
-    (if (id c \O) "(i32.const 634)"
-    (if (id c \P) "(i32.const 642)"
-    (if (id c \Q) "(i32.const 650)"
-    (if (id c \R) "(i32.const 658)"
-    (if (id c \S) "(i32.const 666)"
-    (if (id c \T) "(i32.const 674)"
-    (if (id c \U) "(i32.const 682)"
-    (if (id c \V) "(i32.const 690)"
-    (if (id c \W) "(i32.const 698)"
-    (if (id c \X) "(i32.const 706)"
-    (if (id c \Y) "(i32.const 714)"
-    (if (id c \Z) "(i32.const 722)"
-    (if (id c \[) "(i32.const 730)"
-    (if (id c \\) "(i32.const 738)"
-    (if (id c \]) "(i32.const 746)"
-    (if (id c \^) "(i32.const 754)"
-    (if (id c \_) "(i32.const 762)"
-    (if (id c \`) "(i32.const 770)"
-    (if (id c \a) "(i32.const 778)"
-    (if (id c \b) "(i32.const 786)"
-    (if (id c \c) "(i32.const 794)"
-    (if (id c \d) "(i32.const 802)"
-    (if (id c \e) "(i32.const 810)"
-    (if (id c \f) "(i32.const 818)"
-    (if (id c \g) "(i32.const 826)"
-    (if (id c \h) "(i32.const 834)"
-    (if (id c \i) "(i32.const 842)"
-    (if (id c \j) "(i32.const 850)"
-    (if (id c \k) "(i32.const 858)"
-    (if (id c \l) "(i32.const 866)"
-    (if (id c \m) "(i32.const 874)"
-    (if (id c \n) "(i32.const 882)"
-    (if (id c \o) "(i32.const 890)"
-    (if (id c \p) "(i32.const 898)"
-    (if (id c \q) "(i32.const 906)"
-    (if (id c \r) "(i32.const 914)"
-    (if (id c \s) "(i32.const 922)"
-    (if (id c \t) "(i32.const 930)"
-    (if (id c \u) "(i32.const 938)"
-    (if (id c \v) "(i32.const 946)"
-    (if (id c \w) "(i32.const 954)"
-    (if (id c \x) "(i32.const 962)"
-    (if (id c \y) "(i32.const 970)"
-    (if (id c \z) "(i32.const 978)"
-    (if (id c \{) "(i32.const 986)"
-    (if (id c \|) "(i32.const 994)"
-    (if (id c \}) "(i32.const 1002)"
-    (if (id c \~) "(i32.const 1010)" (sc-reject))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
-
-(def sc-runtime ()
-  (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "(memory (export \"memory\") 1 1024)
-     (global $" "heap (mut i32) (i32.const 4096))
-     (func $pai") (sc-l2 "rp (param $x i32) (result i32)
-       (i32.and (" "i32.and (i32.ge_u (local.get $x) (i32.const 4096")) (sc-l2 (sc-l2 "))
-                        (i32.lt_u (local.get " "$x) (global.get $heap)))
-                (i32.eq") (sc-l2 "z (i32.and (local.get $x) (i32.const 7)))))
-    " " (func $valid (param $x i32) (result i32)
-      "))) (sc-l2 (sc-l2 (sc-l2 " (if (result i32) (i32.or (i32.eqz (local.get $x" "))
-           (i32.or (i32.eq (i32.and (local.ge") (sc-l2 "t $x) (i32.const 7)) (i32.const 1))
-            " " (i32.or (i32.eq (i32.and (local.get $x) (i32.co")) (sc-l2 (sc-l2 "nst 7)) (i32.const 2))
-                     (cal" "l $pairp (local.get $x)))))
-         (then (loca") (sc-l2 "l.get $x)) (else unreachable)))
-     (func $join" (sc-l2 " (export \"join\") (param $a i32) (param $d i32) (" "result i32)
-       (local $p i32) (local $end i3"))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 "2)
-       (drop (call $valid (local.get $a))) (d" "rop (call $valid (local.get $d)))
-       (local.") (sc-l2 "set $p (global.get $heap))
-       (local.set $en" "d (i32.add (local.get $p) (i32.const 8)))
-      ")) (sc-l2 (sc-l2 " (if (i32.gt_u (local.get $end) (i32.mul (memory" ".size) (i32.const 65536)))
-         (then (if (i") (sc-l2 "32.eq (memory.grow (i32.const 1)) (i32.const -1)" (sc-l2 ")
-           (then unreachable))))
-       (i32.s" "tore (local.get $p) (local.get $a))
-       (i32.")))) (sc-l2 (sc-l2 (sc-l2 "store offset=4 (local.get $p) (local.get $d))
-  " "     (global.set $heap (local.get $end)) (local.") (sc-l2 "get $p))
-     (func $car (param $x i32) (result " "i32)
-       (if (result i32) (i32.eqz (local.get")) (sc-l2 (sc-l2 " $x)) (then (i32.const 0))
-         (else (if (r" "esult i32) (call $pairp (local.get $x))
-        ") (sc-l2 "   (then (i32.load (local.get $x))) (else unreac" (sc-l2 "hable)))))
-     (func $cdr (param $x i32) (resul" "t i32)
-       (if (result i32) (i32.eqz (local.g")))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "et $x)) (then (i32.const 0))
-         (else (if " "(result i32) (call $pairp (local.get $x))
-      ") (sc-l2 "     (then (i32.load offset=4 (local.get $x))) (" "else unreachable)))))
-     (func $id (param $a i")) (sc-l2 (sc-l2 "32) (param $b i32) (result i32)
-       (i32.eq (" "local.get $a) (local.get $b)))
-     (func $type ") (sc-l2 "(param $x i32) (result i32)
-       (drop (call $" (sc-l2 "valid (local.get $x)))
-       (if (result i32) (" "call $pairp (local.get $x)) (then (i32.const 9))")))) (sc-l2 (sc-l2 (sc-l2 "
-         (else (if (result i32)
-           (i32" ".eq (i32.and (local.get $x) (i32.const 7)) (i32.") (sc-l2 "const 2))
-           (then (i32.const 25)) (else" " (i32.const 17))))))
-(global $symbols (mut i32) ")) (sc-l2 (sc-l2 "(i32.const 0))
-     (global $next-symbol (mut i3" "2) (i32.const 33))
-     (func $check-text (param") (sc-l2 " $xs i32) (result i32)
-       (local $p i32) (lo" (sc-l2 "cal $c i32) (local $n i32)
-       (local.set $p " "(local.get $xs))
-       (block $done (loop $scan"))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 "
-         (br_if $done (i32.eqz (local.get $p)))" "
-         (local.set $n (i32.add (local.get $n) ") (sc-l2 "(i32.const 1)))
-         (if (i32.gt_u (local.ge" "t $n) (i32.const 4096)) (then unreachable))
-    ")) (sc-l2 (sc-l2 "     (local.set $c (call $car (local.get $p)))
- " "        (if (i32.ne (i32.and (local.get $c) (i32") (sc-l2 ".const 7)) (i32.const 2))
-           (then unrea" (sc-l2 "chable))
-         (local.set $c (i32.shr_u (loca" "l.get $c) (i32.const 3)))
-         (if (i32.or (")))) (sc-l2 (sc-l2 (sc-l2 "i32.gt_u (local.get $c) (i32.const 1114111))
-   " "            (i32.and (i32.ge_u (local.get $c) (i") (sc-l2 "32.const 55296))
-                        (i32.le" "_u (local.get $c) (i32.const 57343))))
-         ")) (sc-l2 (sc-l2 "  (then unreachable))
-         (local.set $p (ca" "ll $cdr (local.get $p))) (br $scan)))
-       (lo") (sc-l2 "cal.get $xs))
-     (func $copy-text (param $xs i" (sc-l2 "32) (result i32)
-       (local $p i32) (local $r" "ev i32) (local $out i32)
-       (local.set $p (l"))))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "ocal.get $xs))
-       (block $first-done (loop $" "first
-         (br_if $first-done (i32.eqz (loca") (sc-l2 "l.get $p)))
-         (local.set $rev (call $join" " (call $car (local.get $p)) (local.get $rev)))
- ")) (sc-l2 (sc-l2 "        (local.set $p (call $cdr (local.get $p))" ") (br $first)))
-       (block $done (loop $secon") (sc-l2 "d
-         (br_if $done (i32.eqz (local.get $rev" ")))
-         (local.set $out (call $join (call $"))) (sc-l2 (sc-l2 (sc-l2 "car (local.get $rev)) (local.get $out)))
-       " "  (local.set $rev (call $cdr (local.get $rev))) ") (sc-l2 "(br $second)))
-       (local.get $out))
-     (fu" "nc $same-text (param $a i32) (param $b i32) (res")) (sc-l2 (sc-l2 "ult i32)
-       (block $done (loop $scan
-       " "  (br_if $done (i32.or (i32.eqz (local.get $a)) ") (sc-l2 "(i32.eqz (local.get $b))))
-         (if (i32.ne " (sc-l2 "(call $car (local.get $a)) (call $car (local.get" " $b)))
-           (then (return (i32.const 0))))"))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 "
-         (local.set $a (call $cdr (local.get $a" ")))
-         (local.set $b (call $cdr (local.get") (sc-l2 " $b))) (br $scan)))
-       (i32.eq (local.get $a" ") (local.get $b)))
-     (func $register (param $")) (sc-l2 (sc-l2 "symbol i32) (param $name i32) (result i32)
-     " "  (global.set $symbols (call $join
-         (cal") (sc-l2 "l $join (local.get $symbol) (local.get $name)) (" (sc-l2 "global.get $symbols)))
-       (local.get $symbol" "))
-     (func $intern (export \"intern\") (param $")))) (sc-l2 (sc-l2 (sc-l2 "name i32) (result i32)
-       (local $p i32) (lo" "cal $entry i32) (local $symbol i32)
-       (drop") (sc-l2 " (call $check-text (local.get $name)))
-       (l" "ocal.set $p (global.get $symbols))
-       (block")) (sc-l2 (sc-l2 " $new (loop $scan
-         (br_if $new (i32.eqz " "(local.get $p)))
-         (local.set $entry (cal") (sc-l2 "l $car (local.get $p)))
-         (if (call $same" (sc-l2 "-text (local.get $name) (call $cdr (local.get $e" "ntry)))
-           (then (return (call $car (loc")))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "al.get $entry)))))
-         (local.set $p (call " "$cdr (local.get $p))) (br $scan)))
-       (local") (sc-l2 ".set $symbol (global.get $next-symbol))
-       (" "drop (call $register (local.get $symbol) (call $")) (sc-l2 (sc-l2 "copy-text (local.get $name))))
-       (global.se" "t $next-symbol (i32.add (local.get $symbol) (i32") (sc-l2 ".const 8)))
-       (local.get $symbol))
-     (fu" (sc-l2 "nc $nom (param $symbol i32) (result i32)
-       " "(local $p i32) (local $entry i32)
-       (local.")))) (sc-l2 (sc-l2 (sc-l2 "set $p (global.get $symbols))
-       (block $mis" "sing (loop $scan
-         (br_if $missing (i32.e") (sc-l2 "qz (local.get $p)))
-         (local.set $entry (" "call $car (local.get $p)))
-         (if (i32.eq ")) (sc-l2 (sc-l2 "(local.get $symbol) (call $car (local.get $entry" ")))
-           (then (return (call $copy-text (c") (sc-l2 "all $cdr (local.get $entry))))))
-         (local" (sc-l2 ".set $p (call $cdr (local.get $p))) (br $scan)))" "
-       unreachable)
-     (func $err (param i32)"))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 " (result i32) unreachable)
-(func $reserved (drop" " (call $register (i32.const 0) (call $join (i32.") (sc-l2 "const 882) (call $join (i32.const 842) (call $jo" "in (i32.const 866) (i32.const 0))))))(drop (call")) (sc-l2 (sc-l2 " $register (i32.const 1) (call $join (i32.const " "930) (i32.const 0))))(drop (call $register (i32.") (sc-l2 "const 9) (call $join (i32.const 898) (call $join" (sc-l2 " (i32.const 778) (call $join (i32.const 842) (ca" "ll $join (i32.const 914) (i32.const 0)))))))(dro")))) (sc-l2 (sc-l2 (sc-l2 "p (call $register (i32.const 17) (call $join (i3" "2.const 922) (call $join (i32.const 970) (call $") (sc-l2 "join (i32.const 874) (call $join (i32.const 786)" " (call $join (i32.const 890) (call $join (i32.co")) (sc-l2 (sc-l2 "nst 866) (i32.const 0)))))))))(drop (call $regis" "ter (i32.const 25) (call $join (i32.const 794) (") (sc-l2 "call $join (i32.const 834) (call $join (i32.cons" (sc-l2 "t 778) (call $join (i32.const 914) (i32.const 0)" ")))))))")))))))))
-
-
-; Function-valued calls use pair closures; ordinary named calls remain direct.
+(def sc-append (a b) (sc-reverse (sc-reverse a nil) b))
+(def sc-reverse (a b) (if a (sc-reverse (cdr a) (join (car a) b)) b))
+(def sc-syntax (x)
+  (sc-member x '(if fn def quote lit let do try catch module import export)))
+(def sc-name-chars (xs)
+  (if xs (if (sc-member (car xs) "abcdefghijklmnopqrstuvwxyz-0123456789")
+    (sc-name-chars (cdr xs)) nil) t))
 (def sc-variable (x)
   (if x (if (id x t) nil
     (if (id (type x) 'symbol)
-      (if (sc-member x '(if fn def quote lit)) nil
-        (if (nom x) (sc-name-chars (nom x)) nil)) nil)) nil))
-(def sc-primitive-name (x) (sc-member x '(join id car cdr type nom sym err fp-add fp-sub fp-mul fp-div fp-lt fp-eq)))
-(def sc-primitives () '((join a d) (id a b) (car x) (cdr x) (type x) (nom x) (sym x) (err x)
-  (fp-add a b) (fp-sub a b) (fp-mul a b) (fp-div a b) (fp-lt a b) (fp-eq a b)))
-(def sc-append (a b) (if a (join (car a) (sc-append (cdr a) b)) b))
-(def sc-access (x ctx)
-  (if ctx (if (id x (car (car ctx))) (cdr (car ctx)) (sc-access x (cdr ctx))) nil))
-(def sc-local-context (params)
-  (if params
-    (join (join (car params) (sc-l3 "(local.get $p-" (nom (car params)) ")"))
-      (sc-local-context (cdr params))) nil))
-(def sc-capture-context (ctx)
-  (if ctx
-    (join (join (car (car ctx))
-      (sc-l3 "(call $lookup " (sc-constant (car (car ctx))) " (local.get $env))"))
-      (sc-capture-context (cdr ctx))) nil))
-(def sc-lambda-context (params ctx)
-  (sc-append (sc-local-context params) (sc-capture-context ctx)))
-(def sc-environment (ctx)
-  (if ctx
-    (sc-l6 "(call $join (call $join " (sc-constant (car (car ctx))) " "
-      (cdr (car ctx)) ") " (sc-l2 (sc-environment (cdr ctx)) ")"))
-    "(i32.const 0)"))
-(def sc-function-value (name) (sc-l3 "(global.get $fun-" (nom name) ")"))
-(def sc-indirect (x ctx forms path)
-  (sc-l5 "(call $apply " (sc-expr (car x) ctx forms (join \f path)) " "
-    (sc-argument-list (cdr x) ctx forms path) ")"))
-(def sc-argument-list (xs ctx forms path)
+      (if (sc-syntax x) nil
+        (if (sc-integer-operator x) t
+          (if (nom x) (sc-name-chars (nom x)) nil))) nil)) nil))
+(def sc-name (x) (if (sc-primitive-name x) nil (sc-variable x)))
+(def sc-find (name forms)
+  (if forms (if (id name (sc-second (car forms))) (car forms) (sc-find name (cdr forms))) nil))
+(def sc-proper (x)
+  (if x (if (id (type x) 'pair) (sc-proper (cdr x)) nil) t))
+(def sc-param-names (xs)
   (if xs (if (id (type xs) 'pair)
-    (sc-l5 "(call $join " (sc-expr (car xs) ctx forms (join \a path)) " "
-      (sc-argument-list (cdr xs) ctx forms (join \d path)) ")") (sc-reject))
-    "(i32.const 0)"))
-(def sc-if (xs ctx forms path)
+    (join (car xs) (sc-param-names (cdr xs))) (join xs nil)) nil))
+(def sc-param-valid (xs seen)
+  (if xs
+    (if (id (type xs) 'pair)
+      (if (sc-variable (car xs))
+        (if (sc-member (car xs) seen) nil (sc-param-valid (cdr xs) (join (car xs) seen))) nil)
+      (if (sc-variable xs) (if (sc-member xs seen) nil t) nil)) t))
+(def sc-form-body (form)
+  (sc-body (cdr (cdr (cdr form)))))
+(def sc-body (expressions)
+  (if expressions
+    (if (sc-proper expressions)
+      (if (cdr expressions) (join 'do expressions) (car expressions)) (sc-reject))
+    (sc-reject)))
+(def sc-definitions (forms all)
+  (if forms
+    (if (id (type forms) 'pair)
+      (if (id (type (car forms)) 'pair)
+        (if (id (car (car forms)) 'def)
+          (if (sc-name (sc-second (car forms)))
+            (if (sc-find (sc-second (car forms)) (cdr forms)) nil
+              (if (sc-param-valid (sc-third (car forms)) nil)
+                (if (cdr (cdr (cdr (car forms))))
+                  (if (sc-proper (car forms)) (sc-definitions (cdr forms) all) nil) nil) nil)) nil) nil) nil) nil) t))
+(def sc-normalize (x)
+  (if (id (type x) 'pair)
+    (if (id (car x) 'let)
+      (if (sc-variable (sc-second x))
+        (if (cdr (cdr (cdr x)))
+          (sc-l2 (sc-l3 'fn (join (sc-second x) nil) (sc-body (cdr (cdr (cdr x))))) (sc-third x))
+          (sc-reject)) (sc-reject)) x) x))
+(def sc-next-digit (c ds)
+  (if (id c (car ds)) (car (cdr ds)) (sc-next-digit c (cdr ds))))
+(def sc-increment-reversed (digits)
+  (if digits (if (id (car digits) \9)
+    (join \0 (sc-increment-reversed (cdr digits)))
+    (join (sc-next-digit (car digits) "0123456789") (cdr digits))) "1"))
+(def sc-increment (digits) (sc-reverse (sc-increment-reversed (sc-reverse digits nil)) nil))
+(def sc-count (items count)
+  (if items (sc-count (cdr items) (sc-increment count)) count))
+(def sc-prefix (c path) (join c path))
+(def sc-slot (path) (sc-l3 "(local.get $r" path ")"))
+(def sc-get (path) (sc-l3 "(call $root-get (local.get $frame) " (sc-slot path) ")"))
+(def sc-put (path value)
+  (sc-l5 "(call $root-set (local.get $frame) " (sc-slot path) " " value ")"))
+(def sc-clear (paths)
+  (if paths (sc-l2 (sc-put (car paths) "(i32.const 0)") (sc-clear (cdr paths))) nil))
+(def sc-context (names prefix)
+  (if names
+    (join (join (car names) prefix) (sc-context (cdr names) (join \d prefix))) nil))
+(def sc-access (name ctx)
+  (if ctx (if (id name (car (car ctx))) (cdr (car ctx)) (sc-access name (cdr ctx))) nil))
+(def sc-context-names (ctx)
+  (if ctx (join (car (car ctx)) (sc-context-names (cdr ctx))) nil))
+(def sc-context-slots (ctx)
+  (if ctx (join (cdr (car ctx)) (sc-context-slots (cdr ctx))) nil))
+(def sc-function-value (name) (sc-l3 "(global.get $fun-u-" (nom name) ")"))
+(def sc-primitive-value (name) (sc-l3 "(global.get $fun-p-" (nom name) ")"))
+(def sc-global (path) (sc-l3 "(global.get $literal-" path ")"))
+(def sc-primitive-name (x)
+  (sc-member x '(join id car cdr type nom sym err apply char-code code-char
+    fp-add fp-sub fp-mul fp-div fp-lt fp-eq)))
+(def sc-primitives ()
+  '((join a d) (id a b) (car x) (cdr x) (type x) (nom x) (sym x) (err x)
+    (apply function arguments) (char-code x) (code-char x)
+    (fp-add a b) (fp-sub a b) (fp-mul a b) (fp-div a b) (fp-lt a b) (fp-eq a b)))
+(def sc-character-digits (c) (sc-fourth (char-code c)))
+(def sc-char (c)
+  (sc-l3 "(i32.or (i32.shl (i32.const " (sc-character-digits c) ") (i32.const 3)) (i32.const 2))"))
+
+; Layout contains every rooted expression result, argument-list accumulator,
+; closure capture accumulator, parameter and catch binding. Scalar locals hold
+; deterministic slot indexes; they never substitute for roots.
+(def sc-layout (raw path)
+  (sc-layout-normal (sc-normalize raw) path))
+(def sc-layout-normal (x path)
+  (join path
+    (if (id (type x) 'pair)
+      (if (if (sc-integer x) t (sc-chars x)) nil
+        (if (id (car x) 'quote) nil
+          (if (id (car x) 'fn) (join (join \e path) nil)
+            (if (id (car x) 'if) (sc-layout-many (cdr x) path)
+              (if (id (car x) 'do) (sc-layout-many (cdr x) path)
+                (if (id (car x) 'try)
+                  (sc-append (sc-layout (sc-second x) (join \q path))
+                    (join (join \h path) (sc-layout (sc-third (sc-third x)) (join \z path))))
+                  (join (join \l path)
+                    (sc-append (sc-layout (car x) (join \f path)) (sc-layout-many (cdr x) path))))))))) nil)))
+(def sc-layout-many (xs path)
+  (if xs (if (id (type xs) 'pair)
+    (sc-append (sc-layout (car xs) (join \a path)) (sc-layout-many (cdr xs) (join \d path))) (sc-reject)) nil))
+(def sc-layout-constant (x path)
+  (join path (if (id (type x) 'pair)
+    (if (sc-chars x) nil
+      (sc-append (sc-layout-constant (car x) (join \a path)) (sc-layout-constant (cdr x) (join \d path))))
+    (if (if (id x nil) t (id x t)) nil
+      (if (id (type x) 'symbol) (sc-layout-constant (nom x) (join \n path)) nil)))))
+(def sc-locals (layout) (sc-locals-loop layout nil))
+(def sc-locals-loop (layout output)
+  (if layout (sc-locals-loop (cdr layout)
+    (sc-l4 output "(local $r" (car layout) " i32)")) output))
+(def sc-indexes (layout index) (sc-indexes-loop layout index nil))
+(def sc-indexes-loop (layout index output)
+  (if layout
+    (sc-indexes-loop (cdr layout) (sc-increment index)
+      (sc-l6 output "(local.set $r" (car layout) " (i32.const " index "))")) output))
+(def sc-prologue (layout) (sc-frame-prologue layout nil))
+(def sc-public-prologue (layout) (sc-frame-prologue layout t))
+(def sc-frame-prologue (layout public)
+  (sc-l6 "(local $frame i32)(local $status i32)" (sc-locals layout)
+    (if public "(if (i32.eqz (call $public-begin)) (then (return (i32.const 0))))" nil)
+    (sc-l3 "(local.set $status (i32.const 0))(local.set $frame (call $frame-enter (i32.const "
+      (sc-count layout "0") ")))")
+    (sc-l3 "(if (i32.eq (local.get $frame) (i32.const -1)) (then (return "
+      (if public "(call $public-end (i32.const 0))" "(i32.const 2)") ")))" )
+    (sc-indexes layout "0")))
+(def sc-leave () "(call $frame-leave (local.get $frame))")
+(def sc-check (target)
+  (sc-l3 "(if (global.get $error-pending) (then (br $" target ")))"))
+(def sc-site (path)
+  (sc-l3 "(global.set $active-site " (sc-slot path) ")"))
+(def sc-done (path)
+  (sc-l4 "(global.set $output " (sc-get path) ")" (sc-l2 (sc-leave) "(return (i32.const 0))")))
+(def sc-finish (path tail) (if tail (sc-done path) nil))
+(def sc-atomic (value path tail)
+  (sc-l2 (sc-put path value) (sc-finish path tail)))
+(def sc-transfer (function arguments)
+  (sc-l6 "(global.set $transfer-fn " function ")(global.set $transfer-args " arguments ")"
+    (sc-l2 (sc-leave) "(return (i32.const 1))")))
+
+; Constants are initialized by statements too: no unrooted car result can sit
+; on the Wasm operand stack while its cdr allocates or triggers collection.
+(def sc-constant-code (x path target)
+  (if (id x nil) (sc-put path "(i32.const 0)")
+    (if (id x t) (sc-put path "(i32.const 1)")
+      (if (id (type x) 'char) (sc-put path (sc-char x))
+        (if (id (type x) 'symbol)
+          (sc-l4 (sc-constant-code (nom x) (join \n path) target)
+            (sc-put path (sc-l3 "(call $sym " (sc-get (join \n path)) ")")) (sc-check target) nil)
+          (if (sc-chars x)
+            (sc-l2 (sc-put path (sc-l5 "(call $literal-text (global.get $text-" path
+              ") (global.get $text-length-" path "))")) (sc-check target))
+            (sc-l4 (sc-constant-code (car x) (join \a path) target)
+              (sc-constant-code (cdr x) (join \d path) target)
+              (sc-put path (sc-l5 "(call $join " (sc-get (join \a path)) " " (sc-get (join \d path)) ")"))
+              (sc-check target))))))))
+
+(def sc-emit (raw ctx forms path tail target)
+  (sc-emit-normal (sc-normalize raw) ctx forms path tail target))
+(def sc-emit-normal (x ctx forms path tail target)
+  (if (id x nil) (sc-atomic "(i32.const 0)" path tail)
+    (if (id x t) (sc-atomic "(i32.const 1)" path tail)
+      (if (sc-access x ctx) (sc-atomic (sc-get (sc-access x ctx)) path tail)
+        (if (id (type x) 'char) (sc-atomic (sc-char x) path tail)
+          (if (id (type x) 'pair)
+            (if (if (sc-integer x) t (sc-chars x)) (sc-atomic (sc-global path) path tail)
+              (sc-compound x ctx forms path tail target))
+            (if (sc-find x forms) (sc-atomic (sc-function-value x) path tail)
+              (if (sc-primitive-name x) (sc-atomic (sc-primitive-value x) path tail) (sc-reject)))))))))
+(def sc-compound (x ctx forms path tail target)
+  (if (id (car x) 'quote)
+    (if (sc-two x) (sc-atomic (sc-global path) path tail) (sc-reject))
+    (if (id (car x) 'fn)
+      (if (sc-param-valid (sc-second x) nil)
+        (sc-l6 (sc-put (join \e path) "(i32.const 0)")
+          (sc-capture (sc-reverse ctx nil) (join \e path) target)
+          (sc-site path)
+          (sc-put path (sc-l5 "(call $closure (global.get $code-l-" path ") " (sc-get (join \e path)) ")"))
+          (sc-check target) (sc-finish path tail)) (sc-reject))
+      (if (id (car x) 'if) (sc-if (cdr x) ctx forms path path tail target)
+        (if (id (car x) 'do) (sc-do (cdr x) ctx forms path path tail target)
+          (if (id (car x) 'try) (sc-try x ctx forms path tail target)
+            (sc-call x ctx forms path tail target)))))))
+(def sc-capture (ctx accumulator target)
+  (if ctx
+    (sc-l3 (sc-put accumulator (sc-l5 "(call $join " (sc-get (cdr (car ctx))) " " (sc-get accumulator) ")"))
+      (sc-check target) (sc-capture (cdr ctx) accumulator target)) nil))
+(def sc-call (x ctx forms path tail target)
+  (if (if (sc-proper (cdr x)) (sc-static-arity x (sc-context-names ctx) forms) nil)
+    (sc-l6 (sc-emit (car x) ctx forms (join \f path) nil target)
+      (sc-arguments (cdr x) ctx forms path target)
+      (sc-put (join \l path) "(i32.const 0)")
+      (sc-argument-list (sc-reverse (sc-argument-paths (cdr x) path) nil) (join \l path) target)
+      (sc-site path)
+      (if tail
+        (sc-transfer (sc-get (join \f path)) (sc-get (join \l path)))
+        (sc-l4 "(local.set $status "
+          (sc-l5 "(call $invoke " (sc-get (join \f path)) " " (sc-get (join \l path)) "))")
+          (sc-l3 "(if (i32.eq (local.get $status) (i32.const 2)) (then (br $" target ")))")
+          (sc-l2 (sc-put path "(global.get $output)")
+            "(global.set $output (i32.const 0))")))) (sc-reject)))
+(def sc-arguments (xs ctx forms path target)
+  (if xs (sc-l2 (sc-emit (car xs) ctx forms (join \a path) nil target)
+    (sc-arguments (cdr xs) ctx forms (join \d path) target)) nil))
+(def sc-argument-paths (xs path)
+  (if xs (join (join \a path) (sc-argument-paths (cdr xs) (join \d path))) nil))
+(def sc-argument-list (paths accumulator target)
+  (if paths
+    (sc-l3 (sc-put accumulator (sc-l5 "(call $join " (sc-get (car paths)) " " (sc-get accumulator) ")"))
+      (sc-check target) (sc-argument-list (cdr paths) accumulator target)) nil))
+(def sc-if (xs ctx forms outer path tail target)
   (if xs (if (id (type xs) 'pair)
     (if (cdr xs)
       (if (id (type (cdr xs)) 'pair)
-        (sc-l6 "(if (result i32) " (sc-expr (car xs) ctx forms (join \a path)) " (then "
-          (sc-expr (sc-second xs) ctx forms (join \a (join \d path))) ") (else "
-          (sc-l2 (sc-if (cdr (cdr xs)) ctx forms (join \d (join \d path))) "))"))
+        (sc-l6 (sc-emit (car xs) ctx forms (join \a path) nil target)
+          "(if " (sc-get (join \a path)) " (then "
+          (sc-l2 (sc-emit (sc-second xs) ctx forms (join \a (join \d path)) tail target)
+            (if tail nil (sc-put outer (sc-get (join \a (join \d path))))))
+          (sc-l3 ") (else " (sc-if (cdr (cdr xs)) ctx forms outer (join \d (join \d path)) tail target) "))"))
         (sc-reject))
-      (sc-expr (car xs) ctx forms (join \a path))) (sc-reject)) "(i32.const 0)"))
-; Validate dynamic arity before reading the arguments. Named direct arities are static.
-(def sc-check-args (params arg)
-  (if params
-    (sc-l5 "(if (i32.eqz (call $pairp " arg ")) (then unreachable)) "
-      (sc-check-args (cdr params) (sc-l3 "(call $cdr " arg ")")) " ")
-    (sc-l3 "(if " arg " (then unreachable)) ")))
-(def sc-wrapper-args (params arg)
-  (if params (sc-l5 " (call $car " arg ") "
-    (sc-wrapper-args (cdr params) (sc-l3 "(call $cdr " arg ")")) " ") nil))
-(def sc-locals (params)
-  (if params (sc-l4 "(local $p-" (nom (car params)) " i32) " (sc-locals (cdr params))) nil))
-(def sc-unpack (params arg)
-  (if params (sc-l6 "(local.set $p-" (nom (car params)) " (call $car " arg ")) "
-    (sc-unpack (cdr params) (sc-l3 "(call $cdr " arg ")"))) nil))
-(def sc-code-global (name mode)
-  (if mode
-    (sc-l3 "(global.set $code-" name " (call $join (i32.const 0) (i32.const 0))) ")
-    (sc-l3 "(global $code-" name " (mut i32) (i32.const 0)) ")))
-(def sc-named-global (name mode)
-  (sc-l2 (sc-code-global (sc-l2 "named-" (nom name)) mode)
-    (if mode
-      (sc-l5 "(global.set $fun-" (nom name) " (call $closure (global.get $code-named-"
-        (nom name) ") (i32.const 0))) ")
-      (sc-l3 "(global $fun-" (nom name) " (mut i32) (i32.const 0)) "))))
-(def sc-function-globals (forms mode)
-  (if forms (sc-l2 (sc-named-global (sc-second (car forms)) mode)
-    (sc-function-globals (cdr forms) mode)) nil))
-(def sc-primitive-globals (ps mode)
-  (if ps (sc-l2 (sc-named-global (car (car ps)) mode)
-    (sc-primitive-globals (cdr ps) mode)) nil))
-(def sc-wrappers (forms)
-  (if forms
-    (sc-l6 "(func $wrap-" (nom (sc-second (car forms)))
-      " (param $env i32) (param $args i32) (result i32) "
-      (sc-check-args (sc-third (car forms)) "(local.get $args)")
-      (sc-l4 "(call $bel-" (nom (sc-second (car forms)))
-        (sc-wrapper-args (sc-third (car forms)) "(local.get $args)") ")) ")
-      (sc-wrappers (cdr forms))) nil))
-(def sc-primitive-wrappers (ps)
-  (if ps
-    (sc-l6 "(func $wrap-" (nom (car (car ps)))
-      " (param $env i32) (param $args i32) (result i32) "
-      (sc-check-args (cdr (car ps)) "(local.get $args)")
-      (sc-l4 "(call $" (nom (car (car ps)))
-        (sc-wrapper-args (cdr (car ps)) "(local.get $args)") ")) ")
-      (sc-primitive-wrappers (cdr ps))) nil))
-; A syntax path gives each lambda a stable internal name, without numeric counters.
-(def sc-lambda-item (x ctx forms path mode)
+      (sc-l2 (sc-emit (car xs) ctx forms (join \a path) tail target)
+        (if tail nil (sc-put outer (sc-get (join \a path)))))) (sc-reject))
+    (sc-atomic "(i32.const 0)" outer tail)))
+(def sc-do (xs ctx forms outer path tail target)
+  (if xs
+    (if (id (type xs) 'pair)
+      (if (cdr xs)
+        (sc-l3 (sc-emit (car xs) ctx forms (join \a path) nil target)
+          (sc-clear (sc-layout (car xs) (join \a path)))
+          (sc-do (cdr xs) ctx forms outer (join \d path) tail target))
+        (sc-l2 (sc-emit (car xs) ctx forms (join \a path) tail target)
+          (if tail nil (sc-put outer (sc-get (join \a path)))))) (sc-reject))
+    (sc-atomic "(i32.const 0)" outer tail)))
+(def sc-try (x ctx forms path tail target)
   (if (sc-three x)
-    (if (sc-params (sc-second x) forms)
-      (if (id mode 'global) (sc-code-global path nil)
-        (if (id mode 'init) (sc-code-global path t)
-          (if (id mode 'dispatch) (sc-dispatch-item path (sc-l2 "lambda-" path))
-            (sc-l6 "(func $lambda-" path " (param $env i32) (param $args i32) (result i32) "
-              (sc-locals (sc-second x))
-              (sc-l3 (sc-check-args (sc-second x) "(local.get $args)")
-                (sc-unpack (sc-second x) "(local.get $args)")
-                (sc-expr (sc-third x) (sc-lambda-context (sc-second x) ctx) forms (join \b path))) ") "))))
-      (sc-reject)) (sc-reject)))
-(def sc-lambda-scan (x ctx forms path mode)
+    (if (sc-three (sc-third x))
+      (if (id (car (sc-third x)) 'catch)
+        (if (sc-variable (sc-second (sc-third x)))
+          (sc-l6 "(block $after-" path (sc-l3 " (block $catch-" path " ")
+            (sc-l4 (sc-emit (sc-second x) ctx forms (join \q path) nil (sc-l2 "catch-" path))
+              (sc-put path (sc-get (join \q path))) (sc-l3 "(br $after-" path "))")
+              (sc-put (join \h path) "(global.get $error-value)"))
+            (sc-l3 (sc-clear (sc-layout (sc-second x) (join \q path))) "(call $error-clear)"
+              (sc-emit (sc-third (sc-third x))
+                (join (join (sc-second (sc-third x)) (join \h path)) ctx)
+                forms (join \z path) tail target))
+            (sc-l3 (if tail nil (sc-put path (sc-get (join \z path)))) ")" (sc-finish path tail)))
+          (sc-reject)) (sc-reject)) (sc-reject)) (sc-reject)))
+
+; Each function descriptor is (identity parameters body captured-names).
+; Named identities are their names; lambdas use the unique syntax path symbol.
+(def sc-descriptor (name params body captures) (sc-l4 name params body captures))
+(def sc-descriptor-path (d) (join \_ (nom (car d))))
+(def sc-descriptor-context (d)
+  (sc-append (sc-context (sc-param-names (sc-second d)) "p")
+    (sc-context (sc-fourth d) "c")))
+(def sc-descriptor-layout (d)
+  (sc-append '("environment" "arguments" "cursor")
+    (sc-append (sc-context-slots (sc-descriptor-context d))
+      (sc-layout (sc-third d) (sc-descriptor-path d)))))
+(def sc-descriptors (forms) (sc-descriptors-loop forms nil))
+(def sc-descriptors-loop (forms output)
+  (if forms
+    (sc-descriptors-loop (cdr forms)
+      (join (sc-descriptor (sym (sc-append "u-" (nom (sc-second (car forms)))))
+        (sc-third (car forms)) (sc-form-body (car forms)) nil) output)) (sc-reverse output nil)))
+(def sc-all-descriptors (forms) (sc-expand-descriptors (sc-descriptors forms) nil))
+(def sc-expand-descriptors (descriptors output)
+  (if descriptors
+    (sc-expand-descriptors (cdr descriptors)
+      (sc-reverse (join (car descriptors)
+        (sc-lambdas (sc-third (car descriptors)) (sc-descriptor-context (car descriptors))
+          (sc-descriptor-path (car descriptors)))) output)) (sc-reverse output nil)))
+(def sc-lambdas (raw ctx path)
+  (sc-lambdas-normal (sc-normalize raw) ctx path))
+(def sc-lambdas-normal (x ctx path)
   (if (id (type x) 'pair)
     (if (if (sc-integer x) t (sc-chars x)) nil
       (if (id (car x) 'quote) nil
         (if (id (car x) 'fn)
-          (sc-l2 (sc-lambda-item x ctx forms path mode)
-            (sc-lambda-scan (sc-third x) (sc-lambda-context (sc-second x) ctx)
-              forms (join \b path) mode))
-          (sc-l2 (sc-lambda-scan (car x) ctx forms (join \f path) mode)
-            (sc-lambda-args (cdr x) ctx forms path mode))))) nil))
-(def sc-lambda-args (xs ctx forms path mode)
+          ((fn (descriptor)
+             (join descriptor
+               (sc-lambdas (sc-third descriptor) (sc-descriptor-context descriptor)
+                 (sc-descriptor-path descriptor))))
+           (sc-descriptor (sym (sc-append "l-" path)) (sc-second x) (sc-body (cdr (cdr x))) (sc-context-names ctx)))
+          (if (id (car x) 'try)
+            (sc-append (sc-lambdas (sc-second x) ctx (join \q path))
+              (sc-lambdas (sc-third (sc-third x))
+                (join (join (sc-second (sc-third x)) (join \h path)) ctx) (join \z path)))
+            (if (if (id (car x) 'if) t (id (car x) 'do))
+              (sc-lambdas-many (cdr x) ctx path)
+              (sc-append (sc-lambdas (car x) ctx (join \f path)) (sc-lambdas-many (cdr x) ctx path))))))) nil))
+(def sc-lambdas-many (xs ctx path)
   (if xs (if (id (type xs) 'pair)
-    (sc-l2 (sc-lambda-scan (car xs) ctx forms (join \a path) mode)
-      (sc-lambda-args (cdr xs) ctx forms (join \d path) mode)) (sc-reject)) nil))
-(def sc-lambda-forms (forms all mode)
+    (sc-append (sc-lambdas (car xs) ctx (join \a path)) (sc-lambdas-many (cdr xs) ctx (join \d path))) (sc-reject)) nil))
+
+(def sc-arity-fail ()
+  "(drop (call $raise (global.get $error-arity) (global.get $error-arity)))(br $failed)")
+(def sc-bind-params (params prefix)
+  (if params
+    (if (id (type params) 'pair)
+      (sc-l6 "(if (i32.eqz (call $pairp " (sc-get "cursor") ")) (then " (sc-arity-fail) "))"
+        (sc-l3 (sc-put prefix (sc-l3 "(call $car " (sc-get "cursor") ")"))
+          (sc-put "cursor" (sc-l3 "(call $cdr " (sc-get "cursor") ")"))
+          (sc-bind-params (cdr params) (join \d prefix))))
+      (sc-put prefix (sc-get "cursor")))
+    (sc-l3 "(if " (sc-get "cursor") (sc-l3 " (then " (sc-arity-fail) "))"))))
+(def sc-bind-captures (names prefix)
+  (if names
+    (sc-l4 (sc-put prefix (sc-l3 "(call $car " (sc-get "cursor") ")"))
+      (sc-check "failed")
+      (sc-put "cursor" (sc-l3 "(call $cdr " (sc-get "cursor") ")"))
+      (sc-bind-captures (cdr names) (join \d prefix))) nil))
+(def sc-steps (descriptors forms identity) (sc-steps-loop descriptors forms identity nil))
+(def sc-steps-loop (descriptors forms identity output)
+  (if descriptors
+    (sc-steps-loop (cdr descriptors) forms (sc-increment identity)
+      (sc-l2 output (sc-step-forms (car descriptors) forms identity))) output))
+; Rebind the global definition table without changing descriptor layout.
+(def sc-step-forms (d forms identity)
+  (sc-l6 "(func $step-" (nom (car d)) " (param $env i32)(param $args i32)(result i32)"
+    (sc-prologue (sc-descriptor-layout d))
+    (sc-l6 (sc-put "environment" "(local.get $env)") (sc-put "arguments" "(local.get $args)")
+      (sc-l3 "(global.set $active-function (i32.const " identity "))(global.set $active-site (i32.const 0))") "(block $failed "
+      (sc-l6 (sc-put "cursor" (sc-get "arguments")) (sc-bind-params (sc-second d) "p")
+        (sc-put "cursor" (sc-get "environment")) (sc-l2 (sc-bind-captures (sc-fourth d) "c") (sc-check "failed"))
+        (sc-emit (sc-third d) (sc-descriptor-context d) forms (sc-descriptor-path d) t "failed") nil)
+      (sc-l3 ")" (sc-leave) "(i32.const 2)")) ")"))
+
+(def sc-primitive-descriptors (primitives)
+  (if primitives
+    (join (sc-descriptor (sym (sc-append "p-" (nom (car (car primitives)))))
+            (cdr (car primitives)) nil nil)
+      (sc-primitive-descriptors (cdr primitives))) nil))
+(def sc-primitive-arguments (params path)
+  (if params (sc-l3 " " (sc-get path) (sc-primitive-arguments (cdr params) (join \d path))) nil))
+(def sc-primitive-step (primitive identity)
+  ((fn (layout name)
+     (sc-l6 "(func $step-p-" (nom name) " (param $env i32)(param $args i32)(result i32)"
+       (sc-prologue layout)
+       (sc-l6 (sc-put "environment" "(local.get $env)") (sc-put "arguments" "(local.get $args)")
+         nil "(block $failed "
+         (sc-l3 (sc-put "cursor" (sc-get "arguments")) (sc-bind-params (cdr primitive) "p")
+           (if (id name 'apply)
+             (sc-transfer (sc-get "p") (sc-get "dp"))
+             (sc-l4 (sc-put "result" (sc-l4 "(call $" (nom name)
+               (sc-primitive-arguments (cdr primitive) "p") ")"))
+               (sc-check "failed") (sc-done "result") nil)))
+         (sc-l3 ")" (sc-leave) "(i32.const 2)")) ")"))
+   (sc-append '("environment" "arguments" "cursor" "result")
+     (sc-context-slots (sc-context (cdr primitive) "p"))) (car primitive)))
+(def sc-primitive-steps (primitives identity)
+  (if primitives
+    (sc-l2 (sc-primitive-step (car primitives) identity)
+      (sc-primitive-steps (cdr primitives) (sc-increment identity))) nil))
+(def sc-dispatch (descriptors)
+  (sc-l3 "(func $dispatch (param $code i32)(param $env i32)(param $args i32)(result i32)"
+    (sc-dispatch-items descriptors)
+    "(drop (call $raise (global.get $error-not-callable) (global.get $error-not-callable)))(i32.const 2))"))
+(def sc-dispatch-items (descriptors) (sc-dispatch-items-loop descriptors nil))
+(def sc-dispatch-items-loop (descriptors output)
+  (if descriptors
+    (sc-dispatch-items-loop (cdr descriptors)
+      (sc-l6 output "(if (i32.eq (local.get $code) (global.get $code-" (nom (car (car descriptors)))
+        ")) (then (return (call $step-" (nom (car (car descriptors))) " (local.get $env)(local.get $args)))))")) output))
+
+(def sc-literals (raw path)
+  (sc-literals-normal (sc-normalize raw) path))
+(def sc-literals-normal (x path)
+  (if (id (type x) 'pair)
+    (if (if (sc-integer x) t (sc-chars x)) (join (join path x) nil)
+      (if (id (car x) 'quote)
+        (if (sc-two x) (join (join path (sc-second x)) nil) (sc-reject))
+        (if (id (car x) 'fn) nil
+          (if (id (car x) 'try)
+            (sc-append (sc-literals (sc-second x) (join \q path))
+              (sc-literals (sc-third (sc-third x)) (join \z path)))
+            (if (if (id (car x) 'if) t (id (car x) 'do))
+              (sc-literals-many (cdr x) path)
+              (sc-append (sc-literals (car x) (join \f path)) (sc-literals-many (cdr x) path))))))) nil))
+(def sc-literals-many (xs path)
+  (if xs (if (id (type xs) 'pair)
+    (sc-append (sc-literals (car xs) (join \a path)) (sc-literals-many (cdr xs) (join \d path))) (sc-reject)) nil))
+(def sc-all-literals (descriptors) (sc-all-literals-loop descriptors nil))
+(def sc-all-literals-loop (descriptors output)
+  (if descriptors
+    (sc-all-literals-loop (cdr descriptors)
+      (sc-reverse (sc-literals (sc-third (car descriptors)) (sc-descriptor-path (car descriptors))) output))
+    (sc-reverse output nil)))
+(def sc-literal-globals (literals) (sc-literal-globals-loop literals nil))
+(def sc-literal-globals-loop (literals output)
+  (if literals
+    (sc-literal-globals-loop (cdr literals)
+      (sc-l4 output "(global $literal-" (car (car literals)) " (mut i32)(i32.const 0))")) output))
+(def sc-function-globals (descriptors) (sc-function-globals-loop descriptors nil))
+(def sc-function-globals-loop (descriptors output)
+  (if descriptors
+    (sc-function-globals-loop (cdr descriptors)
+      (sc-l6 output "(global $code-" (nom (car (car descriptors))) " (mut i32)(i32.const 0))(global $fun-"
+        (nom (car (car descriptors))) " (mut i32)(i32.const 0))")) output))
+(def sc-literal-initializer (literal)
+  ((fn (path value)
+     (sc-l6 "(func $init-literal-" path " (result i32)"
+       (sc-prologue (sc-layout-constant value path))
+       (sc-l6 "(block $failed " (sc-constant-code value path "failed")
+         (sc-l4 "(global.set $literal-" path " " (sc-l2 (sc-get path) ")"))
+         (sc-leave) "(return (i32.const 0)))" (sc-l2 (sc-leave) "(i32.const 2)")) ")"))
+   (car literal) (cdr literal)))
+(def sc-literal-initializers (literals) (sc-literal-initializers-loop literals nil))
+(def sc-literal-initializers-loop (literals output)
+  (if literals (sc-literal-initializers-loop (cdr literals)
+    (sc-l2 output (sc-literal-initializer (car literals)))) output))
+(def sc-initialize-functions (descriptors) (sc-initialize-functions-loop descriptors nil))
+(def sc-initialize-functions-loop (descriptors output)
+  (if descriptors
+    (sc-initialize-functions-loop (cdr descriptors)
+      (sc-l6 output "(global.set $code-" (nom (car (car descriptors))) " (call $join (i32.const 0)(i32.const 0)))"
+        (sc-check "failed")
+        (sc-l6 "(global.set $fun-" (nom (car (car descriptors))) " (call $closure (global.get $code-"
+          (nom (car (car descriptors))) ")(i32.const 0)))" (sc-check "failed")))) output))
+(def sc-initialize-literals (literals) (sc-initialize-literals-loop literals nil))
+(def sc-initialize-literals-loop (literals output)
+  (if literals
+    (sc-initialize-literals-loop (cdr literals)
+      (sc-l4 output "(if (call $init-literal-" (car (car literals)) ") (then (br $failed)))")) output))
+(def sc-initialize (descriptors literals)
+  (sc-l5 "(func $generated-init (result i32)(block $failed "
+    (sc-initialize-functions descriptors) (sc-initialize-literals literals)
+    "(return (i32.const 0)))" "(i32.const 2))"))
+(def sc-mark-functions (descriptors) (sc-mark-functions-loop descriptors nil))
+(def sc-mark-functions-loop (descriptors output)
+  (if descriptors
+    (sc-mark-functions-loop (cdr descriptors)
+      (sc-l6 output "(call $mark (global.get $code-" (nom (car (car descriptors))) "))(call $mark (global.get $fun-"
+        (nom (car (car descriptors))) "))")) output))
+(def sc-mark-literals (literals) (sc-mark-literals-loop literals nil))
+(def sc-mark-literals-loop (literals output)
+  (if literals
+    (sc-mark-literals-loop (cdr literals)
+      (sc-l4 output "(call $mark (global.get $literal-" (car (car literals)) "))")) output))
+(def sc-global-roots (descriptors literals)
+  (sc-l4 "(func $generated-roots " (sc-mark-functions descriptors) (sc-mark-literals literals) ")"))
+(def sc-export-params (params path)
+  (if params
+    (sc-l5 "(param $p" path " i32)" (sc-export-params (cdr params) (join \d path)) nil) nil))
+(def sc-export-inputs (params path)
+  (if params
+    (sc-l2 (sc-put path (sc-l3 "(local.get $p" path ")")) (sc-export-inputs (cdr params) (join \d path))) nil))
+(def sc-export-layout (params path)
+  (if params (join path (sc-export-layout (cdr params) (join \d path))) nil))
+(def sc-export-arguments (paths)
+  (if paths
+    (sc-l3 (sc-put "arguments" (sc-l5 "(call $join " (sc-get (car paths)) " " (sc-get "arguments") ")"))
+      (sc-check "failed") (sc-export-arguments (cdr paths))) nil))
+(def sc-export (first)
+  (sc-l2 (sc-l5 "(func (export \"choose_args\") (param $args i32)(result i32)(call $invoke-value "
+      (sc-function-value (sc-second first)) " (local.get $args)))" nil nil)
+    (if (sc-proper (sc-third first))
+      ((fn (layout paths)
+         (sc-l6 "(func (export \"choose\")" (sc-export-params (sc-third first) "p") "(result i32)"
+           (sc-public-prologue layout)
+           (sc-l4 (sc-export-inputs (sc-third first) "p") "(block $failed "
+             (sc-l3 (sc-put "arguments" "(i32.const 0)") (sc-export-arguments (sc-reverse paths nil))
+               (sc-l5 "(drop (call $invoke " (sc-function-value (sc-second first)) " " (sc-get "arguments") "))")) ")")
+           (sc-l4 (sc-l2 (sc-put "result" "(call $public-end (global.get $output))")
+               (sc-l3 "(local.set $status " (sc-get "result") ")"))
+             (sc-leave) "(local.get $status)" ")")))
+       (sc-append '("arguments" "result") (sc-export-layout (sc-third first) "p"))
+       (sc-export-layout (sc-third first) "p")) nil)))
+(def sc-module (forms origins)
+  ((fn (descriptors)
+     ((fn (all literals)
+        ((fn (texts)
+           (sc-module-output forms descriptors all literals texts
+             (sc-diag-rows all forms origins "1" (cdr texts))))
+         (sc-text-rows (sc-all-texts literals) "4096")))
+      (sc-append descriptors (sc-primitive-descriptors (sc-primitives))) (sc-all-literals descriptors)))
+   (sc-all-descriptors forms)))
+(def sc-module-output (forms descriptors all literals texts diagnostics)
+  (sc-l6 "(module " (sc-l2 (sc-memory-declaration (cdr diagnostics)) (sc-runtime))
+    (sc-l2 (sc-function-globals all) (sc-literal-globals literals))
+    (sc-l4 (sc-steps descriptors forms "1")
+      (sc-primitive-steps (sc-primitives) (sc-count descriptors "1"))
+      (sc-dispatch all) (sc-literal-initializers literals))
+    (sc-l4 (sc-initialize all literals) (sc-global-roots all literals) (sc-export (car forms))
+      (sc-diagnostics texts diagnostics)) ")"))
+
+; Source tables are UTF-8 static data, not language heap objects. The one target
+; primitive dependency is isolated in sc-character-digits for the A/B bridge.
+(def sc-default-origins (forms) (sc-default-origins-loop forms nil))
+(def sc-default-origins-loop (forms output)
+  (if forms (sc-default-origins-loop (cdr forms)
+    (join (sc-l3 "<ast>" "0" (sc-second (car forms))) output)) (sc-reverse output nil)))
+(def sc-shorter (a b)
+  (if a (if b (sc-shorter (cdr a) (cdr b)) nil) (if b t nil)))
+(def sc-digit-less (a b ds)
+  (if (id a (car ds)) (if (id a b) nil t)
+    (if (id b (car ds)) nil (sc-digit-less a b (cdr ds)))))
+(def sc-lex-less (a b)
+  (if a (if (id (car a) (car b)) (sc-lex-less (cdr a) (cdr b))
+    (sc-digit-less (car a) (car b) "0123456789")) nil))
+(def sc-decimal-less (a b)
+  (if (sc-shorter a b) t (if (sc-shorter b a) nil (sc-lex-less a b))))
+(def sc-valid-origins (forms origins)
   (if forms
-    (sc-l2 (sc-lambda-scan (sc-fourth (car forms)) (sc-local-context (sc-third (car forms)))
-      all (join \_ (nom (sc-second (car forms)))) mode)
-      (sc-lambda-forms (cdr forms) all mode)) nil))
-(def sc-dispatch-item (code target)
-  (sc-l5 "(if (i32.eq (local.get $code) (global.get $code-" code
-    ")) (then (return (call $" target " (local.get $env) (local.get $args))))) "))
-(def sc-dispatch-named (forms)
+    (if (id (type origins) 'pair)
+      (if (sc-three (car origins))
+        (if (sc-chars (car (car origins)))
+          (if (sc-canonical-digits (sc-second (car origins)))
+            (if (sc-decimal-less "2147483647" (sc-second (car origins))) nil
+              (if (id (type (sc-third (car origins))) 'symbol)
+                (sc-valid-origins (cdr forms) (cdr origins)) nil)) nil) nil) nil) nil)
+    (id origins nil)))
+(def sc-prefix-p (a b)
+  (if a (if b (if (id (car a) (car b)) (sc-prefix-p (cdr a) (cdr b)) nil) nil) t))
+(def sc-origin-for (name forms origins)
   (if forms
-    (sc-l2 (sc-dispatch-item (sc-l2 "named-" (nom (sc-second (car forms))))
-      (sc-l2 "wrap-" (nom (sc-second (car forms))))) (sc-dispatch-named (cdr forms))) nil))
-(def sc-dispatch-primitives (ps)
-  (if ps (sc-l2 (sc-dispatch-item (sc-l2 "named-" (nom (car (car ps))))
-    (sc-l2 "wrap-" (nom (car (car ps))))) (sc-dispatch-primitives (cdr ps))) nil))
-(def sc-dispatch (forms)
-  (sc-l6 (sc-l2 (sc-l2 "(func $apply (param $fn i32) (param $args i32) (result i32) " (sc-l2 "(local $code i32) (local $env i32)
-    (if (i32.ne (call $ca" "r (local.get $fn)) (global.get $call-marker)) (then unreacha")) (sc-l2 "ble))
-    (local.set $code (call $car (call $cdr (local.get " (sc-l2 "$fn))))
-    (local.set $env (call $cdr (call $cdr (local.get" " $fn)))) ")))
-    (sc-dispatch-named forms) (sc-dispatch-primitives (sc-primitives))
-    (sc-lambda-forms forms forms 'dispatch) " unreachable) " nil))
+    (if (if (sc-text-equal name (sc-append "u-" (nom (sc-second (car forms))))) t
+          (sc-prefix-p (sc-reverse (sc-append "_u-" (nom (sc-second (car forms)))) nil)
+            (sc-reverse name nil)))
+      (car origins) (sc-origin-for name (cdr forms) (cdr origins)))
+    (sc-l3 "<primitive>" "0" (sym (cdr (cdr name))))))
+(def sc-utf8-width (c)
+  ((fn (code)
+     (if (sc-decimal-less code "128") "0"
+       (if (sc-decimal-less code "2048") "00"
+         (if (sc-decimal-less code "65536") "000" "0000"))))
+   (sc-character-digits c)))
+(def sc-add-width (offset width)
+  (if width (sc-add-width (sc-increment offset) (cdr width)) offset))
+(def sc-byte-end (text offset)
+  (if text (sc-byte-end (cdr text) (sc-add-width offset (sc-utf8-width (car text)))) offset))
+(def sc-byte-escape (code current high low)
+  (if (sc-text-equal code current) (join \\ (join high (join low nil)))
+    (if (id low \f)
+      (sc-byte-escape code (sc-increment current) (sc-next-digit high "0123456789abcdef") \0)
+      (sc-byte-escape code (sc-increment current) high (sc-next-digit low "0123456789abcdef")))))
+(def sc-wat-escape (text)
+  (if text
+    (sc-l2
+      ((fn (code)
+         (if (if (sc-decimal-less code "32") t
+               (if (sc-text-equal code "127") t
+                 (if (sc-text-equal code "34") t (sc-text-equal code "92"))))
+           (sc-byte-escape code "0" \0 \0) (join (car text) nil)))
+       (sc-character-digits (car text)))
+      (sc-wat-escape (cdr text))) nil))
+(def sc-diag-rows (descriptors forms origins identity offset)
+  (sc-diag-loop descriptors forms origins identity offset nil))
+(def sc-diag-loop (descriptors forms origins identity offset output)
+  (if descriptors
+    (sc-diag-row descriptors forms origins identity offset output
+      (sc-origin-for (nom (car (car descriptors))) forms origins))
+    (join (sc-reverse output nil) offset)))
+(def sc-diag-row (descriptors forms origins identity offset output origin)
+  ((fn (name-offset source-length name-length)
+     (sc-diag-loop (cdr descriptors) forms origins (sc-increment identity)
+       (sc-byte-end (nom (sc-third origin)) name-offset)
+       (join (sc-l6 identity origin offset source-length name-offset name-length) output)))
+   (sc-byte-end (car origin) offset) (sc-byte-end (car origin) "0")
+   (sc-byte-end (nom (sc-third origin)) "0")))
+(def sc-fifth (x) (car (cdr (cdr (cdr (cdr x))))))
+(def sc-sixth (x) (car (cdr (cdr (cdr (cdr (cdr x)))))))
+(def sc-diag-data (rows) (sc-diag-data-loop rows nil))
+(def sc-diag-data-loop (rows output)
+  (if rows
+    (sc-diag-data-loop (cdr rows)
+      (sc-l3 output
+        (sc-l5 "(data (i32.const " (sc-third (car rows)) ") \""
+          (sc-wat-escape (car (sc-second (car rows)))) "\")")
+        (sc-l5 "(data (i32.const " (sc-fifth (car rows)) ") \""
+          (sc-wat-escape (nom (sc-third (sc-second (car rows))))) "\")"))) output))
+(def sc-diag-field (row field)
+  (if (id field 'source-address) (sc-third row)
+    (id field 'source-length) (sc-fourth row)
+    (id field 'function-address) (sc-fifth row)
+    (id field 'function-length) (sc-sixth row)
+    (sc-second (sc-second row))))
+(def sc-diag-cases (rows field) (sc-diag-cases-loop rows field nil))
+(def sc-diag-cases-loop (rows field output)
+  (if rows
+    (sc-diag-cases-loop (cdr rows) field
+      (sc-l6 output "(if (i32.eq (local.get $function) (i32.const " (car (car rows))
+        ")) (then (return (i32.const " (sc-diag-field (car rows) field) "))))")) output))
+(def sc-diag-accessor (name rows field)
+  (sc-l5 "(func (export \"" name "\") (param $function i32)(result i32)"
+    (sc-diag-cases rows field) "(i32.const 0))"))
+(def sc-diagnostics (texts answer)
+  (sc-l6 (sc-l2 (sc-text-data (car texts)) (sc-diag-data (car answer)))
+    (sc-l3 "(func $generated-static-end (result i32)(i32.const " (cdr answer) "))")
+    (sc-diag-accessor "diag_source_addr" (car answer) 'source-address)
+    (sc-diag-accessor "diag_source_len" (car answer) 'source-length)
+    (sc-diag-accessor "diag_function_addr" (car answer) 'function-address)
+    (sc-l2 (sc-diag-accessor "diag_function_len" (car answer) 'function-length)
+      (sc-diag-accessor "diag_line" (car answer) 'line))))
 
-(def sc-higher-runtime ()
-  (sc-l2 (sc-l2 (sc-l2 (sc-l2 "(global $call-marker (mut i32) (i32.const 0))
-(func $closure" " (param $c") (sc-l2 "ode i32) (param $env i32) (result i32)
- (call $join (global." "get $call-")) (sc-l2 (sc-l2 "marker) (call $join (local.get $code) (local.get $env))))
-(f" "unc $looku") (sc-l2 "p (param $name i32) (param $env i32) (result i32)
- (local $e" "ntry i32)
-"))) (sc-l2 (sc-l2 (sc-l2 " (block $missing (loop $scan
-  (br_if $missing (i32.eqz (loc" "al.get $en") (sc-l2 "v)))
-  (local.set $entry (call $car (local.get $env)))
-  (if" " (i32.eq (")) (sc-l2 (sc-l2 "local.get $name) (call $car (local.get $entry)))
-   (then (r" "eturn (cal") (sc-l2 (sc-l2 "l $cdr (local.get $entry)))))
-  (local.set $env (call $cdr (" "local.get ") "$env))) (br $scan))) unreachable)
-")))))
+(def sc-units (digit digits)
+  (if (id digit (car digits)) nil (join t (sc-units digit (cdr digits)))))
+(def sc-add-digit (a units carry)
+  (if units
+    (if (id a \9) (sc-add-digit \0 (cdr units) t)
+      (sc-add-digit (sc-next-digit a "0123456789") (cdr units) carry)) (join a carry)))
+(def sc-add-reversed (a b carry output)
+  (if a
+    (sc-add-reversed-step (cdr a) (if b (cdr b) nil) output
+      (sc-add-digit (car a) (if carry (join t (sc-units (if b (car b) \0) "0123456789"))
+        (sc-units (if b (car b) \0) "0123456789")) nil))
+    (if b
+      (sc-add-reversed-step nil (cdr b) output
+        (sc-add-digit \0 (if carry (join t (sc-units (car b) "0123456789"))
+          (sc-units (car b) "0123456789")) nil))
+      (if carry (join \1 output) output))))
+(def sc-add-reversed-step (a b output result)
+  (sc-add-reversed a b (cdr result) (join (car result) output)))
+(def sc-add-decimal (a b)
+  (sc-add-reversed (sc-reverse a nil) (sc-reverse b nil) nil nil))
+(def sc-page-count (end threshold pages)
+  (if (sc-decimal-less threshold end)
+    (sc-page-count end (sc-add-decimal threshold "65536") (sc-increment pages)) pages))
+(def sc-memory-declaration (end)
+  (if (sc-decimal-less "67108864" end) (sc-reject)
+    (sc-l3 "(memory (export \"memory\") " (sc-page-count end "65536" "1") " 1024)")))
 
-(def sc-name-export ()
- (sc-l2 "(func (export \"symbolname\") (param $x i32) (result i32) "
-         "(call $nom (local.get $x)))"))
+(def sc-text-constants (x path)
+  (if (id (type x) 'pair)
+    (if (sc-chars x) (join (join path x) nil)
+      (sc-append (sc-text-constants (car x) (join \a path)) (sc-text-constants (cdr x) (join \d path))))
+    (if (if (id x nil) t (id x t)) nil
+      (if (id (type x) 'symbol) (sc-text-constants (nom x) (join \n path)) nil))))
+(def sc-all-texts (literals) (sc-all-texts-loop literals nil))
+(def sc-all-texts-loop (literals output)
+  (if literals
+    (sc-all-texts-loop (cdr literals)
+      (sc-reverse (sc-text-constants (cdr (car literals)) (car (car literals))) output))
+    (sc-reverse output nil)))
+(def sc-text-rows (texts offset) (sc-text-rows-loop texts offset nil))
+(def sc-text-rows-loop (texts offset output)
+  (if texts
+    (sc-text-rows-loop (cdr texts) (sc-byte-end (cdr (car texts)) offset)
+      (join (sc-l4 (car (car texts)) (cdr (car texts)) offset
+        (sc-byte-end (cdr (car texts)) "0")) output))
+    (join (sc-reverse output nil) offset)))
+(def sc-text-data (rows) (sc-text-data-loop rows nil))
+(def sc-text-data-loop (rows output)
+  (if rows
+    (sc-text-data-loop (cdr rows)
+      (sc-l6 output "(global $text-" (car (car rows)) " i32(i32.const " (sc-third (car rows))
+        (sc-l6 "))(global $text-length-" (car (car rows)) " i32(i32.const " (sc-fourth (car rows)) "))"
+          (sc-l5 "(data (i32.const " (sc-third (car rows)) ") \""
+            (sc-wat-escape (sc-second (car rows))) "\")")))) output))
 
-(def sc-symbol-runtime ()
- (sc-l2 "(func $sym (param $x i32) (result i32) "
-         "(call $intern (local.get $x)))"))
-
-; f64 arithmetic is performed by Wasm instructions. Values cross the ABI as
-; raw bit strings in ordinary pairs; NaN/infinity are outside this first contract.
-(def sc-float-runtime ()
-  (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "
-(global $fp-lit (mut i32) (i32.const 0))
-(glob" "al $fp-tag (mut i32) (i32.const 0))
-(func $fp-f") (sc-l2 "inite (param $bits i64) (result i64)
- (if (i64." "eq (i64.and (local.get $bits) (i64.const 0x7ff0")) (sc-l2 (sc-l2 "000000000000))
-             (i64.const 0x7ff000" "0000000000)) (then unreachable))
- (local.get $b") (sc-l2 "its))
-(func $fp-unpack (param $x i32) (result f" "64)
- (local $tail i32) (local $bits i32) (local"))) (sc-l2 (sc-l2 (sc-l2 " $n i32) (local $char i32) (local $raw i64)
- (i" "f (i32.ne (call $car (local.get $x)) (global.ge") (sc-l2 "t $fp-lit)) (then unreachable))
- (local.set $ta" "il (call $cdr (local.get $x)))
- (if (i32.ne (ca")) (sc-l2 (sc-l2 "ll $car (local.get $tail)) (global.get $fp-tag)" ") (then unreachable))
- (local.set $tail (call $") (sc-l2 "cdr (local.get $tail)))
- (local.set $bits (call" " $car (local.get $tail)))
- (if (call $cdr (loca")))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 "l.get $tail)) (then unreachable))
- (loop $read
-" "   (if (i32.eqz (call $pairp (local.get $bits))") (sc-l2 ") (then unreachable))
-   (local.set $char (call" " $car (local.get $bits)))
-   (if (i32.eqz (i32.")) (sc-l2 (sc-l2 "or (i32.eq (local.get $char) (i32.const 386))
- " "                      (i32.eq (local.get $char)") (sc-l2 " (i32.const 394)))) (then unreachable))
-   (loc" "al.set $raw (i64.or (i64.shl (local.get $raw) ("))) (sc-l2 (sc-l2 (sc-l2 "i64.const 1))
-                          (i64.ex" "tend_i32_u (i32.eq (local.get $char) (i32.const") (sc-l2 " 394)))))
-   (local.set $bits (call $cdr (local" ".get $bits)))
-   (local.set $n (i32.add (local.")) (sc-l2 (sc-l2 "get $n) (i32.const 1)))
-   (br_if $read (i32.lt" "_u (local.get $n) (i32.const 64))))
- (if (local") (sc-l2 ".get $bits) (then unreachable))
- (f64.reinterpr" "et_i64 (call $fp-finite (local.get $raw))))
-(fu"))))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 (sc-l2 "nc $fp-pack (param $x f64) (result i32)
- (local" " $raw i64) (local $bits i32) (local $n i32)
- (l") (sc-l2 "ocal.set $raw (call $fp-finite (i64.reinterpret" "_f64 (local.get $x))))
- (loop $write
-   (local.")) (sc-l2 (sc-l2 "set $bits (call $join
-     (if (result i32) (i3" "2.wrap_i64 (i64.and (local.get $raw) (i64.const") (sc-l2 " 1)))
-       (then (i32.const 394)) (else (i32." "const 386))) (local.get $bits)))
-   (local.set "))) (sc-l2 (sc-l2 (sc-l2 "$raw (i64.shr_u (local.get $raw) (i64.const 1))" ")
-   (local.set $n (i32.add (local.get $n) (i32") (sc-l2 ".const 1)))
-   (br_if $write (i32.lt_u (local.g" "et $n) (i32.const 64))))
- (call $join (global.g")) (sc-l2 (sc-l2 "et $fp-lit) (call $join (global.get $fp-tag)
-  " " (call $join (local.get $bits) (i32.const 0))))") (sc-l2 ")
-(func $fp-add (param $a i32) (param $b i32) (" "result i32)
- (call $fp-pack (f64.add (call $fp-")))) (sc-l2 (sc-l2 (sc-l2 (sc-l2 "unpack (local.get $a)) (call $fp-unpack (local." "get $b)))))
-(func $fp-sub (param $a i32) (param") (sc-l2 " $b i32) (result i32)
- (call $fp-pack (f64.sub " "(call $fp-unpack (local.get $a)) (call $fp-unpa")) (sc-l2 (sc-l2 "ck (local.get $b)))))
-(func $fp-mul (param $a i" "32) (param $b i32) (result i32)
- (call $fp-pack") (sc-l2 " (f64.mul (call $fp-unpack (local.get $a)) (cal" "l $fp-unpack (local.get $b)))))
-(func $fp-div ("))) (sc-l2 (sc-l2 (sc-l2 "param $a i32) (param $b i32) (result i32)
- (cal" "l $fp-pack (f64.div (call $fp-unpack (local.get") (sc-l2 " $a)) (call $fp-unpack (local.get $b)))))
-(func" " $fp-lt (param $a i32) (param $b i32) (result i")) (sc-l2 (sc-l2 "32)
- (f64.lt (call $fp-unpack (local.get $a)) (" "call $fp-unpack (local.get $b))))
-(func $fp-eq ") (sc-l2 "(param $a i32) (param $b i32) (result i32)
- (f6" (sc-l2 "4.eq (call $fp-unpack (local.get $a)) (call $fp" "-unpack (local.get $b))))
-"))))))))
-(def sc-float-initialize ()
-  (sc-l6 "(global.set $fp-lit " (sc-constant 'lit) ")"
-         "(global.set $fp-tag " (sc-constant 'float) ")"))
+; Known call targets are checked even in dead branches. A lexical/computed
+; target keeps the runtime arity contract so a handler can recover its error.
+(def sc-arity-accepts (params args)
+  (if params
+    (if (id (type params) 'pair)
+      (if args (if (id (type args) 'pair) (sc-arity-accepts (cdr params) (cdr args)) nil) nil) t)
+    (id args nil)))
+(def sc-primitive-params (name primitives)
+  (if primitives
+    (if (id name (car (car primitives))) (cdr (car primitives))
+      (sc-primitive-params name (cdr primitives))) nil))
+(def sc-static-arity (call bound forms)
+  (if (sc-member (car call) bound) t
+    (if (sc-find (car call) forms)
+      (sc-arity-accepts (sc-third (sc-find (car call) forms)) (cdr call))
+      (if (sc-primitive-name (car call))
+        (sc-arity-accepts (sc-primitive-params (car call) (sc-primitives)) (cdr call))
+        (if (id (type (car call)) 'pair)
+          (if (id (car (car call)) 'fn)
+            (if (sc-param-valid (sc-second (car call)) nil)
+              (sc-arity-accepts (sc-second (car call)) (cdr call)) nil) t) t)))))

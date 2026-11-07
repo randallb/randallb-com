@@ -1,5 +1,9 @@
 # Compiling the literate foundation and lexical closures
 
+The [ABI2 language core](../../../language-core/readme.md) supersedes this
+earlier milestone’s fixed-arity, arena-only and ASCII restrictions. Its guide
+owns the current runtime, bootstrap and host contract.
+
 The Bel-written compiler now compiles the unchanged five foundation definitions,
 all 67 expressions from the [foundation chapter](../../../literate/foundation.rbel.md),
 function values, and fixed-arity lexical closures. A native filter also uses
