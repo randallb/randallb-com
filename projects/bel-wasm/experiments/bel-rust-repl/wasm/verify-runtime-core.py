@@ -268,7 +268,7 @@ console.log(JSON.stringify({passed:true,checks}));
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--wat2wasm', type=Path, default=ROOT/'target/wabt-native-build/wat2wasm')
+    parser.add_argument('--wat2wasm', type=Path, default=ROOT/'target/bel-wasm-tools/node_modules/.bin/wat2wasm')
     parser.add_argument('--report', type=Path, default=ROOT/'target/runtime-core/results.json')
     args = parser.parse_args()
     body = literal_runtime((HERE/'core-runtime.bel').read_text())

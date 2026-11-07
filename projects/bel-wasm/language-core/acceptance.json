@@ -29,7 +29,7 @@
     "experiments/bel-rust-repl/wasm/self-wat.mjs": "909ac1f3cb89ca3a1dc2985d58b15661a8d4b5603cc92b9d54723b330d33a646",
     "experiments/bel-rust-repl/wasm/verify-language-compiler.mjs": "52286441f034fd119c0cc774773d78ddf6cc71da94dcb553eb0bc09e4de27ce1",
     "experiments/bel-rust-repl/wasm/verify-language-compiler.py": "0fa6a367f5c446592daa293bc033969b88feb1bcc79caad8197d5df9e72abd65",
-    "experiments/bel-rust-repl/wasm/verify-runtime-core.py": "8e56d689f4d545e1041a31f40ba527744caef24663f915d9a371f97b14f11389",
+    "experiments/bel-rust-repl/wasm/verify-runtime-core.py": "27c76f65b15d086f18e4965bcb2b9883f69bbfe44710a818f13c50c4fe90877d",
     "experiments/bel-rust-repl/wasm/verify-selfhost.py": "d0ad3deb11333e7b635c33dfc31972b1dcfcb689d22373f3905af6b02f17d4e7",
     "experiments/bel-rust-repl/wasm/wasm-values.mjs": "1e4548e47f3cb41f2801b3ed01ad3c31e0c359f8426f54a2703fb4368ec7c030",
     "libcwr/verify.py": "1d33acc61e6994221e4314addb26c90dc1b3bda3e222f34cfcc2567e12769b20",
