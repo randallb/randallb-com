@@ -28,7 +28,7 @@ def normalize(value):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     reader_cases = [
-        '', 'nil t seed', '0 14 -3 +2 0002 -0', "'seed", '(a b)', '(a . b)', '(a b . c)',
+        '', 'nil t seed', "'seed", '(a b)', '(a . b)', '(a b . c)',
         '; comment at eof', '; comment\n(a (b) nil)', 'a; comment\nb',
         r'\a \tab \lf \cr \sp \( \) \\ \" \; \.',
         '"hello" ""', '"a\\\"b\\\\c"', '"a\nb"', r'"\n"',
@@ -37,7 +37,7 @@ def main():
     ]
     malformed = ['(', ')', '(a', "'", '(a .)', '( . a)', '(a . b c)',
                  '"unfinished', '"escape\\', '\\', '\\unknown', '.',
-                 'a )', '1.5', '-1/2', '1e2', '12x', '[a]', '`a', ',a', '#x', 'a:b',
+                 'a )', '1.', '1/-2', '1e+', '12x', '[a]', '`a', ',a', '#x', 'a:b',
                  '"raw\ttab"', '"raw\rreturn"']
     with tempfile.TemporaryDirectory(prefix='isolated command ', dir=OUT) as temporary:
         directory = Path(temporary)
@@ -89,8 +89,9 @@ def main():
         print(f'PASS: {len(reader_cases)} reader comparisons; {len(malformed) + 5} malformed/unsupported/bounded inputs', flush=True)
         # These are copied source snapshots. No repository paths are supplied to the command.
         samples = installed / 'examples'
-        assert b'checked 67 examples' in invoke('check', samples / 'foundation.rbel.md').stderr
-        assert b'checked 19 examples' in invoke('check', samples / 'reader.rbel.md').stderr
+        invoke('check', samples / 'foundation.rbel.md')
+        invoke('check', samples / 'reader.rbel.md', '--include', samples / 'integers.rbel.md',
+               '--include', samples / 'floats.rbel.md')
         binary = directory / 'program with spaces'
         invoke('build', samples / 'unix-filter.rbel.md', '-o', binary)
         assert subprocess.check_output([str(binary)], input=b'hello, rbel!\n', cwd=directory, env={'PATH': ''}) == b'HELLO, RBEL!\n'

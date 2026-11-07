@@ -283,7 +283,7 @@ static void compile_native(const Buffer *wat, int checking) {
     "-fno-optimize-sibling-calls", "-frounding-math", "-DWASM_RT_USE_MMAP=0",
     "-DWASM_RT_MEMCHECK_BOUNDS_CHECK=1", "-DWASM_RT_MEMCHECK_GUARD_PAGES=0",
     "-DWASM_RT_STACK_DEPTH_COUNT=1", "-DWASM_RT_STACK_EXHAUSTION_HANDLER=0",
-    "-DWASM_RT_MAX_CALL_STACK_DEPTH=1024", "-I", runtime, "-I", tempdir,
+    "-DWASM_RT_MAX_CALL_STACK_DEPTH=4096", "-I", runtime, "-I", tempdir,
     adapter, code, impl, mem, exceptions, "-lm", "-pthread", "-o", candidate, NULL};
   if (run(cc)) fail("native C compilation failed");
   free(watpath); free(wasm); free(code); free(candidate); free(assembler); free(validator); free(translator);

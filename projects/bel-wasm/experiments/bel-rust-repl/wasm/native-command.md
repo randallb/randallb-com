@@ -85,29 +85,38 @@ Filenames are passed as process arguments, never interpolated into shell command
 
 The reader implements whitespace, semicolon comments, proper/dotted lists,
 apostrophe quotation, strings, and character notation. Symbol tokens use ASCII
-letters, digits, and hyphens, plus the integer operators `+`, `-`, `=`, `<`,
-`<=`, `>`, and `>=`. Signed decimal integer literals through magnitude 256 are
-supported; malformed numeric tokens, fractions, decimal points, and exponent
-notation are rejected. Bracket functions, backquote, unquote, and other
-abbreviations remain unsupported. This is the reader for the compiled subset, not every Bel
-notation. Character names use ASCII letters and the names sp/tab/lf/cr. String
-escapes take the next character literally, matching the existing reader's rule.
+letters, digits, and hyphens, plus arithmetic operators `+`, `-`, `*`, `/`,
+`=`, `<`, `<=`, `>`, and `>=`. Exact integer, fraction, decimal and exponent
+literals are supported; `f` suffixes request finite IEEE binary64 floats.
+Bracket functions, backquote, unquote, and other abbreviations remain unsupported.
+Character names use ASCII letters and sp/tab/lf/cr. String escapes take the next
+character literally, matching the existing reader's rule.
 
-Integer values use Bel's existing `(lit num ...)` representation, made of pairs
-and symbols. A literal evaluates to itself, including inside quoted lists and
-records. Zero is distinct from `nil` and is true in a conditional. Numeric
-comparison uses `=`, rather than pair identity with `id`.
+Exact values use `(lit num sign numerator denominator)` with decimal character
+lists; floats use `(lit float bits)` with a 64-bit binary character list. These
+replace the old unary integer representation; old raw numeric value trees are
+not compatible. Rebuild generated modules and migrate persisted raw numeric
+values before using them with the new library. Literals evaluate to themselves,
+including in quoted data. Zero is true. Use `=` for numeric equality; `id`
+continues to compare pair identity.
 
-Load [the integer library](../../../literate/integers.rbel.md) with `--include`
-to use signed addition, subtraction, equality, and ordering. Arithmetic checks
-its operands and rejects results outside -256 through 256. `integer-text`
-converts an integer to decimal text for a byte-list filter's output. The `read`
-command continues to expose the underlying value tree as JSON; it does not
-evaluate or pretty-print numeric values.
+Include [exact arithmetic](../../../literate/integers.rbel.md) for `+`, `-`, `*`,
+`/`, equality, ordering, and exact text output. Include the
+[float chapter](../../../literate/floats.rbel.md) too for `float`, `exact`,
+`float-text`, and `number-text`. Mixed exactness is an error. Float overflow and
+nonfinite results are errors; underflow rounds to signed zero. The reader chapter
+itself depends on both libraries when compiled as an example suite:
 
-Run `python3 experiments/bel-rust-repl/wasm/command/verify-integers.py` after
-building the command. It tests native arithmetic, boundary and failure cases,
-and a built executable whose output is `16`.
+```sh
+bin/rbel check examples/reader.rbel.md --include examples/integers.rbel.md --include examples/floats.rbel.md
+bin/rbel check examples/floats.rbel.md --include examples/integers.rbel.md
+```
+
+Run `python3 experiments/bel-rust-repl/wasm/command/verify-numbers.py` after
+building the command. It checks independent exact and binary64 expected values,
+boundary/failure cases and an executable that prints a large integer. The `read`
+command exposes value trees as JSON; it does not evaluate or pretty-print them.
+See the [numeric contract](../../../literate/numbers.md).
 
 The compiler's fixed-arity functions, lexical closures, and remaining limits are
 in [higher-order compilation](higher-order.md). `sym` is now a compiled primitive:

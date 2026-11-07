@@ -67,16 +67,20 @@ target/rbel-command/bin/rbel check literate/foundation.rbel.md
 ```
 
 The [reader chapter](literate/reader.rbel.md) maintains its explanation, definitions,
-and 19 examples together. See the command guide for the relocatable bundle,
+and executable examples together. See the command guide for the relocatable bundle,
 initial bootstrap, native-seed rebuild, supported syntax, and failure checks.
 
-## Signed integers
+## Exact numbers and explicit floats
 
-The compiled path supports signed decimal integer literals through magnitude 256.
-Load the [integer library](literate/integers.rbel.md) with `--include` for addition,
-subtraction, numeric equality, ordering, and decimal text output. Arithmetic
-rejects other value types and results outside -256 through 256. Zero is a true
-value, distinct from `nil`.
+Integers use decimal digit magnitudes with no fixed value limit. Fractions,
+decimals, and exponent notation are exact: `(+ 0.1 0.2)` equals `0.3`.
+The [exact library](literate/integers.rbel.md) supplies arithmetic, comparison,
+and text output. The [float chapter](literate/floats.rbel.md) adds explicit
+finite binary64 values (`0.1f`), conversions, and bit-preserving text output.
+Mixed exact/float operations require explicit conversion. Available memory,
+source size, and execution budgets still bound computations.
+See the [numeric contract](literate/numbers.md) for syntax, compatibility,
+limits, and verification commands. Zero remains true, distinct from `nil`.
 
 ## Native macOS ARM64 command
 
