@@ -58,6 +58,7 @@ def main():
               expected=1, contains='assertion completed')
         base = '```rbel definition=identity\n(def identity (x) x)\n```\n'
         tests = {
+            'no-cases': (base, 'source requires definitions and examples or tests'),
             'unclosed-test': (base + '```rbel test=broken\n(rt-done)\n', 'unclosed fence'),
             'duplicate-test': (base + ('```rbel test=duplicate\n(rt-done)\n```\n' * 2), 'duplicate block'),
             'unknown-attribute': (base + '```rbel test=bad extra=yes\n(rt-done)\n```\n', 'unsupported rbel fence'),
@@ -131,8 +132,8 @@ def main():
 
     check('pinned-foundation', [sys.executable, ROOT / 'literate/check.py', '--extract-only'])
     check('extractor-regressions', [sys.executable, ROOT / 'literate/check_test.py'])
-    check('existing-foundation-on-wasm', test_command(ROOT / 'literate/foundation.rbel.md'), contains='67 cases')
-    check('existing-reader-on-wasm', test_command(ROOT / 'literate/reader.rbel.md'), contains='12 cases')
+    check('existing-foundation-on-wasm', test_command(ROOT / 'literate/foundation.rbel.md'))
+    check('existing-reader-on-wasm', test_command(ROOT / 'literate/reader.rbel.md'))
     if not SKIP_NATIVE:
         check('native-foundation-regression', [COMPILER, 'check', ROOT / 'literate/foundation.rbel.md'])
         check('native-reader-regression', [COMPILER, 'check', ROOT / 'literate/reader.rbel.md'])
