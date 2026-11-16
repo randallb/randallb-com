@@ -23,6 +23,9 @@ def source_record():
 
 
 def run(args):
+    if getattr(args, "vm_type", "smolvm") == "tart":
+        from tart_backend import run as run_tart
+        return run_tart(args, source_record())
     argv = args.command
     if argv and argv[0] == '--':
         argv = argv[1:]
@@ -124,6 +127,10 @@ def run(args):
 def recover(args):
     directory = Path(args.record).expanduser().resolve()
     with vm.lock(directory):
+        owner = json.loads((directory / 'owner.json').read_text())
+        if owner.get('vm_type') == 'tart':
+            from tart_backend import recover
+            return recover(directory)
         machine = vm.load_machine(directory)
         result = machine.cleanup(retain=machine.record['kind'] == 'builder' and not args.delete_builder)
         vm.save(directory / 'recovery.json', result)
@@ -134,9 +141,16 @@ def recover(args):
 def main():
     parser = argparse.ArgumentParser(prog='rbdc', description='randallb.com repository tasks')
     tasks = parser.add_subparsers(dest='task', required=True)
-    evals = tasks.add_parser('evals', help='fresh Linux VM execution')
+    evals = tasks.add_parser('evals', help='fresh Linux or macOS VM execution')
     commands = evals.add_subparsers(dest='action', required=True)
     runner = commands.add_parser('run', help='execute argv in a fresh owned VM')
+    runner.add_argument('--vm-type', choices=['smolvm', 'tart'], default='smolvm', help='VM implementation; --backend remains the SmolVM executable')
+    runner.add_argument('--tart', default=os.environ.get('RBDC_TART', 'tart'), help='Tart executable (requires 2.41.1)')
+    runner.add_argument('--tart-home', default=os.environ.get('RBDC_TART_HOME', '.rbdc-evals/tart'), help='dedicated Tart state/cache directory')
+    runner.add_argument('--macos-image', help='digest-pinned OCI macOS image; uses the documented default when omitted')
+    runner.add_argument('--boot-timeout', type=int, default=180)
+    runner.add_argument('--cpus', type=int, default=4)
+    runner.add_argument('--memory', type=int, default=8192, help='macOS guest RAM in MiB')
     runner.add_argument('--image', default=os.environ.get('RBDC_EVALS_IMAGE', '.rbdc-evals/builder/image.tar.gz'))
     runner.add_argument('--backend', default=os.environ.get('RBDC_SMOLVM', 'smolvm'))
     runner.add_argument('--state', default=os.environ.get('RBDC_EVALS_STATE', '.rbdc-evals'))
