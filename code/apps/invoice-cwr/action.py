@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import uuid
+import re
 
 from install import verify
 
@@ -23,8 +24,16 @@ def supervise(root, output, parent_fd, lock_fd):
     with (output / 'harness.log').open('a') as log:
         env = dict(os.environ)
         env['PATH'] = str(Path(config['tart']).parent) + os.pathsep + env.get('PATH', '')
-        command = [config['python'], str(root / 'runner' / 'acceptance_eval.py'),
-                   '--payload', config['payload'], '--output', str(evaluation)]
+        if 'tart_home' in config:
+            env['RBDC_TART_HOME'] = config['tart_home']
+        if 'prepared_base' in config:
+            env['RBDC_PREPARED_BASE'] = config['prepared_base']
+        request = json.loads((output / 'request.json').read_text()) if (output / 'request.json').is_file() else {'action': 'invoice'}
+        if request['action'] == 'invoice':
+            command = [config['python'], str(root / 'runner' / 'acceptance_eval.py'),
+                       '--payload', config['payload'], '--output', str(evaluation)]
+        else:
+            command = [config['python'], str(root / 'workflow.py'), str(root), str(output)]
         child = subprocess.Popen(command, env=env, cwd=root, stdout=log, stderr=log,
                                  start_new_session=True)
         cancelled = threading.Event()
@@ -49,30 +58,51 @@ def supervise(root, output, parent_fd, lock_fd):
             result = json.loads(result_path.read_text())
         solution = evaluation / 'invoice-total.sh'
         status = result['status']
-        if status not in ('passed', 'failed', 'error'):
+        if status not in ('completed', 'passed', 'failed', 'error'):
             raise ValueError('harness returned an unknown evaluation status')
-        if cancelled.is_set() or (status == 'passed' and child.returncode != 0):
+        if cancelled.is_set() or (status in ('passed', 'completed') and child.returncode != 0):
             status = 'error'
             result.update(status='error', passed=False, error='CWR action or harness stopped; inspect runner cleanup evidence')
             result_path.write_text(json.dumps(result, indent=2) + '\n')
-        count = len(result['cases_passed'])
-        report = {'status': status, 'checks_passed': count, 'checks_total': 5,
-                  'summary': f'{status.upper()}: invoice-total, {count}/5 checks',
+        count = len(result.get('cases_passed', []))
+        report = {'run_id': output.name, 'status': status,
+                  'summary': 'Scenario completed; workspace exported and ready for grading' if status == 'completed' else f'{status.upper()}: invoice-total, {count}/5 checks',
                   'evidence': {'result': str(result_path), 'result_uri': result_path.as_uri(),
                                'solution': str(solution) if solution.is_file() else None,
                                'solution_uri': solution.as_uri() if solution.is_file() else None,
                                'run_record': result.get('run_record')}}
+        if status != 'completed':
+            report.update(checks_passed=count, checks_total=5)
+        for name in ('workspace', 'workspace_manifest', 'diff', 'changes'):
+            if name in result:
+                report['evidence'][name] = result[name]
+                report['evidence'][name + '_uri'] = Path(result[name]).as_uri()
+        for name in ('stdout', 'stderr'):
+            if (evaluation / name).is_file():
+                report['evidence'][name] = str(evaluation / name)
+                report['evidence'][name + '_uri'] = (evaluation / name).as_uri()
+        report['source_run_id'] = result.get('source_run_id')
         if status == 'error':
             report['error'] = result.get('error', 'runner error')
         (output / 'action-report.json').write_text(json.dumps(report, indent=2) + '\n')
         return 1 if status == 'error' else 0
 
 
-def execute(root):
+def execute(root, action='invoice'):
     os.umask(0o077)
     verify(root)
-    if json.load(sys.stdin) != {}:
-        raise ValueError('run--invoice takes an empty object')
+    request = json.load(sys.stdin)
+    if action == 'invoice':
+        if request != {}:
+            raise ValueError('run--invoice takes an empty object')
+    elif action == 'run-scenario':
+        if not isinstance(request, dict) or set(request) != {'scenario'} or not isinstance(request['scenario'], str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', request['scenario']):
+            raise ValueError('supply one local scenario name')
+    elif action == 'grade-result':
+        if not isinstance(request, dict) or set(request) != {'run_id'} or not isinstance(request['run_id'], str) or not re.fullmatch(r'[a-f0-9]{32}', request['run_id']):
+            raise ValueError('supply a saved scenario run_id')
+    else:
+        raise ValueError('unsupported action')
     config = json.loads((root / 'config.json').read_text())
     with (root / '.invoice.lock').open('a') as lock:
         try:
@@ -81,6 +111,7 @@ def execute(root):
             raise RuntimeError('another invoice evaluation is running') from None
         output = root / 'runs' / uuid.uuid4().hex
         output.mkdir(mode=0o700)
+        (output / 'request.json').write_text(json.dumps({**request, 'action': action}) + '\n')
         parent_fd, alive_fd = os.pipe()
         try:
             with (output / 'supervisor.log').open('a') as log:
@@ -107,7 +138,8 @@ if __name__ == '__main__':
         root = Path(__file__).resolve().parent
         if len(sys.argv) == 5 and sys.argv[1] == '--supervise':
             raise SystemExit(supervise(root, Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])))
-        raise SystemExit(execute(root))
+        action = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == '--action' else 'invoice'
+        raise SystemExit(execute(root, action))
     except (OSError, ValueError, RuntimeError) as error:
         print(json.dumps({'status': 'error', 'summary': 'Invoice evaluation could not run',
                           'error': str(error)}), flush=True)

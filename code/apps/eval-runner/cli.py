@@ -23,6 +23,12 @@ def source_record():
 
 
 def run(args):
+    if (getattr(args, 'workspace_input', None) or getattr(args, 'workspace_output', None)) and args.vm_type != 'tart':
+        raise RuntimeError('workspace input/output requires --vm-type tart')
+    if getattr(args, 'workspace_output', None) and not getattr(args, 'workspace_input', None):
+        raise RuntimeError('--workspace-output requires --workspace-input')
+    if getattr(args, 'prepared_base', None) and args.vm_type != 'tart':
+        raise RuntimeError('--prepared-base requires --vm-type tart')
     if getattr(args, "reuse_host_auth", False):
         if args.vm_type != "tart":
             raise RuntimeError("--reuse-host-auth requires --vm-type tart")
@@ -165,12 +171,15 @@ def main():
     runner.add_argument('--tart', default=os.environ.get('RBDC_TART', 'tart'), help='Tart executable (requires 2.41.1)')
     runner.add_argument('--tart-home', default=os.environ.get('RBDC_TART_HOME', '.rbdc-evals/tart'), help='dedicated Tart state/cache directory')
     runner.add_argument('--macos-image', help='digest-pinned OCI macOS image; uses the documented default when omitted')
+    runner.add_argument('--prepared-base', default=os.environ.get('RBDC_PREPARED_BASE'), help='verified descriptor for an optional stopped local Tart base to clone')
     runner.add_argument('--boot-timeout', type=int, default=180)
     runner.add_argument('--cpus', type=int, default=4)
     runner.add_argument('--memory', type=int, default=8192, help='macOS guest RAM in MiB')
     runner.add_argument('--image', default=os.environ.get('RBDC_EVALS_IMAGE', '.rbdc-evals/builder/image.tar.gz'))
     runner.add_argument('--backend', default=os.environ.get('RBDC_SMOLVM', 'smolvm'))
     runner.add_argument('--state', default=os.environ.get('RBDC_EVALS_STATE', '.rbdc-evals'))
+    runner.add_argument('--workspace-input', type=Path, help='snapshot and copy this folder into the fresh Tart guest; command starts there')
+    runner.add_argument('--workspace-output', type=Path, help='export completed guest workspace, hashes and diff to a new host folder before cleanup')
     runner.add_argument('--timeout', type=int, default=None, help='guest deadline in seconds (1..86400; default 300, or 3600 interactive)')
     runner.add_argument('command', nargs=argparse.REMAINDER)
     runner.set_defaults(function=run)

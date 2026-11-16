@@ -1,4 +1,78 @@
-# Invoice evaluation through standalone CWR
+# Scenario workspaces and grading through standalone CWR
+
+Version 0.2 adds an editable scenario folder, full workspace export and separate
+grading/regrading actions. The original combined invoice action remains available.
+
+## Run a scenario, inspect it, then grade it
+
+After installing the 0.2 bundle, edit `scenarios/invoice-docs/` in the installation:
+
+```text
+invoice-docs/
+  task.md                   Initial request
+  workspace/                Agent-visible files
+    README.md
+    docs/invoice-export.md
+    meeting-notes/billing-handoff.md
+    examples/example.csv
+  grading/contract.json      Host-side grading selection; never copied to agent
+```
+
+The editable folder is separate from the bundle's immutable `scenario-template/`.
+Use the installed launcher:
+
+```sh
+/absolute/private/scenario-cwr/invoke run invoice-docs
+# Take run_id from the returned JSON inside result.stdout:
+/absolute/private/scenario-cwr/invoke grade <run_id>
+# Repeat grade with that same scenario run_id to regrade, without another model turn.
+```
+
+| CWR action | JSON input | Result |
+| --- | --- | --- |
+| `@invoice_eval--run--scenario` | `{"scenario":"invoice-docs"}` | Completed agent run, exported workspace/diff/logs; no grade yet |
+| `@invoice_eval--grade--result` | `{"run_id":"<32 hex digits>"}` | Independent grade of that saved workspace, with a new evidence record |
+| `@invoice_eval--run--invoice` | `{}` | Original combined invoice smoke evaluation |
+
+Each scenario run snapshots and hashes the agent-visible folder before VM
+creation. The fresh VM starts in that copy, with no host mounts. The finished
+folder is exported before VM deletion, including code, documents, tests and
+binary files. Retained `evaluation/export/` contains `workspace/`, `manifest.json`,
+`workspace.tar`, `diff.patch` and `changes.json`; the run also retains stdout,
+stderr, starting snapshot and VM lifecycle record. Large/binary changes have a
+summary in the diff and full content in the saved workspace. Failed commands
+still attempt export. Cancellation or transport loss can leave an incomplete
+export, explicitly reported as an error.
+
+Grading checks the saved hashes and copies the finished workspace to a separate
+fresh VM. That VM has **no Codex installation, sign-in copy or network access**.
+The first supported contract is `invoice-total-v1`: five deterministic checks
+of `invoice-total.sh`. Adding another task grader is a source change, rather
+than executing arbitrary host commands from scenario documents. Missing or empty
+solutions fail the checks; changed saved artifacts and infrastructure problems
+are errors. Every grade records its source run/manifest and grader identity.
+
+Keep saved originals intact for regrading; make a separate copy to edit or launch
+the resulting app yourself. Scenario files can be changed between new runs;
+each run retains its own starting snapshot. Workspace transfer supports regular
+files/directories up to 64 MiB and 4096 entries. Links and special files are
+rejected rather than followed onto the host.
+
+Setup accepts optional `--tart-home /absolute/shared/cache` to reuse a local
+Tart image cache; the runner's workload lock serializes users of that cache.
+
+Some base-image boots can stall the GUI login agent that provides Tart RPC.
+`prepare_base.py --tart-home /absolute/shared/cache --output /absolute/base.json`
+creates a separate, stopped local base with the same guest RPC executable started
+by a system service as `admin`, independently of GUI login. Preparation uses the
+image's documented public `admin` login over SSH, installs no Codex and copies no
+host sign-in. A fresh clone must pass an unattended RPC check before the helper
+writes the descriptor. Install with `--prepared-base /absolute/base.json` and
+the same `--tart-home`. Every run checks the stopped base's disk/config/NVRAM
+hashes and clones it; scenario transfer and grading continue over the guest
+agent. The saved base is a machine prerequisite, not a retained workload VM.
+
+## Original invoice action
 
 Ask the `invoice_eval` coworker's `run--invoice` action to run one invoice coding
 evaluation. It returns PASS or FAIL, checks passed out of five, and paths/URIs to
@@ -21,7 +95,7 @@ for its Python and verified Codex payload. Credentials are never packaged.
 From the source repository:
 
 ```sh
-python3 code/apps/invoice-cwr/package.py --output /tmp/invoice-cwr-0.1.0
+python3 code/apps/invoice-cwr/package.py --output /tmp/scenario-cwr-0.2.0
 nix build .#evals-codex-payload --out-link /tmp/invoice-codex-payload
 ```
 
@@ -30,7 +104,7 @@ from the extracted bundle using Nix Python. Neither setup nor invocation reads
 the repository:
 
 ```sh
-python3 /tmp/invoice-cwr-0.1.0/install.py \
+python3 /tmp/scenario-cwr-0.2.0/install.py \
   --destination /absolute/private/invoice-cwr \
   --payload /tmp/invoice-codex-payload \
   --cwr /absolute/installed/cwr/bin/cwr

@@ -1,4 +1,7 @@
 """Disposable macOS guests. No shared host folders or SSH transport; shared NAT is opt-in."""
+import contextlib
+import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,6 +11,7 @@ import shutil
 import shlex
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -24,6 +28,80 @@ def image_reference(value):
     if not re.fullmatch(r'[a-zA-Z0-9./_:-]+@sha256:[a-f0-9]{64}', value):
         raise RuntimeError('macOS image must be an OCI reference pinned with @sha256:<64 hex digits>')
     return value
+
+
+@contextlib.contextmanager
+def verified_prepared_base(descriptor_path, home):
+    """Verify and read-lock a stopped local base without changing its contents.
+
+    Tart 2.41.1 uses a POSIX whole-file write lock on config.json while running.
+    Our shared POSIX lock prevents a source VM starting while it is verified and
+    cloned. Hash through the existing descriptors: closing another descriptor to
+    config.json would release this process's POSIX lock.
+    """
+    descriptor_path, home = Path(descriptor_path).expanduser(), Path(home).resolve()
+    if not stat.S_ISREG(descriptor_path.lstat().st_mode):
+        raise RuntimeError('prepared-base descriptor must be an ordinary file')
+    with os.fdopen(os.open(descriptor_path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as source:
+        raw = source.read(65537)
+    if len(raw) > 65536:
+        raise RuntimeError('prepared-base descriptor exceeds 64 KiB')
+    descriptor = json.loads(raw)
+    required = {'format', 'name', 'tart_home', 'source_image', 'files'}
+    if not isinstance(descriptor, dict) or set(descriptor) != required or descriptor['format'] != 'rbdc-prepared-base-v1':
+        raise RuntimeError('invalid prepared-base descriptor format')
+    base_name = descriptor['name']
+    if not isinstance(base_name, str) or not re.fullmatch(r'rbdc-base-[a-z0-9-]+', base_name):
+        raise RuntimeError('invalid prepared-base local name')
+    if not isinstance(descriptor['tart_home'], str) or Path(descriptor['tart_home']) != home:
+        raise RuntimeError('prepared-base Tart home differs from this run')
+    source_image = descriptor['source_image']
+    if not isinstance(source_image, str):
+        raise RuntimeError('prepared-base source image must be a pinned OCI reference')
+    image_reference(source_image)
+    files = descriptor['files']
+    if (not isinstance(files, dict) or set(files) != {'config.json', 'disk.img', 'nvram.bin'}
+            or any(not isinstance(value, str) or not re.fullmatch('[a-f0-9]{64}', value) for value in files.values())):
+        raise RuntimeError('prepared-base requires exactly three SHA-256 file pins')
+    base = home / 'vms' / base_name
+    if (home.is_symlink() or (home / 'vms').is_symlink() or base.is_symlink()
+            or not base.is_dir() or base.resolve() != base):
+        raise RuntimeError('prepared-base must be an ordinary local VM directory')
+    if (base / 'state.vzvmsave').exists() or (base / 'state.vzvmsave').is_symlink() or (base / 'overlay.asif').exists():
+        raise RuntimeError('prepared-base must be stopped, unsuspended and standalone')
+    with contextlib.ExitStack() as stack:
+        handles = {}
+        for filename in ('config.json', 'disk.img', 'nvram.bin'):
+            path = base / filename
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise RuntimeError('prepared-base contains a link or nonregular required file')
+            handle = stack.enter_context(os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb'))
+            opened = os.fstat(handle.fileno())
+            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                raise RuntimeError('prepared-base file changed during verification')
+            handles[filename] = handle
+        try:
+            fcntl.lockf(handles['config.json'].fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('prepared-base is running or its config lock is busy') from None
+        if (base / 'state.vzvmsave').exists() or (base / 'state.vzvmsave').is_symlink():
+            raise RuntimeError('prepared-base became suspended before its lock was acquired')
+        observed = {}
+        for filename, handle in handles.items():
+            checksum = hashlib.sha256()
+            while True:
+                if vm.interrupted:
+                    raise vm.Cancelled()
+                block = handle.read(1024 * 1024)
+                if not block:
+                    break
+                checksum.update(block)
+            observed[filename] = checksum.hexdigest()
+        if observed != files:
+            raise RuntimeError('prepared-base file checksum mismatch')
+        yield {**descriptor, 'descriptor': str(descriptor_path.resolve()),
+               'descriptor_sha256': hashlib.sha256(raw).hexdigest()}
 
 
 class Machine:
@@ -205,13 +283,25 @@ def run(args, source):
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     directory = state / ('run-' + uuid.uuid4().hex)
     directory.mkdir(mode=0o700)
-    report = {'schema': 1, 'vm_type': 'tart', 'argv': argv, 'source': source,
+    report = {'schema': 1, 'vm_type': 'tart', 'argv': argv, 'source': source, 'inputs': {},
               'guest_exit_status': None, 'outcome': 'preparation_failure',
               'interactive': interactive, 'output_capture': 'live_terminal' if interactive else 'separate_streams'}
     machine = None
     print(f'rbdc: run records: {directory}', file=sys.stderr, flush=True)
-    with vm.lock(directory):
+    with contextlib.ExitStack() as preparation, vm.lock(directory):
         try:
+            snapshot_root = None
+            if getattr(args, 'workspace_input', None):
+                import workspace
+                if getattr(args, 'workspace_output', None) and Path(args.workspace_output).expanduser().exists():
+                    raise RuntimeError('workspace output must be a new directory')
+                if getattr(args, 'workspace_output', None) and Path(args.workspace_output).expanduser().resolve().is_relative_to(Path(args.workspace_input).expanduser().resolve()):
+                    raise RuntimeError('workspace output must be outside the original input folder')
+                snapshot_root = directory / 'workspace-input'
+                snapshot_manifest = workspace.snapshot(Path(args.workspace_input).expanduser(), snapshot_root)
+                report['inputs']['workspace'] = {'path': str(snapshot_root), 'manifest': snapshot_manifest}
+                if getattr(args, 'workspace_output', None):
+                    report['workspace_export'] = {'status': 'not_attempted', 'path': str(Path(args.workspace_output).expanduser().resolve())}
             if sys.platform != 'darwin' or platform.machine() != 'arm64' or int(platform.mac_ver()[0].split('.')[0]) < 14:
                 raise RuntimeError('Tart execution requires Apple Silicon macOS 14 or newer')
             physical_memory = int(subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.memsize']))
@@ -231,11 +321,16 @@ def run(args, source):
             home.mkdir(parents=True, exist_ok=True, mode=0o700)
             if shutil.disk_usage(home).free < 40 * vm.GIB:
                 raise RuntimeError('at least 40 GiB free disk required for macOS image and writable state')
+            prepared = None
+            if getattr(args, 'prepared_base', None):
+                prepared = preparation.enter_context(verified_prepared_base(args.prepared_base, home))
+                report['inputs']['prepared_base'] = prepared
+                image = prepared['name']
             codex = None
             if getattr(args, 'with_codex', False):
                 from codex_payload import verify
                 codex = verify(args.codex_payload)
-                report['inputs'] = {'codex': codex['receipt']}
+                report['inputs']['codex'] = codex['receipt']
             auth_path = None
             if getattr(args, "reuse_host_auth", False):
                 from host_auth import source
@@ -251,7 +346,8 @@ def run(args, source):
             machine = Machine(directory, owner)
             machine.persist()
             report.update(run_id=identity, machine=owner['machine'], backend_version=VERSION,
-                          inputs={'image': image, 'fixtures': {}, **report.get('inputs', {})}, resources=owner['configuration'])
+                          inputs={'image': prepared['source_image'] if prepared else image,
+                                  'fixtures': {}, **report.get('inputs', {})}, resources=owner['configuration'])
             # One workload per dedicated Tart home; no persistent local base VM.
             with vm.lock(home / 'workload-lock'):
                 try:
@@ -268,6 +364,11 @@ def run(args, source):
                     if system.strip() != b'Darwin arm64':
                         raise RuntimeError('expected macOS ARM64 guest identity')
                     report['guest_system'] = system.decode().strip()
+                    if snapshot_root is not None:
+                        import workspace
+                        report['outcome'] = 'workspace_transfer_failure'
+                        workspace.install(machine, snapshot_root)
+                        report['outcome'] = 'transport_failure'
                     if codex:
                         from codex_payload import install
                         report['outcome'] = 'provisioning_failure'
@@ -283,7 +384,8 @@ def run(args, source):
                     # A retained guest completion marker distinguishes guest status from transport failure.
                     marker = '/private/tmp/rbdc-' + identity + '.exit'
                     term = ('TERM=' + shlex.quote(os.environ.get('TERM', 'xterm-256color')) + ' ') if interactive else ''
-                    script = ('cd /private/tmp || exit 125; umask 077; '
+                    working_directory = workspace.GUEST_ROOT if snapshot_root is not None else '/private/tmp'
+                    script = ('cd ' + shlex.quote(working_directory) + ' || exit 125; umask 077; '
                               '/usr/bin/env -i PATH=/private/tmp/rbdc-tools/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin '
                               'HOME=/private/tmp LANG=en_US.UTF-8 ' + term + auth_env + '"$@"; status=$?; '
                               'printf "%s\\n" "$status" > ' + marker + '; exit "$status"')
@@ -303,6 +405,14 @@ def run(args, source):
                         raise RuntimeError('transport exit disagrees with retained guest status')
                     report['guest_exit_status'] = guest_status
                     report['outcome'] = 'success' if code == 0 else 'command_failure'
+                    if getattr(args, 'workspace_output', None):
+                        command_outcome = report['outcome']
+                        report['command_outcome'] = command_outcome
+                        report['outcome'] = 'workspace_export_failure'
+                        report['workspace_export']['status'] = 'failed'
+                        report['workspace_export'] = workspace.export(
+                            machine, snapshot_root, Path(args.workspace_output).expanduser().resolve())
+                        report['outcome'] = command_outcome
                 finally:
                     report['cleanup'] = machine.cleanup()
         except TimeoutError as error:
@@ -313,6 +423,8 @@ def run(args, source):
             report['error'] = str(error)
             print(f'rbdc: {error}', file=sys.stderr)
         finally:
+            if report.get('workspace_export', {}).get('status') == 'not_attempted':
+                report['workspace_export'].update(status='incomplete', reason=report['outcome'])
             report.setdefault('cleanup', {'status': 'not_needed', 'errors': []})
             report['execution_outcome'] = report['outcome']
             if report['cleanup']['status'] == 'failed':

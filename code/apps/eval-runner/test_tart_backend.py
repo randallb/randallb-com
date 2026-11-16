@@ -1,6 +1,9 @@
 import json
+import hashlib
+import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -107,6 +110,113 @@ class TartTests(unittest.TestCase):
             self.machine.call(['list', '--format', 'json'])
         self.assertEqual(command.call_args.kwargs['environment'],
                          {'TART_HOME': self.owner['tart_home'], 'TART_NO_AUTO_PRUNE': '1'})
+
+
+class PreparedBaseTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.home = self.root / 'home'
+        self.base = self.home / 'vms/rbdc-base-test-v1'
+        self.base.mkdir(parents=True)
+        for name in ('config.json', 'disk.img', 'nvram.bin'):
+            (self.base / name).write_bytes(('tiny-' + name).encode())
+        self.data = {'format': 'rbdc-prepared-base-v1', 'name': self.base.name,
+                     'tart_home': str(self.home), 'source_image': tart.DEFAULT_IMAGE,
+                     'files': {name: vm.digest(self.base / name) for name in ('config.json', 'disk.img', 'nvram.bin')}}
+        self.descriptor = self.root / 'base.json'
+        self.write_descriptor()
+
+    def write_descriptor(self):
+        self.descriptor.write_text(json.dumps(self.data))
+
+    def test_verified_base_is_unchanged_and_locked_against_tart_start(self):
+        before = {name: (self.base / name).read_bytes() for name in self.data['files']}
+        probe = '''import os,fcntl,sys
+f=os.open(sys.argv[1],os.O_RDWR)
+try: fcntl.lockf(f,fcntl.LOCK_EX|fcntl.LOCK_NB)
+except BlockingIOError: sys.exit(73)
+'''
+        with tart.verified_prepared_base(self.descriptor, self.home) as receipt:
+            self.assertEqual(receipt['files'], self.data['files'])
+            self.assertEqual(receipt['descriptor_sha256'], hashlib.sha256(self.descriptor.read_bytes()).hexdigest())
+            result = subprocess.run([sys.executable, '-c', probe, str(self.base / 'config.json')])
+            self.assertEqual(result.returncode, 73)
+        self.assertEqual(subprocess.run([sys.executable, '-c', probe, str(self.base / 'config.json')]).returncode, 0)
+        self.assertEqual({name: (self.base / name).read_bytes() for name in self.data['files']}, before)
+
+    def test_running_source_config_lock_is_rejected(self):
+        script = '''import fcntl,sys
+with open(sys.argv[1],'r+') as f:
+ fcntl.lockf(f,fcntl.LOCK_EX)
+ print('locked',flush=True)
+ sys.stdin.read()
+'''
+        child = subprocess.Popen([sys.executable, '-c', script, str(self.base / 'config.json')],
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(child.stdout.readline().strip(), 'locked')
+            with self.assertRaisesRegex(RuntimeError, 'running'):
+                with tart.verified_prepared_base(self.descriptor, self.home):
+                    self.fail('running base accepted')
+        finally:
+            child.communicate('', timeout=5)
+
+    def test_changed_base_file_is_rejected(self):
+        (self.base / 'disk.img').write_bytes(b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'checksum'):
+            with tart.verified_prepared_base(self.descriptor, self.home):
+                self.fail('changed base accepted')
+
+    def test_links_and_suspended_sources_are_rejected(self):
+        original = (self.base / 'disk.img').read_bytes()
+        (self.base / 'disk.img').unlink()
+        (self.root / 'outside').write_bytes(original)
+        (self.base / 'disk.img').symlink_to(self.root / 'outside')
+        with self.assertRaises(RuntimeError):
+            with tart.verified_prepared_base(self.descriptor, self.home):
+                self.fail('linked source accepted')
+        (self.base / 'disk.img').unlink()
+        (self.base / 'disk.img').write_bytes(original)
+        (self.base / 'state.vzvmsave').write_bytes(b'suspended')
+        with self.assertRaisesRegex(RuntimeError, 'unsuspended'):
+            with tart.verified_prepared_base(self.descriptor, self.home):
+                self.fail('suspended source accepted')
+
+    def test_wrong_home_name_source_and_pin_set_are_rejected(self):
+        original = json.loads(json.dumps(self.data))
+        for key, value in [('tart_home', str(self.root / 'other')), ('name', '../other'),
+                           ('source_image', 'base:latest'), ('files', {'disk.img': 'a' * 64}),
+                           ('format', 'other')]:
+            with self.subTest(key=key):
+                self.data = {**original, key: value}; self.write_descriptor()
+                with self.assertRaises(RuntimeError):
+                    with tart.verified_prepared_base(self.descriptor, self.home):
+                        self.fail('invalid descriptor accepted')
+
+    def test_runner_records_local_clone_and_original_oci_provenance(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(command=['/bin/true'], interactive=False, boot_timeout=180,
+                               cpus=4, memory=8192, state=str(self.root / 'state'),
+                               tart=sys.executable, macos_image=None, tart_home=str(self.home),
+                               prepared_base=str(self.descriptor), with_codex=False, reuse_host_auth=False)
+        with patch.object(tart.sys, 'platform', 'darwin'), \
+                patch.object(tart.platform, 'machine', return_value='arm64'), \
+                patch.object(tart.platform, 'mac_ver', return_value=('26.5.2', (), '')), \
+                patch.object(tart.subprocess, 'check_output', return_value=str(64 * vm.GIB).encode()), \
+                patch.object(tart.shutil, 'disk_usage', return_value=SimpleNamespace(free=100 * vm.GIB)), \
+                patch.object(vm, 'command', return_value=(0, b'2.41.1', b'')), \
+                patch.object(tart, 'Machine') as machine:
+            machine.return_value.create.side_effect = RuntimeError('intentional stop before VM creation')
+            machine.return_value.cleanup.return_value = {'status': 'not_needed'}
+            self.assertEqual(tart.run(args, {'revision': None}), 1)
+        self.assertEqual(machine.call_args.args[1]['image'], self.base.name)
+        record_path, = (self.root / 'state').glob('run-*/result.json')
+        record = json.loads(record_path.read_text())
+        self.assertEqual(record['inputs']['image'], tart.DEFAULT_IMAGE)
+        self.assertEqual(record['inputs']['prepared_base']['name'], self.base.name)
+        self.assertEqual(record['inputs']['prepared_base']['files'], self.data['files'])
 
 
 if __name__ == '__main__':
