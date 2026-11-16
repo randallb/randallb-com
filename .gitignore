@@ -5,15 +5,11 @@ node_modules/
 .env.*
 .dev.vars
 .dev.vars.*
-vendor/cwr/target/
+code/vendor/cwr/target/
 .cwr-state/
-cwr/.cwr/
-
+.cwr/
 .drive-build/
 __pycache__/
 migration/
-
-# Isolated project compiler and verification output
-/projects/**/target/
-/projects/**/artifacts/
-__pycache__/
+/code/projects/**/target/
+/code/projects/**/artifacts/

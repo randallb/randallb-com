@@ -11,13 +11,14 @@ import tempfile
 from urllib.parse import urlsplit, unquote
 
 ROOT = Path(__file__).resolve().parent.parent
+REPOSITORY_ROOT = ROOT.parents[2]
 MAX_SOURCE_BYTES = 100_000_000
 MAX_ASSET_BYTES = 25_000_000
 
 
 def build(source: Path, output: Path):
     source = source.resolve(strict=True)
-    if source == ROOT or ROOT in source.parents:
+    if source == REPOSITORY_ROOT or REPOSITORY_ROOT in source.parents:
         raise ValueError("Content must be outside the Git checkout")
     hashes = {}
     total = 0

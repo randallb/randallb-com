@@ -2,7 +2,7 @@ name: Literate libcwr Wasm
 on:
   pull_request:
     paths:
-      - projects/bel-wasm/**
+      - code/projects/bel-wasm/**
       - .github/workflows/libcwr.yml
   workflow_dispatch:
 permissions:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: projects/bel-wasm
+        working-directory: code/projects/bel-wasm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,24 +58,24 @@ jobs:
         with:
           name: libcwr-evidence
           path: |
-            projects/bel-wasm/target/integer-examples.json
-            projects/bel-wasm/target/language-examples.json
-            projects/bel-wasm/target/utf8-examples.json
-            projects/bel-wasm/target/runtime-core/results.json
-            projects/bel-wasm/target/language-compiler-verification/
-            projects/bel-wasm/target/module-verification/results.json
-            projects/bel-wasm/target/bootstrap-command-verification/results.json
-            projects/bel-wasm/target/bel-selfhost/selfhost-results.json
-            projects/bel-wasm/target/bel-selfhost/abi-bootstrap.json
-            projects/bel-wasm/target/rbel-core-bootstrap/core-build.json
-            projects/bel-wasm/target/reader-examples.json
-            projects/bel-wasm/target/float-examples.json
-            projects/bel-wasm/target/numeric-verification/
-            projects/bel-wasm/target/benchmarks/ci/report.json
-            projects/bel-wasm/target/benchmarks/ci/report.md
-            projects/bel-wasm/target/libcwr/results.json
-            projects/bel-wasm/target/libcwr/verification.json
-            projects/bel-wasm/target/libcwr-embedding-checks/
-            projects/bel-wasm/target/libcwr-embedding/manifest.json
-            projects/bel-wasm/target/libcwr-embedding/libcwr.json
+            code/projects/bel-wasm/target/integer-examples.json
+            code/projects/bel-wasm/target/language-examples.json
+            code/projects/bel-wasm/target/utf8-examples.json
+            code/projects/bel-wasm/target/runtime-core/results.json
+            code/projects/bel-wasm/target/language-compiler-verification/
+            code/projects/bel-wasm/target/module-verification/results.json
+            code/projects/bel-wasm/target/bootstrap-command-verification/results.json
+            code/projects/bel-wasm/target/bel-selfhost/selfhost-results.json
+            code/projects/bel-wasm/target/bel-selfhost/abi-bootstrap.json
+            code/projects/bel-wasm/target/rbel-core-bootstrap/core-build.json
+            code/projects/bel-wasm/target/reader-examples.json
+            code/projects/bel-wasm/target/float-examples.json
+            code/projects/bel-wasm/target/numeric-verification/
+            code/projects/bel-wasm/target/benchmarks/ci/report.json
+            code/projects/bel-wasm/target/benchmarks/ci/report.md
+            code/projects/bel-wasm/target/libcwr/results.json
+            code/projects/bel-wasm/target/libcwr/verification.json
+            code/projects/bel-wasm/target/libcwr-embedding-checks/
+            code/projects/bel-wasm/target/libcwr-embedding/manifest.json
+            code/projects/bel-wasm/target/libcwr-embedding/libcwr.json
           if-no-files-found: error

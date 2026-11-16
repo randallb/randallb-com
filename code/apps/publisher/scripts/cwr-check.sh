@@ -4,7 +4,7 @@ site_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 export XDG_STATE_HOME="$site_root/.cwr-state"
 export WORKLOOP_STATE_HOME="$site_root/.cwr-state"
 export WORKLOOP_STORAGE_IDENTITY="randallb-com-site-checks"
-cwr_bin="$site_root/vendor/cwr/target/debug/cwr"
+cwr_bin="$site_root/../../vendor/cwr/target/debug/cwr"
 if [ ! -x "$cwr_bin" ]; then
   echo "Build CWR first: sh scripts/cwr-setup.sh" >&2
   exit 1

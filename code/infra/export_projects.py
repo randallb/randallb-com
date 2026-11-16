@@ -27,11 +27,11 @@ def export(repo, site):
     index_path = site / "projects/index.json"
     index = json.loads(index_path.read_text())
     revision = git(repo, "rev-parse", "HEAD").decode().strip()
-    if git(repo, "status", "--porcelain", "--", "projects", "scripts/export_projects.py"):
+    if git(repo, "status", "--porcelain", "--", "code/projects", "code/infra/export_projects.py"):
         raise ValueError("Commit project sources and exporter before exporting")
     replacements = {}
     for slug in SLUGS:
-        prefix = f"projects/{slug}/"
+        prefix = f"code/projects/{slug}/"
         names = git(repo, "ls-tree", "-rz", "--name-only", revision, "--", prefix)
         names = [name.decode() for name in names.split(b"\0") if name]
         if not names:
@@ -72,10 +72,10 @@ def export(repo, site):
         config["routes"][download] = {"file": output.relative_to(site).as_posix(),
                                        "content_type": "application/zip", "noindex": True}
         replacements[manifest["download_url"]] = download
-        github = f"{REPOSITORY}/tree/{revision}/projects/{slug}"
+        github = f"{REPOSITORY}/tree/{revision}/code/projects/{slug}"
         manifest.update(files=files, download_url=download, download_sha256=digest,
                         maintained_source={"repository": REPOSITORY, "revision": revision,
-                                           "path": f"projects/{slug}", "url": github})
+                                           "path": f"code/projects/{slug}", "url": github})
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         for project in index["projects"]:
             if project["id"] == slug:
@@ -106,4 +106,4 @@ if __name__ == "__main__":
     parser.add_argument("--site", required=True, type=Path,
                         help="Website content folder containing site.json or routes.json")
     args = parser.parse_args()
-    print(export(Path(__file__).resolve().parents[1], args.site))
+    print(export(Path(__file__).resolve().parents[2], args.site))

@@ -23,10 +23,10 @@ Git is the editing home for these experiment sources. Drive remains the editing
 home for website prose, pages, and routes. Site-hosted source files and ZIPs are
 exports of committed Git content, not separate editing copies.
 
-After committing source changes, export into the website content folder:
+From the repository root, after committing source changes, export into the website content folder:
 
 ```sh
-python3 scripts/export_projects.py --site /path/to/Website
+python3 code/infra/export_projects.py --site /path/to/Website
 ```
 
 The exporter refreshes source files, manifests, GitHub links, and deterministic
