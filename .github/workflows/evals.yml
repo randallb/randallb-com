@@ -15,6 +15,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 -m unittest discover -s code/apps/eval-runner -p 'test_*.py' -v
+      - run: python3 -m unittest discover -s code/apps/invoice-cwr -p 'test_*.py' -v
       - run: code/bin/rbdc --help && code/bin/rbdc evals --help
   nix:
     runs-on: ubuntu-24.04-arm
