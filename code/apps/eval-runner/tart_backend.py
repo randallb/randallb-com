@@ -45,16 +45,18 @@ class Machine:
     def machine_path(self):
         return Path(self.record['tart_home']) / 'vms' / self.record['machine']
 
-    def call(self, args, timeout=30, check=True, stream=False, cancelling=True):
+    def call(self, args, timeout=30, check=True, stream=False, cancelling=True, input_path=None):
         self.sequence += 1
         output = self.directory / f'backend-{self.sequence:03d}-{args[0]}'
         entry = {'argv': args, 'started': time.time()}
+        if input_path:
+            entry['stdin_sha256'] = vm.digest(input_path)
         self.record.setdefault('operations', []).append(entry)
         self.persist()
         try:
             status, stdout, stderr = vm.command([self.record['backend'], *args], timeout,
                                                output=output, stream=stream, cancelling=cancelling,
-                                               environment=self.environment)
+                                               environment=self.environment, input_path=input_path)
             entry['exit_status'] = status
             if status and check:
                 raise RuntimeError(f'Tart {args[0]} failed ({status}): {stderr.decode(errors="replace")[-2000:]}')
@@ -215,6 +217,11 @@ def run(args, source):
             home.mkdir(parents=True, exist_ok=True, mode=0o700)
             if shutil.disk_usage(home).free < 40 * vm.GIB:
                 raise RuntimeError('at least 40 GiB free disk required for macOS image and writable state')
+            codex = None
+            if getattr(args, 'with_codex', False):
+                from codex_payload import verify
+                codex = verify(args.codex_payload)
+                report['inputs'] = {'codex': codex['receipt']}
             identity = uuid.uuid4().hex
             owner = {'schema': 1, 'vm_type': 'tart', 'kind': 'run', 'id': identity,
                      'machine': 'rbdc-evals-tart-' + identity, 'backend': backend,
@@ -226,7 +233,7 @@ def run(args, source):
             machine = Machine(directory, owner)
             machine.persist()
             report.update(run_id=identity, machine=owner['machine'], backend_version=VERSION,
-                          inputs={'image': image, 'fixtures': {}}, resources=owner['configuration'])
+                          inputs={'image': image, 'fixtures': {}, **report.get('inputs', {})}, resources=owner['configuration'])
             # One workload per dedicated Tart home; no persistent local base VM.
             with vm.lock(home / 'workload-lock'):
                 try:
@@ -243,10 +250,15 @@ def run(args, source):
                     if system.strip() != b'Darwin arm64':
                         raise RuntimeError('expected macOS ARM64 guest identity')
                     report['guest_system'] = system.decode().strip()
+                    if codex:
+                        from codex_payload import install
+                        report['outcome'] = 'provisioning_failure'
+                        report['codex_installation'] = install(machine, codex)
+                        report['outcome'] = 'transport_failure'
                     # A retained guest completion marker distinguishes guest status from transport failure.
                     marker = '/private/tmp/rbdc-' + identity + '.exit'
                     script = ('cd /private/tmp || exit 125; umask 077; '
-                              '/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin '
+                              '/usr/bin/env -i PATH=/private/tmp/rbdc-tools/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin '
                               'HOME=/private/tmp LANG=en_US.UTF-8 "$@"; status=$?; '
                               'printf "%s\\n" "$status" > ' + marker + '; exit "$status"')
                     code, _, _, output = machine.call(['exec', owner['machine'], '/bin/sh', '-c', script, 'rbdc', *argv],

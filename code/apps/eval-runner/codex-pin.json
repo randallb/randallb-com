@@ -1,0 +1,10 @@
+{
+  "name": "codex",
+  "version": "0.169.0",
+  "target": "aarch64-apple-darwin",
+  "release": "https://github.com/openai/codex/releases/tag/rust-v0.169.0",
+  "url": "https://github.com/openai/codex/releases/download/rust-v0.169.0/codex-aarch64-apple-darwin.tar.gz",
+  "sha256": "7f4c49c80bae1d0b4e347acfcdf11faa3475d87ae5e65a5eb1261d3c358145ee",
+  "archive_member": "codex-aarch64-apple-darwin",
+  "expected_version": "codex-cli 0.169.0"
+}

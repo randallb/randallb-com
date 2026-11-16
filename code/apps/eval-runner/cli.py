@@ -23,6 +23,8 @@ def source_record():
 
 
 def run(args):
+    if getattr(args, "with_codex", False) and getattr(args, "vm_type", "smolvm") != "tart":
+        raise RuntimeError("--with-codex currently supports macOS Tart guests only")
     if getattr(args, "vm_type", "smolvm") == "tart":
         from tart_backend import run as run_tart
         return run_tart(args, source_record())
@@ -145,6 +147,8 @@ def main():
     commands = evals.add_subparsers(dest='action', required=True)
     runner = commands.add_parser('run', help='execute argv in a fresh owned VM')
     runner.add_argument('--vm-type', choices=['smolvm', 'tart'], default='smolvm', help='VM implementation; --backend remains the SmolVM executable')
+    runner.add_argument('--with-codex', action='store_true', help='install pinned Codex CLI in the fresh macOS guest; no authentication')
+    runner.add_argument('--codex-payload', default=os.environ.get('RBDC_CODEX_PAYLOAD'), help='verified Nix-built Codex payload directory')
     runner.add_argument('--tart', default=os.environ.get('RBDC_TART', 'tart'), help='Tart executable (requires 2.41.1)')
     runner.add_argument('--tart-home', default=os.environ.get('RBDC_TART_HOME', '.rbdc-evals/tart'), help='dedicated Tart state/cache directory')
     runner.add_argument('--macos-image', help='digest-pinned OCI macOS image; uses the documented default when omitted')

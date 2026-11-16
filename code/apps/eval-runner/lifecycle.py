@@ -71,13 +71,14 @@ def backend_path(value):
     return str(Path(path).resolve())
 
 
-def command(argv, timeout=90, output=None, stream=False, cancelling=True, cwd=None, environment=None):
+def command(argv, timeout=90, output=None, stream=False, cancelling=True, cwd=None, environment=None, input_path=None):
     """Drain byte streams, bound process groups, capture partial output on cancel."""
     env = {key: os.environ[key] for key in ('HOME', 'PATH', 'TMPDIR') if key in os.environ}
     if environment:
         env.update(environment)
-    child = subprocess.Popen(argv, env=env, cwd=cwd, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    with (open(input_path, "rb") if input_path else contextlib.nullcontext(subprocess.DEVNULL)) as input_handle:
+        child = subprocess.Popen(argv, env=env, cwd=cwd, stdin=input_handle,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     readers = selectors.DefaultSelector()
     readers.register(child.stdout, selectors.EVENT_READ, 0)
     readers.register(child.stderr, selectors.EVENT_READ, 1)

@@ -232,3 +232,64 @@ python3 code/apps/eval-runner/acceptance_tart.py --output /path/to/new/evidence
 It exercises Darwin identity, stdout/stderr, host-environment/mount boundaries,
 failed IPv4/IPv6 egress, reset between clones, tricky argv, guest exits 7/124/127,
 timeout, Ctrl-C and forced-kill recovery. Evidence stays outside tracked source.
+
+
+## First harness: Codex CLI in macOS guests
+
+The installation-only increment provisions **Codex CLI 0.169.0** in a fresh
+macOS guest, without login, host account state or a model call:
+
+```sh
+direnv allow
+direnv exec . rbdc evals run --vm-type tart --with-codex -- codex --version
+# Inspect CLI help without authenticating:
+direnv exec . rbdc evals run --vm-type tart --with-codex -- codex --help
+```
+
+On Apple Silicon macOS, the Nix-packaged `rbdc` supplies `RBDC_CODEX_PAYLOAD`
+to its own process. The root flake also exposes `evals-codex-payload`; the
+app-local `codex-payload.nix` and `codex-pin.json` declare the official upstream
+ARM64 macOS release URL, exact version and SHA-256. Nix verifies the archive
+before constructing a payload directory containing only that archive and its
+public manifest. The existing root lock supplies Nixpkgs; no second flake or
+guest Nix bootstrap is introduced. Other host platforms do not expose the
+macOS payload or claim guest harness support.
+
+For the source entry point, first run
+`nix build .#evals-codex-payload --no-link --print-out-paths`, then pass the
+printed directory as `--codex-payload /nix/store/...` alongside `--with-codex`.
+An explicitly supplied `RBDC_CODEX_PAYLOAD` may also select that directory;
+the runner rejects manifests or archive checksums differing from its own pin.
+A host-side `codex` executable is not used or implicitly copied.
+
+After normal fresh-VM boot, provisioning checks that its guest installation
+path is absent, verifies the host archive, transfers the archive over
+`tart exec -i` stdin, and verifies the received archive and installed executable
+checksums inside the guest. The original release binary is not patched or
+stripped. Installation goes to `/private/tmp/rbdc-tools/bin/codex`, placed on
+the command's declared PATH. A version check must match `codex-cli 0.169.0`
+before the requested command runs. No host mounts, extra disks, guest network
+access, SSH transport or credentials are needed. Host Nix acquisition may use
+the network to fetch the public pinned release.
+
+`codex-installation.json` and `result.json` retain release URL, archive and
+binary hashes, expected/observed version, transfer method and guest path.
+Backend operation records hash stdin without retaining a duplicate payload.
+A missing/invalid payload fails preparation before a VM is created. A transfer,
+installation or version-check failure reports `provisioning_failure` and still
+runs owned-VM cleanup; cleanup failure remains the overall failure. Every run
+starts from the unchanged pinned macOS base, so opting into Codex does not
+modify the cache or subsequent guests. `--with-codex` is rejected for Linux.
+
+Actual installation acceptance requires the Nix payload path explicitly:
+
+```sh
+python3 code/apps/eval-runner/acceptance_codex.py \
+  --payload /nix/store/...-rbdc-codex-payload-0.169.0 \
+  --output /path/to/new/evidence
+```
+
+This checks two fresh installs with matching provenance/version, offline CLI
+help, absent host secret/auth/mounts, blocked egress, a subsequent unprovisioned
+reset, and a real-VM injected transfer failure with verified cleanup. It does
+not log in, select a model, run a coding task or provision Claude Code/Linux.
