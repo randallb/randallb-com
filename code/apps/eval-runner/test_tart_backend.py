@@ -80,6 +80,28 @@ class TartTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'backend identity changed'):
             tart.recover(self.root)
 
+    def test_shared_network_uses_builtin_attachment_and_offline_keeps_sink(self):
+        for mode in ('shared-nat', 'discard-only-socket'):
+            with self.subTest(mode=mode):
+                self.owner['configuration'] = {'network': mode}
+                machine = tart.Machine(self.root, self.owner)
+                try:
+                    with patch.object(machine, 'validate'), patch.object(machine, 'call', return_value=(0, b'', b'', None)), patch.object(tart.subprocess, 'Popen') as launch:
+                        launch.return_value.pid = 12345
+                        launch.return_value.poll.return_value = None
+                        machine.start(1)
+                    argv = launch.call_args.args[0]
+                    self.assertEqual('--net-fd' in argv, mode == 'discard-only-socket')
+                    self.assertEqual(bool(launch.call_args.kwargs['pass_fds']), mode == 'discard-only-socket')
+                    self.assertNotIn('--net-softnet', argv)
+                    self.assertNotIn('--dir', argv)
+                    self.assertIn('--no-clipboard', argv)
+                finally:
+                    for sock in machine.sockets:
+                        sock.close()
+                    for handle in machine.logs:
+                        handle.close()
+
     def test_tart_state_is_explicit_and_auto_pruning_disabled(self):
         with patch.object(vm, 'command', return_value=(0, b'', b'')) as command:
             self.machine.call(['list', '--format', 'json'])
