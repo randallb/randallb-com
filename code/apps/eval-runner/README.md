@@ -250,8 +250,8 @@ On Apple Silicon macOS, the Nix-packaged `rbdc` supplies `RBDC_CODEX_PAYLOAD`
 to its own process. The root flake also exposes `evals-codex-payload`; the
 app-local `codex-payload.nix` and `codex-pin.json` declare the official upstream
 ARM64 macOS release URL, exact version and SHA-256. Nix verifies the archive
-before constructing a payload directory containing only that archive and its
-public manifest. The existing root lock supplies Nixpkgs; no second flake or
+before constructing a payload directory containing the CLI archive, the same-version
+code-mode-host archive, and their public manifest. The existing root lock supplies Nixpkgs; no second flake or
 guest Nix bootstrap is introduced. Other host platforms do not expose the
 macOS payload or claim guest harness support.
 
@@ -263,10 +263,11 @@ the runner rejects manifests or archive checksums differing from its own pin.
 A host-side `codex` executable is not used or implicitly copied.
 
 After normal fresh-VM boot, provisioning checks that its guest installation
-path is absent, verifies the host archive, transfers the archive over
-`tart exec -i` stdin, and verifies the received archive and installed executable
-checksums inside the guest. The original release binary is not patched or
-stripped. Installation goes to `/private/tmp/rbdc-tools/bin/codex`, placed on
+path is absent, verifies the host archive, transfers both pinned archives over
+`tart exec -i` stdin, and verifies each received archive and installed executable
+checksum inside the guest. The original release binary is not patched or
+stripped. The CLI and `codex-code-mode-host` are installed together under
+`/private/tmp/rbdc-tools/bin`, placed on
 the command's declared PATH. A version check must match `codex-cli 0.169.0`
 before the requested command runs. No host mounts, extra disks, guest network
 access, SSH transport or credentials are needed. Host Nix acquisition may use
@@ -355,3 +356,49 @@ python3 code/apps/eval-runner/acceptance_interactive.py \
 This verifies input, 24x80 to 43x119 resizing, Ctrl-C followed by continued shell
 use, exit 7, shell EOF, timeout, host cancellation, host terminal settings
 restoration, VM removal and the Codex welcome screen exited without signing in.
+
+
+## Authenticated model proof
+
+The agreed [scope and anti-goals](AUTH-PROOF-SCOPE.md) govern this experiment.
+Copy the current host Codex auth into a disposable guest and make one request:
+
+```sh
+direnv exec . rbdc evals run --vm-type tart --reuse-host-auth -- codex exec --skip-git-repo-check 'Reply with exactly AUTH_PROOF_OK.'
+# Or use an interactive Codex terminal:
+direnv exec . rbdc evals run --vm-type tart --reuse-host-auth --interactive -- codex --no-daemon
+```
+
+`--reuse-host-auth` enables Codex installation and Tart shared networking. It
+reads `$CODEX_HOME/auth.json`, falling back to `~/.codex/auth.json`; use
+`--codex-auth-home` to select an explicit directory. The source entry point
+also requires the pinned `--codex-payload` as described above.
+
+Credentials travel on guest-agent stdin into a private guest CODEX_HOME.
+The host file is unchanged and guest auth is removed with the disposable VM.
+There is no refresh writeback, reusable guest cache, or automatic sign-in.
+Shared networking permits host/LAN/internet access with no custom helper;
+default runs remain offline. `--network shared` can also be used independently.
+Interactive terminal input/output is not captured; noninteractive command
+output and lifecycle/cleanup results remain in the run directory.
+
+
+## One end-to-end coding eval
+
+Build the pinned payload, then run one invoice-total coding task:
+
+```sh
+nix build .#evals-codex-payload --no-link --print-out-paths
+python3 code/apps/eval-runner/acceptance_eval.py --payload /nix/store/... --output /path/to/new/evidence
+```
+
+This uses the current host auth copy, shared networking, and a fresh guest.
+Codex reads the task and example CSV, implements a POSIX shell CLI, and runs
+its own checks. The runner then grades five exact-output cases: the example,
+header-only input, blank lines, zero values, and a larger total. A failed case
+exits nonzero. The runner exports the solution through captured guest stdout
+before normal VM deletion; the host saves `invoice-total.sh`, its SHA-256,
+`eval-result.json`, task, grading cases, transcripts and lifecycle records.
+Success requires every case, a saved artifact, guest exit 0 and verified VM
+removal. This small task proves the complete path; it is not a broad coding
+benchmark. No guest downloads are needed to provision coding tools.

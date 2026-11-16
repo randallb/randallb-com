@@ -23,6 +23,13 @@ def source_record():
 
 
 def run(args):
+    if getattr(args, "reuse_host_auth", False):
+        if args.vm_type != "tart":
+            raise RuntimeError("--reuse-host-auth requires --vm-type tart")
+        args.with_codex = True
+        args.network = "shared"
+    if getattr(args, "network", "offline") == "shared" and args.vm_type != "tart":
+        raise RuntimeError("--network shared currently supports Tart guests only")
     if getattr(args, "interactive", False) and getattr(args, "vm_type", "smolvm") != "tart":
         raise RuntimeError("--interactive currently supports macOS Tart guests only")
     if getattr(args, "with_codex", False) and getattr(args, "vm_type", "smolvm") != "tart":
@@ -150,6 +157,9 @@ def main():
     runner = commands.add_parser('run', help='execute argv in a fresh owned VM')
     runner.add_argument('--vm-type', choices=['smolvm', 'tart'], default='smolvm', help='VM implementation; --backend remains the SmolVM executable')
     runner.add_argument('-it', '--interactive', action='store_true', help='attach terminal input/output to a macOS guest PTY')
+    runner.add_argument('--reuse-host-auth', action='store_true', help='copy current CODEX_HOME auth.json into disposable Tart guest; enables Codex and shared networking')
+    runner.add_argument('--codex-auth-home', help='override host auth source; defaults to current CODEX_HOME or ~/.codex')
+    runner.add_argument('--network', choices=['offline', 'shared'], default='offline', help='Tart guest networking; shared permits host/LAN/internet access')
     runner.add_argument('--with-codex', action='store_true', help='install pinned Codex CLI in the fresh macOS guest; no authentication')
     runner.add_argument('--codex-payload', default=os.environ.get('RBDC_CODEX_PAYLOAD'), help='verified Nix-built Codex payload directory')
     runner.add_argument('--tart', default=os.environ.get('RBDC_TART', 'tart'), help='Tart executable (requires 2.41.1)')

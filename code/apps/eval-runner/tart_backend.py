@@ -1,4 +1,4 @@
-"""Disposable macOS guests. No shared host folders, NAT or SSH transport."""
+"""Disposable macOS guests. No shared host folders or SSH transport; shared NAT is opt-in."""
 import json
 import os
 from pathlib import Path
@@ -93,32 +93,40 @@ class Machine:
 
     def start(self, boot_timeout):
         self.validate()
-        guest, sink = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
-        self.sockets = [guest, sink]
-        sink.settimeout(.5)
-
-        def discard():
-            while True:
-                try:
-                    sink.recv(65536)
-                except socket.timeout:
-                    continue
-                except OSError:
-                    return
-
-        threading.Thread(target=discard, daemon=True).start()
         args = [self.record['backend'], 'run', self.record['machine'], '--no-graphics',
-                '--no-audio', '--no-usb-accessories', '--no-clipboard', '--net-fd', str(guest.fileno())]
+                '--no-audio', '--no-usb-accessories', '--no-clipboard']
+        guest = None
+        if self.record['configuration']['network'] == 'shared-nat':
+            # Tart's default network attachment is shared NAT. No helper needed.
+            passed_fds = ()
+        else:
+            guest, sink = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
+            self.sockets = [guest, sink]
+            sink.settimeout(.5)
+
+            def discard():
+                while True:
+                    try:
+                        sink.recv(65536)
+                    except socket.timeout:
+                        continue
+                    except OSError:
+                        return
+
+            threading.Thread(target=discard, daemon=True).start()
+            args += ['--net-fd', str(guest.fileno())]
+            passed_fds = (guest.fileno(),)
         self.record['launch_argv'] = args
         self.persist()
         self.logs = [(self.directory / ('vm-' + suffix)).open('wb') for suffix in ('stdout', 'stderr')]
         env = {key: os.environ[key] for key in ('HOME', 'PATH', 'TMPDIR') if key in os.environ}
         env.update(self.environment)
         self.process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=self.logs[0], stderr=self.logs[1],
-                                        env=env, pass_fds=(guest.fileno(),), start_new_session=True)
+                                        env=env, pass_fds=passed_fds, start_new_session=True)
         self.record['launch_pid'] = self.process.pid
         self.persist()
-        guest.close()
+        if guest is not None:
+            guest.close()
         deadline = time.monotonic() + boot_timeout
         while time.monotonic() < deadline:
             if vm.interrupted:
@@ -228,13 +236,17 @@ def run(args, source):
                 from codex_payload import verify
                 codex = verify(args.codex_payload)
                 report['inputs'] = {'codex': codex['receipt']}
+            auth_path = None
+            if getattr(args, "reuse_host_auth", False):
+                from host_auth import source
+                auth_path = source(args.codex_auth_home)
             identity = uuid.uuid4().hex
             owner = {'schema': 1, 'vm_type': 'tart', 'kind': 'run', 'id': identity,
                      'machine': 'rbdc-evals-tart-' + identity, 'backend': backend,
                      'backend_sha256': vm.digest(backend), 'backend_version': VERSION,
                      'tart_home': str(home), 'image': image, 'mutation_started': False,
                      'configuration': {'cpus': args.cpus, 'memory_mib': args.memory,
-                                       'network': 'discard-only-socket', 'mounts': 0,
+                                       'network': 'shared-nat' if getattr(args, 'network', 'offline') == 'shared' else 'discard-only-socket', 'mounts': 0,
                                        'clipboard': False, 'audio': False, 'usb': False}}
             machine = Machine(directory, owner)
             machine.persist()
@@ -261,12 +273,19 @@ def run(args, source):
                         report['outcome'] = 'provisioning_failure'
                         report['codex_installation'] = install(machine, codex)
                         report['outcome'] = 'transport_failure'
+                    auth_env = ''
+                    if auth_path is not None:
+                        from host_auth import install as install_auth, GUEST_HOME
+                        report['outcome'] = 'authentication_failure'
+                        report['authentication'] = install_auth(machine, auth_path)
+                        auth_env = 'CODEX_HOME=' + GUEST_HOME + ' '
+                        report['outcome'] = 'transport_failure'
                     # A retained guest completion marker distinguishes guest status from transport failure.
                     marker = '/private/tmp/rbdc-' + identity + '.exit'
                     term = ('TERM=' + shlex.quote(os.environ.get('TERM', 'xterm-256color')) + ' ') if interactive else ''
                     script = ('cd /private/tmp || exit 125; umask 077; '
                               '/usr/bin/env -i PATH=/private/tmp/rbdc-tools/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin '
-                              'HOME=/private/tmp LANG=en_US.UTF-8 ' + term + '"$@"; status=$?; '
+                              'HOME=/private/tmp LANG=en_US.UTF-8 ' + term + auth_env + '"$@"; status=$?; '
                               'printf "%s\\n" "$status" > ' + marker + '; exit "$status"')
                     command = ['/bin/sh', '-c', script, 'rbdc', *argv]
                     if interactive:
