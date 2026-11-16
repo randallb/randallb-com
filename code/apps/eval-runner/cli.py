@@ -23,6 +23,8 @@ def source_record():
 
 
 def run(args):
+    if getattr(args, "interactive", False) and getattr(args, "vm_type", "smolvm") != "tart":
+        raise RuntimeError("--interactive currently supports macOS Tart guests only")
     if getattr(args, "with_codex", False) and getattr(args, "vm_type", "smolvm") != "tart":
         raise RuntimeError("--with-codex currently supports macOS Tart guests only")
     if getattr(args, "vm_type", "smolvm") == "tart":
@@ -147,6 +149,7 @@ def main():
     commands = evals.add_subparsers(dest='action', required=True)
     runner = commands.add_parser('run', help='execute argv in a fresh owned VM')
     runner.add_argument('--vm-type', choices=['smolvm', 'tart'], default='smolvm', help='VM implementation; --backend remains the SmolVM executable')
+    runner.add_argument('-it', '--interactive', action='store_true', help='attach terminal input/output to a macOS guest PTY')
     runner.add_argument('--with-codex', action='store_true', help='install pinned Codex CLI in the fresh macOS guest; no authentication')
     runner.add_argument('--codex-payload', default=os.environ.get('RBDC_CODEX_PAYLOAD'), help='verified Nix-built Codex payload directory')
     runner.add_argument('--tart', default=os.environ.get('RBDC_TART', 'tart'), help='Tart executable (requires 2.41.1)')
@@ -158,7 +161,7 @@ def main():
     runner.add_argument('--image', default=os.environ.get('RBDC_EVALS_IMAGE', '.rbdc-evals/builder/image.tar.gz'))
     runner.add_argument('--backend', default=os.environ.get('RBDC_SMOLVM', 'smolvm'))
     runner.add_argument('--state', default=os.environ.get('RBDC_EVALS_STATE', '.rbdc-evals'))
-    runner.add_argument('--timeout', type=int, default=300, help='guest command deadline in seconds (1..86400)')
+    runner.add_argument('--timeout', type=int, default=None, help='guest deadline in seconds (1..86400; default 300, or 3600 interactive)')
     runner.add_argument('command', nargs=argparse.REMAINDER)
     runner.set_defaults(function=run)
     recovery = commands.add_parser('recover', help='clean the exact VM in an inactive run/builder record')
@@ -171,10 +174,13 @@ def main():
     builder.add_argument('--backend', default=os.environ.get('RBDC_SMOLVM', 'smolvm'))
     builder.set_defaults(function=build_image)
     args = parser.parse_args()
+    if hasattr(args, 'timeout') and args.timeout is None:
+        args.timeout = 3600 if args.interactive else 300
     if hasattr(args, 'timeout') and not 1 <= args.timeout <= 86400:
         parser.error('--timeout must be between 1 and 86400 seconds')
     signal.signal(signal.SIGINT, vm.on_signal)
     signal.signal(signal.SIGTERM, vm.on_signal)
+    signal.signal(signal.SIGHUP, vm.on_signal)
     try:
         return args.function(args)
     except Exception as error:

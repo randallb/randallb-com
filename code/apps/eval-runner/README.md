@@ -293,3 +293,65 @@ This checks two fresh installs with matching provenance/version, offline CLI
 help, absent host secret/auth/mounts, blocked egress, a subsequent unprovisioned
 reset, and a real-VM injected transfer failure with verified cleanup. It does
 not log in, select a model, run a coding task or provision Claude Code/Linux.
+
+
+## Interactive macOS terminal
+
+From Terminal on this Mac, launch the pinned Codex UI in a fresh guest:
+
+```sh
+direnv exec . rbdc evals run --vm-type tart --with-codex --interactive -- codex --no-daemon
+```
+
+The standalone pinned Codex release uses `--no-daemon` for its interactive UI;
+it has no bundled background-server package. A normal terminal such as Terminal
+or iTerm should supply its real `TERM` value (for example `xterm-256color`).
+Codex rejects `TERM=dumb`. The current offline guest can display the welcome
+and sign-in selector, but provider authentication and model/network access are
+still separate work. No host account is automatically available in the guest.
+
+For an interactive guest shell with Codex installed:
+
+```sh
+direnv exec . rbdc evals run --vm-type tart --with-codex --interactive -- /bin/sh -i
+# Then, inside the guest:
+codex --no-daemon
+# Return to the guest shell, then type exit or Ctrl-D to remove the VM.
+```
+
+`-it` is an alias for `--interactive`. Interactive mode requires foreground controlling-terminal stdin
+and stdout; redirected/piped input is rejected before VM creation. It currently
+supports Tart macOS guests. Tart's guest PTY handles input, terminal dimensions
+and resize events. Ctrl-C reaches the foreground guest process; an interactive
+shell can remain usable afterward. Exiting the command or Ctrl-D at a shell
+prompt ends the run and removes the owned VM. There is no persistent attach
+or reconnect session.
+
+The default interactive command deadline is one hour; `--timeout <seconds>`
+accepts 1..86400 and excludes VM boot/provisioning. Noninteractive mode retains
+its 300-second default. Timeout and host SIGINT/SIGTERM/SIGHUP stop the owned terminal
+client, restore host input/echo settings and common TUI modes, then remove the
+VM. If the terminal disappears, the operation records restoration failure
+separately while preserving the original cancellation/timeout and VM cleanup. Guest exit status is checked against its completion marker just as for
+noninteractive runs. Host SIGKILL cannot run restoration/cleanup; use `stty sane`
+if the terminal is left in raw mode, then the existing `rbdc evals recover`
+command for the retained owner record.
+
+Interactive output is displayed live and is not saved as guest stdout/stderr;
+keystrokes are not recorded. Run metadata, command argv, lifecycle/provisioning
+diagnostics, guest exit status and cleanup results remain in the run directory,
+with `interactive: true` and `output_capture: live_terminal`. Noninteractive
+runs retain their separate captured output streams. Guest networking, host
+mount and credential boundaries are unchanged.
+
+Actual PTY/VM acceptance, with only synthetic test input and transcripts:
+
+```sh
+python3 code/apps/eval-runner/acceptance_interactive.py \
+  --payload /nix/store/...-rbdc-codex-payload-0.169.0 \
+  --output /path/to/new/evidence
+```
+
+This verifies input, 24x80 to 43x119 resizing, Ctrl-C followed by continued shell
+use, exit 7, shell EOF, timeout, host cancellation, host terminal settings
+restoration, VM removal and the Codex welcome screen exited without signing in.

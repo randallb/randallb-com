@@ -5,6 +5,7 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import shlex
 import signal
 import socket
 import subprocess
@@ -183,6 +184,10 @@ def recover(directory):
 
 
 def run(args, source):
+    interactive = getattr(args, "interactive", False)
+    if interactive:
+        from interactive import require_terminal
+        require_terminal()
     argv = args.command[1:] if args.command[:1] == ['--'] else args.command
     if not argv:
         raise RuntimeError('supply a guest command after --')
@@ -193,7 +198,8 @@ def run(args, source):
     directory = state / ('run-' + uuid.uuid4().hex)
     directory.mkdir(mode=0o700)
     report = {'schema': 1, 'vm_type': 'tart', 'argv': argv, 'source': source,
-              'guest_exit_status': None, 'outcome': 'preparation_failure'}
+              'guest_exit_status': None, 'outcome': 'preparation_failure',
+              'interactive': interactive, 'output_capture': 'live_terminal' if interactive else 'separate_streams'}
     machine = None
     print(f'rbdc: run records: {directory}', file=sys.stderr, flush=True)
     with vm.lock(directory):
@@ -257,14 +263,21 @@ def run(args, source):
                         report['outcome'] = 'transport_failure'
                     # A retained guest completion marker distinguishes guest status from transport failure.
                     marker = '/private/tmp/rbdc-' + identity + '.exit'
+                    term = ('TERM=' + shlex.quote(os.environ.get('TERM', 'xterm-256color')) + ' ') if interactive else ''
                     script = ('cd /private/tmp || exit 125; umask 077; '
                               '/usr/bin/env -i PATH=/private/tmp/rbdc-tools/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin '
-                              'HOME=/private/tmp LANG=en_US.UTF-8 "$@"; status=$?; '
+                              'HOME=/private/tmp LANG=en_US.UTF-8 ' + term + '"$@"; status=$?; '
                               'printf "%s\\n" "$status" > ' + marker + '; exit "$status"')
-                    code, _, _, output = machine.call(['exec', owner['machine'], '/bin/sh', '-c', script, 'rbdc', *argv],
-                                                       timeout=args.timeout, check=False, stream=True)
-                    for suffix in ('stdout', 'stderr'):
-                        shutil.copyfile(str(output) + '.' + suffix, directory / ('guest-' + suffix))
+                    command = ['/bin/sh', '-c', script, 'rbdc', *argv]
+                    if interactive:
+                        from interactive import execute
+                        print('rbdc: interactive session; exit the guest command to remove its VM.', file=sys.stderr, flush=True)
+                        code = execute(machine, command, args.timeout)
+                    else:
+                        code, _, _, output = machine.call(['exec', owner['machine'], *command],
+                                                           timeout=args.timeout, check=False, stream=True)
+                        for suffix in ('stdout', 'stderr'):
+                            shutil.copyfile(str(output) + '.' + suffix, directory / ('guest-' + suffix))
                     _, completed, _, _ = machine.call(['exec', owner['machine'], '/bin/cat', marker])
                     guest_status = int(completed.strip())
                     if not 0 <= guest_status <= 255 or guest_status != code:
