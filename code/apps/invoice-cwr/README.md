@@ -140,3 +140,15 @@ missing or incomplete execution evidence never produces a passing grade.
 `bundle.json` records source hashes; setup and actions verify them. These hashes
 detect changed bundle contents, not publisher identity. Install a reviewed local
 bundle. Rebuild from the maintained runner instead of editing the installed copy.
+
+## Durable shared-drive home
+
+Keep scenarios, saved runs and caller receipts in a shared project folder; keep
+VM disks and CWR state on the Mac. The standalone launcher source is
+`shared_drive_invoke.py`: copy it into the shared folder as `invoke`. It expects
+the local installation at `~/code/evals-local-runtime/scenario-cwr/invoke`. Link
+that installation's `scenarios/` and `runs/` to their shared-folder counterparts,
+preserving existing data first. The launcher saves caller receipts in the shared
+folder's `invocations/` and supervises parent death/cancellation until the local
+launcher exits. Scenario contents, generated results, VM disks and credentials
+are runtime data and are not repository source.
