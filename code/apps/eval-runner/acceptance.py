@@ -64,6 +64,11 @@ def main():
     assert json.loads(stdout) == arguments
     failure, _, _ = invoke('exit7', ['sh', '-c', 'echo expected-error >&2; exit 7'], 7)
     assert failure['guest_exit_status'] == 7 and failure['outcome'] == 'command_failure'
+    timed_out, stdout, _ = invoke('timeout', ['sh', '-c', 'echo timeout-ready; sleep 10'], 1, options=['--timeout', '1'])
+    assert timed_out['outcome'] == 'timeout' and timed_out['guest_exit_status'] is None
+    assert b'timeout-ready' in stdout
+    exited124, _, _ = invoke('exit124', ['sh', '-c', 'exit 124'], 124)
+    assert exited124['outcome'] == 'command_failure' and exited124['guest_exit_status'] == 124
     invoke('invalid-command', ['rbdc-executable-does-not-exist'], 127)
     invoke('missing-backend', ['true'], 1, options=['--backend', '/rbdc-missing-backend'])
     image = output / 'invalid-image.tar'

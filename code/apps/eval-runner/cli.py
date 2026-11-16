@@ -68,7 +68,16 @@ def run(args):
                 args.timeout, check=False, stream=True)
             report['backend_exec_status'] = backend_status
             guest_dir = f'{owner["machine"]}:/tmp/rbdc-{owner["id"]}'
-            for filename in ('result.json', 'stdout', 'stderr'):
+            try:
+                machine.copy(f'{guest_dir}/result.json', directory / 'guest-result.json')
+            except RuntimeError as error:
+                # SmolVM's timeout and ordinary guest exit 124 share a code.
+                # A completed guest result distinguishes the latter.
+                if backend_status == 124:
+                    report['timeout_seconds'] = args.timeout
+                    raise TimeoutError(f'guest command exceeded {args.timeout}s; partial output retained') from error
+                raise
+            for filename in ('stdout', 'stderr'):
                 machine.copy(f'{guest_dir}/{filename}', directory / ('guest-' + filename))
             result = json.loads((directory / 'guest-result.json').read_text())
             if result.get('token') != owner['id'] or result.get('argv') != argv or result.get('system', [''])[0] != 'Linux':

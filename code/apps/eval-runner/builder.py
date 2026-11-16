@@ -13,7 +13,7 @@ NIX_URL = 'https://releases.nixos.org/nix/nix-2.34.1/nix-2.34.1-aarch64-linux.ta
 NIX_SHA256 = '81aed0600605ee0494d2cd82c441b1ff6ecad7d3efcc6d4505a70aefc67b865c'
 SOURCE_PATHS = ['flake.nix', 'flake.lock', 'code/rust-toolchain.toml'] + [
     'code/apps/eval-runner/' + name for name in
-    ('default.nix', 'image.nix', 'guest.py', 'cli.py', 'lifecycle.py', 'builder.py', 'bootstrap-builder.sh')]
+    ('default.nix', 'shell.nix', 'image.nix', 'guest.py', 'cli.py', 'lifecycle.py', 'builder.py', 'bootstrap-builder.sh')]
 
 
 def package(root, state):

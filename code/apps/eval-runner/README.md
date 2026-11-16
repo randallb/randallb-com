@@ -128,7 +128,7 @@ direnv exec . python3 code/apps/eval-runner/acceptance.py --output /path/to/new/
 
 Focused tests inject lifecycle faults; the live acceptance script uses the
 public CLI and actual VMs for stdout/stderr, reset, argv, exit 7, missing backend,
-invalid image/command, Ctrl-C, forced-kill recovery and workload boundaries.
+invalid image/command, guest timeout versus exit124, Ctrl-C, forced-kill recovery and workload boundaries.
 Mocked lifecycle tests are not evidence of guest execution. The TeamWorkspace
 superbuild brief is maintained outside source at `TeamWorkspace/Projects/rbdc-evals/SUPERBUILD.md`; the PR carries
 selected current-revision evidence and known limits. Source notices are in

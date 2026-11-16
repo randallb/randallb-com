@@ -51,11 +51,11 @@
               pkgs.tmux
             ];
           };
-          evals = pkgs.mkShell {
-            packages = [ pkgs.python3 pkgs.git pkgs.nix
-              (import ./code/apps/eval-runner/default.nix {
-                inherit pkgs; smolvm = smolvm.packages.${system}.smolvm;
-              }) ];
+          evals = import ./code/apps/eval-runner/shell.nix {
+            inherit pkgs;
+            rbdc = import ./code/apps/eval-runner/default.nix {
+              inherit pkgs; smolvm = smolvm.packages.${system}.smolvm;
+            };
           };
         });
     };
