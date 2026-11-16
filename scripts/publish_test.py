@@ -33,6 +33,29 @@ class PublishTests(unittest.TestCase):
         (self.source / 'private.txt').write_text('unpublished')
         self.assertEqual(build(self.source, self.output)['revision'], second['revision'])
 
+    def test_analytics_preserved_in_html_only_and_changes_revision(self):
+        (self.source / 'page.html').write_text('<html><head></head><body>hello</body></html>')
+        plain = build(self.source, self.output)
+        self.manifest['posthog'] = {'host': 'https://example.com', 'project_token': 'phc_test'}
+        (self.source / 'file.txt').write_text('raw source')
+        self.manifest['routes']['/raw'] = {'file': 'file.txt', 'content_type': 'text/plain'}
+        self.write_manifest()
+        tracked = build(self.source, self.output)
+        self.assertNotEqual(plain['revision'], tracked['revision'])
+        site = json.loads((self.output / 'site-content.json').read_text())
+        def content(route):
+            return (self.output / 'assets' / site['routes'][route]['asset'].lstrip('/')).read_text()
+        html = content('/')
+        self.assertEqual(html.count('data-randallb-posthog'), 1)
+        self.assertIn('posthog.init("phc_test"', html)
+        self.assertIn('https://example.com', html)
+        self.assertIn('maskAllInputs: true', html)
+        self.assertEqual(content('/raw'), 'raw source')
+        self.manifest['posthog']['host'] = 'http://example.com'
+        self.write_manifest()
+        with self.assertRaises(ValueError):
+            build(self.source, self.output)
+
     def test_escape_and_missing_files_fail_before_build_output(self):
         outside = self.root / 'private.txt'
         outside.write_text('private')

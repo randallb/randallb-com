@@ -87,3 +87,10 @@ files. Existing Git history is preserved. `migration/` may remain locally as an
 ignored historical copy; it is neither the editing source nor a publish input.
 The original Drive code checkout is also preserved. The current publisher update is maintained in the Atlas publication workspace's
 `publisher` checkout; the former editing checkout is preserved.
+
+## Publisher analytics
+
+The publisher accepts optional `site.json` PostHog configuration (`host`,
+`project_token`) and injects `scripts/posthog.js` once per HTML asset.
+The loader masks inputs and labels the environment. Raw source files and
+downloads are unchanged.

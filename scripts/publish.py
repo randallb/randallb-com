@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 import shutil
@@ -45,6 +46,28 @@ def build(source: Path, output: Path):
     if not isinstance(routes, dict) or "/" not in routes:
         raise ValueError("A routes object with a homepage is required")
 
+    analytics = manifest.get("posthog")
+    analytics_tag = None
+    if analytics is not None:
+        if (not isinstance(analytics, dict)
+                or set(analytics) != {"host", "project_token"}
+                or not isinstance(analytics["host"], str)
+                or not isinstance(analytics["project_token"], str)
+                or not re.fullmatch(r"phc_[A-Za-z0-9]+", analytics["project_token"])):
+            raise ValueError("Invalid PostHog configuration")
+        host = urlsplit(analytics["host"])
+        if (host.scheme != "https" or not host.hostname or host.username
+                or host.password or host.query or host.fragment
+                or host.path not in ("", "/")):
+            raise ValueError("PostHog host must be an HTTPS origin")
+        template = (ROOT / "scripts/posthog.js").read_text()
+        hashes["publisher:posthog.js"] = hashlib.sha256(template.encode()).hexdigest()
+        def js_string(value):
+            return json.dumps(value).replace("<", "\\u003c")
+        script = template.replace("__PROJECT_TOKEN__", js_string(analytics["project_token"]))
+        script = script.replace("__API_HOST__", js_string(analytics["host"].rstrip("/")))
+        analytics_tag = '<script data-randallb-posthog>\n' + script + '</script>\n'
+
     def entry(row):
         if not isinstance(row, dict):
             raise ValueError("Expected a file entry")
@@ -56,6 +79,16 @@ def build(source: Path, output: Path):
             raise ValueError("Invalid content type")
         if name not in files:
             data = read_file(name)
+            if analytics_tag is not None and content_type.split(";")[0] == "text/html":
+                html = data.decode("utf-8")
+                if "data-randallb-posthog" in html:
+                    raise ValueError("PostHog must be injected by the publisher only")
+                if not re.search(r"</head\s*>", html, re.I):
+                    raise ValueError("Analytics HTML requires a closing head")
+                data = re.sub(r"</head\s*>", lambda match: analytics_tag + match[0],
+                              html, count=1, flags=re.I).encode("utf-8")
+                if len(data) > MAX_ASSET_BYTES:
+                    raise ValueError("Each static asset must be at most 25 MB")
             files[name] = data
         noindex = row.get("noindex", manifest["noindex"])
         if type(noindex) is not bool:
