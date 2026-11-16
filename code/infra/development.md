@@ -24,3 +24,9 @@ The root shell also exposes `rbdc`, whose `evals` command owns fresh synthetic
 Linux VM runs. See [eval-runner setup and recovery](../apps/eval-runner/README.md).
 App-owned Nix definitions compose the CLI, `evals` shell and ARM64 Linux image
 through root outputs and the single dependency lock.
+
+Intel macOS retains the root shell and task runner, but the pinned SmolVM and
+Deno inputs no longer provide Intel macOS packages. Those tools are omitted
+there; eval VM and publisher execution remain unverified/unsupported on that
+platform. Apple Silicon and Linux pins are unchanged. CI forces every declared
+host package/shell derivation rather than relying only on lazy flake checks.

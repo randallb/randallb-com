@@ -21,8 +21,12 @@ Nix-evaluable; only Apple Silicon macOS running ARM64 guests has live acceptance
 `code/bin/rbdc` is the source entry point; the root Nix shell exposes the packaged
 command. `nix develop .#evals` provides a smaller app shell. The shared root lock
 pins SmolVM tag v1.32.3 (CLI version 1.32.2), including its kernel/virtualization
-inputs. Other backend versions are rejected. Existing installed tools and VMs
-are not replaced.
+inputs. Other backend versions are rejected. SmolVM is included only on platforms
+provided by its pin; Intel macOS has no upstream package and keeps the root
+shell/task runner available without a backend. VM execution is unsupported
+there. The root shell likewise omits the separately pinned Deno package on
+Intel macOS because that input dropped the platform. Existing installed tools
+and VMs are not replaced.
 
 ## Linux image build from a Mac
 

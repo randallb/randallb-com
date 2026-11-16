@@ -23,4 +23,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
       - run: nix flake check --all-systems --no-build
+      - name: Force every declared host derivation
+        run: |
+          for system in aarch64-darwin x86_64-darwin aarch64-linux x86_64-linux; do
+            nix eval --raw ".#packages.$system.rbdc.drvPath"
+            nix eval --raw ".#devShells.$system.default.drvPath"
+            nix eval --raw ".#devShells.$system.evals.drvPath"
+          done
       - run: nix build .#packages.aarch64-linux.evals-image --no-link --print-out-paths

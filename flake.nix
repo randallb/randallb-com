@@ -19,7 +19,7 @@
       packages = nixpkgs.lib.genAttrs systems (system:
         let pkgs = import nixpkgs { inherit system; }; in {
           rbdc = import ./code/apps/eval-runner/default.nix {
-            inherit pkgs; smolvm = smolvm.packages.${system}.smolvm;
+            inherit pkgs; smolvm = smolvm.packages.${system}.smolvm or null;
           };
         } // nixpkgs.lib.optionalAttrs (system == "aarch64-linux") {
           evals-image = import ./code/apps/eval-runner/image.nix { inherit pkgs; };
@@ -38,10 +38,9 @@
           default = pkgs.mkShell {
             packages = [
               (import ./code/apps/eval-runner/default.nix {
-                inherit pkgs; smolvm = smolvm.packages.${system}.smolvm;
+                inherit pkgs; smolvm = smolvm.packages.${system}.smolvm or null;
               })
               rust
-              deno
               pkgs.nodejs_24
               pkgs.python3
               pkgs.pkg-config
@@ -49,12 +48,14 @@
               pkgs.ripgrep
               pkgs.jq
               pkgs.tmux
-            ];
+            ] ++ pkgs.lib.optionals (system != "x86_64-darwin") [ deno ];
+            # The separately pinned Deno nixpkgs input also dropped Intel macOS.
+
           };
           evals = import ./code/apps/eval-runner/shell.nix {
             inherit pkgs;
             rbdc = import ./code/apps/eval-runner/default.nix {
-              inherit pkgs; smolvm = smolvm.packages.${system}.smolvm;
+              inherit pkgs; smolvm = smolvm.packages.${system}.smolvm or null;
             };
           };
         });

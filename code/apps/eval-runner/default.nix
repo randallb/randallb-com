@@ -6,6 +6,6 @@ let
   };
 in pkgs.writeShellApplication {
   name = "rbdc";
-  runtimeInputs = [ pkgs.python3 pkgs.git smolvm ];
+  runtimeInputs = [ pkgs.python3 pkgs.git ] ++ pkgs.lib.optional (smolvm != null) smolvm;
   text = ''exec python3 ${source}/cli.py "$@"'';
 }
