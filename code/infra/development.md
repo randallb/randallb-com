@@ -4,7 +4,7 @@ The root `flake.nix`, `flake.lock` and `.envrc` define the shared development sh
 
 Rust is read from `code/rust-toolchain.toml`. Nixpkgs supplies the native compiler, Python, Node 24/npm and supporting tools; a separate pinned Nixpkgs input supplies Deno 2.9.7. Initial dependency revisions match the wlp-mono reference, without importing its runtime, secrets or company configuration.
 
-`.envrc` watches the lock, flake and Rust pin, and copies only those inputs into ignored `.direnv/shell-source/`. A relative `path:` flake reference supports checkout paths containing spaces. Shell loading uses `--no-update-lock-file`; dependency changes belong in the tracked root lock, not the staged copy.
+`.envrc` watches the lock, flake, Rust pin and explicit eval-runner Nix/Python imports, and copies only those inputs into ignored `.direnv/shell-source/`. A relative `path:` flake reference supports checkout paths containing spaces. Shell loading uses `--no-update-lock-file`; dependency changes belong in the tracked root lock, not the staged copy.
 
 ## Verify changes
 
@@ -19,3 +19,8 @@ direnv exec . sh -c 'cd code/apps/publisher && python3 scripts/cwr-verify.py'
 Update a dependency deliberately with `nix flake update <input-name>` and rerun the checks. Change Rust through its toolchain file. Review the resulting lock diff; do not update dependency revisions merely by entering the shell.
 
 The shell declares Apple Silicon and Intel macOS, and ARM64 and x86-64 Linux. Evaluation on all four platforms does not establish runtime compatibility; local execution has been checked on Apple Silicon macOS. First builds may download compiler packages and language dependencies. Reproducible development tools do not provide filesystem, credential, process or network isolation for eval runs.
+
+The root shell also exposes `rbdc`, whose `evals` command owns fresh synthetic
+Linux VM runs. See [eval-runner setup and recovery](../apps/eval-runner/README.md).
+App-owned Nix definitions compose the CLI, `evals` shell and ARM64 Linux image
+through root outputs and the single dependency lock.

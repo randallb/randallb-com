@@ -14,3 +14,5 @@ migration/
 /code/projects/**/target/
 /code/projects/**/artifacts/
 .direnv/
+
+.rbdc-evals/

@@ -1,5 +1,39 @@
 {
   "nodes": {
+    "libkrun-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790725010,
+        "narHash": "sha256-1kL0sdQP6ijlB2oncKzZcl74qzmE6obiX5Hr6ezuqbc=",
+        "owner": "smol-machines",
+        "repo": "libkrun",
+        "rev": "3285db7404144ed61faf0848bb424c0f82743f41",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smol-machines",
+        "repo": "libkrun",
+        "rev": "3285db7404144ed61faf0848bb424c0f82743f41",
+        "type": "github"
+      }
+    },
+    "libkrunfw-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790794569,
+        "narHash": "sha256-S2hB4SVRGLmur4oIcr21gZ8k7n/iXKvQ7unOH9fbZoU=",
+        "owner": "smol-machines",
+        "repo": "libkrunfw",
+        "rev": "bfb229911374698399dcedcc92019287870759ab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smol-machines",
+        "repo": "libkrunfw",
+        "rev": "bfb229911374698399dcedcc92019287870759ab",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1787753485,
@@ -32,11 +66,28 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1790822859,
+        "narHash": "sha256-69xHQhAeMAD2wDXO7T2pcOZIF9Sga2W+JkmY2a11Ops=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "c59305bab2065cfecc4944690d9eedbb56f3a9fa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
         "nixpkgs-deno": "nixpkgs-deno",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "smolvm": "smolvm"
       }
     },
     "rust-overlay": {
@@ -56,6 +107,27 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "smolvm": {
+      "inputs": {
+        "libkrun-src": "libkrun-src",
+        "libkrunfw-src": "libkrunfw-src",
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1793005275,
+        "narHash": "sha256-2glaQtO+8omJFJM2a9xVSiUGa5uSjroSi4DN9Uzbdhg=",
+        "owner": "smol-machines",
+        "repo": "smolvm",
+        "rev": "d36ff1e30d07b224c83017cc0cc3e7f6f3f3bc7e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smol-machines",
+        "ref": "v1.32.3",
+        "repo": "smolvm",
         "type": "github"
       }
     }

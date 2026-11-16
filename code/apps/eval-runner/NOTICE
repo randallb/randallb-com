@@ -1,0 +1,5 @@
+The image composition and Linux builder bootstrap approach derive from
+getworkloop/wlp-mono experimental/nix-smolvm (observed revision
+8d25305b2b0db968b487cd89cce26837957bda48), Apache License 2.0.
+Copyright the getworkloop/wlp-mono contributors. See LICENSE.wlp-mono.
+SmolVM is a separately pinned upstream dependency, not copied source.

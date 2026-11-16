@@ -1,0 +1,26 @@
+name: Eval runner checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m unittest discover -s code/apps/eval-runner -p 'test_*.py' -v
+      - run: code/bin/rbdc --help && code/bin/rbdc evals --help
+  nix:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check --all-systems --no-build
+      - run: nix build .#packages.aarch64-linux.evals-image --no-link --print-out-paths
