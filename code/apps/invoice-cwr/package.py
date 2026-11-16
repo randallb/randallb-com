@@ -9,7 +9,7 @@ import tarfile
 
 RUNNER_FILES = ('acceptance_eval.py', 'cli.py', 'lifecycle.py', 'builder.py', 'guest.py',
                 'tart_backend.py', 'codex_payload.py', 'codex-pin.json',
-                'interactive.py', 'host_auth.py', 'NOTICE', 'LICENSE.wlp-mono')
+                'interactive.py', 'host_auth.py', 'workspace.py', 'NOTICE', 'LICENSE.wlp-mono')
 
 
 def build(output):
@@ -19,12 +19,13 @@ def build(output):
     runner.mkdir()
     for name in RUNNER_FILES:
         shutil.copyfile(source.parent / 'eval-runner' / name, runner / name)
-    for name in ('install.py', 'action.py', 'invoke.py', 'README.md'):
+    for name in ('install.py', 'action.py', 'invoke.py', 'workflow.py', 'prepare_base.py', 'README.md'):
         shutil.copyfile(source / name, output / name)
+    shutil.copytree(source / 'scenario-template', output / 'scenario-template')
     hashes = {str(f.relative_to(output)): hashlib.sha256(f.read_bytes()).hexdigest()
               for f in sorted(output.rglob('*')) if f.is_file()}
     (output / 'bundle.json').write_text(json.dumps({
-        'format': 'invoice-cwr-local-v1', 'version': '0.1.0',
+        'format': 'invoice-cwr-local-v1', 'version': '0.2.0',
         'platform': 'aarch64-darwin', 'files': hashes}, indent=2) + '\n')
     archive = Path(str(output) + '.tar.gz')
     if archive.exists():

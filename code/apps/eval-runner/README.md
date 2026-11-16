@@ -5,6 +5,21 @@ For the standalone local CWR invoice action, build and install the
 `acceptance_eval.py`; the harness retains all five check outcomes and the
 solution, distinguishing failed evaluations from execution/cleanup errors.
 
+For general Tart folder inputs, pass `--workspace-input DIR` and optionally
+`--workspace-output NEW_DIR` to `evals run`. The command starts in a fresh guest
+copy of the input. Before VM cleanup the output retains `workspace/`, hashes,
+an archive, a readable diff and a change list. Inputs are frozen and hashed before
+VM creation; host originals are untouched. Links/special files are rejected;
+limits are 64 MiB and 4096 entries. Failed commands still export, while interrupted
+or unreachable guests report incomplete export explicitly.
+
+`--prepared-base PATH` (or `RBDC_PREPARED_BASE`) selects a stopped local base
+descriptor made by the invoice pack's `prepare_base.py`. The runner verifies the
+source image, configuration/disk/NVRAM hashes and source lock before cloning.
+Every workload is still a fresh disposable clone. The helper adds a standalone
+guest RPC service to a clean base, avoiding dependence on GUI login, without
+installing Codex or copying host credentials. See the linked pack instructions.
+
 Run a command in a fresh ARM64 Linux VM from the repository development shell:
 
 ```sh

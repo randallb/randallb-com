@@ -3,7 +3,7 @@
 | Home | Responsibility |
 | --- | --- |
 | [apps/eval-runner](apps/eval-runner/README.md) | Fresh Linux VM commands, pinned guest image/build route and recovery via `rbdc evals`. |
-| [apps/invoice-cwr](apps/invoice-cwr/README.md) | Standalone local CWR pack for the five-check invoice coding evaluation, with bundled runner and saved evidence. |
+| [apps/invoice-cwr](apps/invoice-cwr/README.md) | Editable scenario folders, full workspace export/diff, and separate CWR invoice grading/regrading actions. |
 | [apps/publisher](apps/publisher/README.md) | Website Worker, Drive publisher, checks, and site-check CWR declarations. |
 | [projects](projects/README.md) | Independently runnable article experiments and their reproduction instructions. |
 | [infra](infra/README.md) | Repository-wide supporting tools. |

@@ -4,7 +4,7 @@ let
     then import ./codex-payload.nix { inherit pkgs; } else null;
   source = pkgs.lib.fileset.toSource {
     root = ./.;
-    fileset = pkgs.lib.fileset.unions [ ./cli.py ./lifecycle.py ./builder.py ./tart_backend.py ./codex_payload.py ./codex-pin.json ./interactive.py ./host_auth.py ];
+    fileset = pkgs.lib.fileset.unions [ ./cli.py ./lifecycle.py ./builder.py ./tart_backend.py ./codex_payload.py ./codex-pin.json ./interactive.py ./host_auth.py ./workspace.py ];
   };
 in pkgs.writeShellApplication {
   name = "rbdc";
