@@ -9,4 +9,4 @@
 
 Reusable first-party libraries belong in `packages/` when there is an actual shared dependency; no empty package hierarchy is required. Keep project-local helpers with the project. The repository’s Rust toolchain pin is here so descendant Cargo projects inherit it.
 
-Run publisher checks from `apps/publisher/`; other experiments own their commands. Root GitHub workflows set their working directories explicitly. Nix environment and eval harness development follow repository preparation.
+Run publisher checks from `apps/publisher/`; other experiments own their commands. Root GitHub workflows set their working directories explicitly. The root flake and `.envrc` provide the shared development shell. Eval harness and isolated-run environment development are separate work.

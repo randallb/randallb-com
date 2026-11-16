@@ -1,6 +1,6 @@
 # Repository organization
 
-Owner: Randall. November 16, 2026. Implementation: Assistant. Status: file migration complete; local checks verified; CWR runtime verification blocked by missing Cargo.
+Owner: Randall. November 16, 2026. Implementation: Assistant. Status: file migration and local CWR verification complete; root direnv/Nix development shell verified on Apple Silicon macOS.
 
 ## Outcome
 
@@ -23,3 +23,13 @@ CWR setup was attempted through the relocated task and stopped at `cargo: comman
 Actual committed-source export was exercised for all three experiments using temporary synthetic website content: GitHub links use `code/projects/`, public source URLs retain `/projects/`, repeated exports produce identical ZIP bytes, and a tracked source edit is rejected. The original source was restored and the working tree was clean afterward. No connected website content was modified.
 
 Local commits separate analytics (`40f7794`) from layout migration (`e778964`). No remote push or deployment performed.
+
+## Root direnv and flake — November 16
+
+Root `.envrc`, `flake.nix` and `flake.lock` now provide the shared shell. Rust/Cargo 1.95.0 derives from the repository toolchain file; Deno is 2.9.7, Node is 24.19.0, Python is 3.13.15 and the native compiler is Clang 21.1.8. Nixpkgs, Deno and Rust-overlay lock revisions were taken from the inspected wlp-mono reference. The shell is standalone and does not load credentials or `.env` files.
+
+Verified `direnv exec`, `nix develop --command`, inherited tool access in nested projects, and no-build flake evaluation on all four declared platforms. Actual builds tested only on Apple Silicon macOS. The direnv snapshot contains only the flake, lock and Rust toolchain file; `.direnv/` stays ignored.
+
+Publisher checks pass inside the shell: four Worker and six Python tests. CWR builds successfully with `--locked`; real pass, intentional failure and restoration report runtime statuses 200, 500 and 200. This resolves the earlier missing-Cargo verification blocker. Hosted CI, other-platform execution, and isolated eval runs remain unverified. Next: scope the eval-run environment and school brief; no deployment, model run or remote publication occurred.
+
+See [environment instructions](../../code/infra/development.md).

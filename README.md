@@ -7,7 +7,23 @@ Public source companion to Randall’s articles: applications, experiments, eval
 
 ## Start developing
 
-Use Deno 2, Python 3.9+, Node/npm, and Rust 1.95.0 where required. The Rust pin lives in `code/rust-toolchain.toml`. A Nix environment is planned, not yet implemented.
+Install Nix with flakes enabled and direnv with nix-direnv integration, then from the repository root:
+
+```sh
+direnv allow
+```
+
+The root flake supplies Rust/Cargo 1.95.0 from `code/rust-toolchain.toml`, Deno, Node 24/npm, Python, a native compiler, and supporting CLI tools. `flake.lock` pins dependencies. The shell uses the same Nixpkgs, Deno and Rust-overlay revisions as the wlp-mono reference at setup time; it has no dependency on that checkout.
+
+Without direnv, enter the same environment with `nix develop`, or run a command with `nix develop --command <command>`. With direnv, scripts and nested project directories inherit the root environment:
+
+```sh
+direnv exec . deno --version
+```
+
+The `.envrc` stages only flake inputs into ignored `.direnv/shell-source/`, leaving source, build output and local secrets out of the Nix store snapshot. It does not load `.env` files automatically. This is a development shell; evaluation-run isolation is separate work.
+
+Then run the publisher checks:
 
 ```sh
 cd code/apps/publisher

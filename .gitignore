@@ -13,3 +13,4 @@ __pycache__/
 migration/
 /code/projects/**/target/
 /code/projects/**/artifacts/
+.direnv/
