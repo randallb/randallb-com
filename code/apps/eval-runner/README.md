@@ -1,5 +1,10 @@
 # rbdc evals
 
+For the standalone local CWR invoice action, build and install the
+[invoice pack](../invoice-cwr/README.md). Its bundle reuses this runner and
+`acceptance_eval.py`; the harness retains all five check outcomes and the
+solution, distinguishing failed evaluations from execution/cleanup errors.
+
 Run a command in a fresh ARM64 Linux VM from the repository development shell:
 
 ```sh
