@@ -201,7 +201,8 @@ with open(sys.argv[1],'r+') as f:
                                cpus=4, memory=8192, state=str(self.root / 'state'),
                                tart=sys.executable, macos_image=None, tart_home=str(self.home),
                                prepared_base=str(self.descriptor), with_codex=False, reuse_host_auth=False)
-        with patch.object(tart.sys, 'platform', 'darwin'), \
+        # Spoof only this backend, leaving lifecycle.save on the real host platform.
+        with patch.object(tart, 'sys', SimpleNamespace(platform='darwin', stderr=sys.stderr)), \
                 patch.object(tart.platform, 'machine', return_value='arm64'), \
                 patch.object(tart.platform, 'mac_ver', return_value=('26.5.2', (), '')), \
                 patch.object(tart.subprocess, 'check_output', return_value=str(64 * vm.GIB).encode()), \
