@@ -21,6 +21,8 @@
           rbdc = import ./code/apps/eval-runner/default.nix {
             inherit pkgs; smolvm = smolvm.packages.${system}.smolvm or null;
           };
+        } // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+          evals-codex-payload = import ./code/apps/eval-runner/codex-payload.nix { inherit pkgs; };
         } // nixpkgs.lib.optionalAttrs (system == "aarch64-linux") {
           evals-image = import ./code/apps/eval-runner/image.nix { inherit pkgs; };
         });
