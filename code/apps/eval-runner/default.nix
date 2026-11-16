@@ -2,7 +2,7 @@
 let
   source = pkgs.lib.fileset.toSource {
     root = ./.;
-    fileset = pkgs.lib.fileset.unions [ ./cli.py ./lifecycle.py ./builder.py ];
+    fileset = pkgs.lib.fileset.unions [ ./cli.py ./lifecycle.py ./builder.py ./tart_backend.py ];
   };
 in pkgs.writeShellApplication {
   name = "rbdc";

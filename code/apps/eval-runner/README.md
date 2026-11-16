@@ -137,3 +137,98 @@ Mocked lifecycle tests are not evidence of guest execution. The TeamWorkspace
 superbuild brief is maintained outside source at `TeamWorkspace/Projects/rbdc-evals/SUPERBUILD.md`; the PR carries
 selected current-revision evidence and known limits. Source notices are in
 `NOTICE` and `LICENSE.wlp-mono`.
+
+
+## macOS guests with Tart
+
+The optional Tart backend runs actual ARM64 macOS guests on Apple Silicon. It
+requires macOS 14 or newer, installed Tart **2.41.1**, at least 40 GiB free space
+before each run, and capacity for the default four CPUs and 8192 MiB guest RAM.
+macOS 15+ unattended hosts may need an unlocked login keychain; see
+<https://tart.run/faq/#headless-machines>. No host keychain settings are changed
+by this runner. The Linux backend remains the default.
+
+Install Tart separately (the root Nix lock continues to own Linux dependencies):
+
+```sh
+brew install openai/tools/tart
+tart --version  # must print 2.41.1; newer releases need explicit validation
+code/bin/rbdc evals run --vm-type tart -- /usr/bin/sw_vers
+code/bin/rbdc evals run --vm-type tart -- /bin/sh -c 'echo hello; echo diagnostic >&2'
+```
+
+`--backend` retains its existing meaning as the SmolVM executable path. Select
+Tart with `--vm-type tart`; use `--tart /absolute/path/to/tart` or `RBDC_TART`
+for its executable. The packaged Nix command also includes the Tart adapter;
+it discovers the separately installed signed Tart app rather than building
+or stripping its app bundle or provisioning profile.
+
+The default base is pinned to this immutable OCI identity, never `latest`:
+
+```
+ghcr.io/cirruslabs/macos-tahoe-base@sha256:65c3133a633fda8753cf1f71f2d55727792d534a2125b0032466563dcc8e58fd
+```
+
+The first run may download approximately 27 GB compressed, with a one-hour
+clone/download deadline. Later runs reuse the OCI cache and clone fresh disks
+using APFS copy-on-write. This third-party base includes the Tart guest agent;
+it is not a Nix-built macOS image, and Xcode/model harnesses are not provisioned
+by this milestone. `--macos-image` accepts other digest-pinned OCI images that
+provide a working Tart guest agent. Their compatibility must be verified.
+Image acquisition needs host network access; workload guests do not receive
+that access.
+
+Tart state/cache defaults to `.rbdc-evals/tart/`, isolated from the person's
+normal Tart home. Override with `--tart-home` or `RBDC_TART_HOME`, keeping this
+a dedicated directory. Automatic Tart pruning is disabled. One workload is
+allowed at a time per Tart home; leftover owned VMs block new runs until their
+run record is recovered. The runner retains the OCI cache, but no local base
+or stopped workload VM after successful cleanup. It does not inspect or mutate
+the person's normal Tart VM inventory.
+
+Each workload boots headlessly with clipboard, audio and USB sharing disabled,
+no host filesystem shares, and a datagram network attachment connected only
+to a host packet sink. The sink discards all frames and never sends frames
+back or connects to a host/LAN/internet interface. Neither NAT nor Softnet is
+used. Commands use the guest-agent channel rather than SSH. This bounds the
+synthetic evaluation environment; it is not a security certification for
+hostile kernels or guest agents.
+
+After the guest agent becomes ready (default deadline 180 seconds), commands
+run in `/private/tmp` with empty stdin and declared PATH, HOME and LANG only.
+PATH includes macOS system tools and `/opt/homebrew/bin`. Argument boundaries
+are retained. A shell runs only when explicitly requested. A guest completion
+marker distinguishes a completed command's exit status from transport failure;
+commands must not tamper with `/private/tmp/rbdc-<run-id>.exit`. Result JSON
+retains the image digest, backend version/hash, source revision/dirty state,
+resources, boot duration, Darwin identity, guest status and cleanup status.
+Raw backend streams retain partial output on interruption; completed runs also
+have `guest-stdout` and `guest-stderr`. Artifact transfer and interactive attach
+are not yet implemented.
+
+`--timeout` governs the guest command separately from `--boot-timeout`.
+`--cpus` (default 4) and `--memory` (MiB; default 8192) configure macOS resources;
+the caller must leave adequate capacity for the host. On failure/cancellation,
+the exact owned VM is stopped, deleted, and checked for absence. A failed
+cleanup remains an overall failure and preserves the ownership record. After
+SIGKILL or host loss, use the same recovery command as Linux:
+
+```sh
+code/bin/rbdc evals recover .rbdc-evals/run-<id>
+```
+
+Recovery checks the Tart backend binary identity, UUID VM name, dedicated home
+and saved VM configuration before mutation. Do not move state or upgrade Tart
+before recovery. Apple macOS license terms and Tart's current FSL license apply
+separately; see <https://www.apple.com/legal/sla/> and
+<https://github.com/openai/tart/blob/main/LICENSE>.
+
+Actual macOS acceptance (creates nine disposable VMs in sequence):
+
+```sh
+python3 code/apps/eval-runner/acceptance_tart.py --output /path/to/new/evidence
+```
+
+It exercises Darwin identity, stdout/stderr, host-environment/mount boundaries,
+failed IPv4/IPv6 egress, reset between clones, tricky argv, guest exits 7/124/127,
+timeout, Ctrl-C and forced-kill recovery. Evidence stays outside tracked source.
